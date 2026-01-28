@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSL Installer - One-Line Installation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            margin: 20px;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+
+        .install-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .install-command {
+            font-family: 'Courier New', monospace;
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 15px 0;
+            position: relative;
+        }
+
+        .install-command code {
+            display: block;
+            white-space: pre;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+
+        .copy-btn:active {
+            background: #4557c2;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .warning strong {
+            color: #856404;
+        }
+
+        .steps {
+            margin: 30px 0;
+        }
+
+        .step {
+            margin: 20px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .step::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.5em;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .feature {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            border-top: 3px solid #667eea;
+        }
+
+        .feature h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🪟 WSL Installer</h1>
+        <p class="subtitle">One-line installation for Windows Subsystem for Linux</p>
+
+        <div class="install-box">
+            <h2>Quick Install</h2>
+            <p>Run this command in PowerShell (as Administrator):</p>
+            <div class="install-command">
+                <button class="copy-btn" onclick="copyToClipboard()" aria-label="Copy installation command to clipboard">Copy</button>
+                <code id="install-cmd">iex (iwr -useb https://smallstepman.github.io/wsl/install.ps1)</code>
+            </div>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ Important:</strong> This command must be run in PowerShell with Administrator privileges. 
+            Right-click PowerShell and select "Run as Administrator".<br><br>
+            <strong>💡 Tip:</strong> If you get an execution policy error, use:<br>
+            <code style="background: #2d2d2d; color: #f8f8f2; padding: 5px; display: inline-block; margin-top: 5px; border-radius: 3px;">Set-ExecutionPolicy Bypass -Scope Process -Force; iex (iwr -useb https://smallstepman.github.io/wsl/install.ps1)</code>
+        </div>
+
+        <div class="steps">
+            <h2>What This Script Does</h2>
+            <div class="step">
+                <strong>Checks if WSL is already installed</strong><br>
+                If WSL is already present, it will show version information and exit.
+            </div>
+            <div class="step">
+                <strong>Enables required Windows features</strong><br>
+                Automatically enables Virtual Machine Platform and Windows Subsystem for Linux.
+            </div>
+            <div class="step">
+                <strong>Installs WSL and default Linux distribution</strong><br>
+                Downloads and installs the WSL kernel and Ubuntu as the default distribution.
+            </div>
+            <div class="step">
+                <strong>Sets WSL 2 as default</strong><br>
+                Configures WSL 2 as the default version for better performance.
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <h3>🚀 Fast Installation</h3>
+                <p>One command to install everything you need to run Linux on Windows.</p>
+            </div>
+            <div class="feature">
+                <h3>✅ Safe & Verified</h3>
+                <p>Uses official WSL installation commands from Microsoft.</p>
+            </div>
+            <div class="feature">
+                <h3>🔧 Dry Run Mode</h3>
+                <p>Test what would happen without making changes using the -DryRun flag.</p>
+            </div>
+        </div>
+
+        <h2>Alternative Installation Methods</h2>
+        <p>If you prefer more control over the installation:</p>
+        <div class="install-command">
+            <code># Download and inspect the script first
+Invoke-WebRequest -Uri https://smallstepman.github.io/wsl/install.ps1 -OutFile install.ps1
+Get-Content install.ps1  # Review the script
+
+# Run with default options
+.\install.ps1
+
+# Or test with dry run (no changes made)
+.\install.ps1 -DryRun
+
+# Show help
+.\install.ps1 -Help</code>
+        </div>
+
+        <h2>Requirements</h2>
+        <ul style="margin: 20px 0; padding-left: 40px;">
+            <li>Windows 10 version 2004 or higher (Build 19041 or higher)</li>
+            <li>Windows 11</li>
+            <li>PowerShell (Run as Administrator)</li>
+            <li>Internet connection</li>
+        </ul>
+
+        <footer>
+            <p>For more information about WSL, visit <a href="https://aka.ms/wsl" target="_blank">aka.ms/wsl</a></p>
+            <p>View source on <a href="https://github.com/smallstepman/wsl" target="_blank">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            const cmd = document.getElementById('install-cmd').textContent;
+            const btn = document.querySelector('.copy-btn');
+            
+            if (!navigator.clipboard) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = cmd;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => btn.textContent = 'Copy', 2000);
+                } catch (err) {
+                    btn.textContent = 'Failed';
+                    setTimeout(() => btn.textContent = 'Copy', 2000);
+                }
+                document.body.removeChild(textArea);
+                return;
+            }
+            
+            navigator.clipboard.writeText(cmd).then(() => {
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                btn.textContent = 'Failed';
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
