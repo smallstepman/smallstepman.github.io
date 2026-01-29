@@ -3,7 +3,6 @@
 {
   imports = [
     ../modules/specialization/plasma.nix
-    ../modules/specialization/i3.nix
     ../modules/specialization/gnome-ibus.nix
   ];
 
@@ -98,6 +97,7 @@
     gnumake
     killall
     xclip
+    wl-clipboard  # Wayland clipboard
 
     # For hypervisors that support auto-resizing, this script forces it.
     # I've noticed not everyone listens to the udev events so this is a hack.
@@ -110,6 +110,12 @@
     # if the clipboard sill works.
     gtkmm3
   ];
+
+  # Enable niri (scrollable-tiling Wayland compositor)
+  programs.niri = {
+    enable = true;
+    package = pkgs.niri-unstable;
+  };
 
   # Our default non-specialised desktop environment.
   services.xserver = lib.mkIf (config.specialisation != {}) {
