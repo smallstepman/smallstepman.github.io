@@ -18,14 +18,14 @@
     # here, NOT in environment.systemPackages
   ];
 
-  users.users.mitchellh = {
+  users.users.m = {
     isNormalUser = true;
-    home = "/home/mitchellh";
+    home = "/home/m";
     extraGroups = [ "docker" "lxd" "wheel" ];
     shell = pkgs.fish;
     hashedPassword = "$6$mTAfbNWiUH$6HLaARy2XAsqXYLx0LcoC4d6/lgaLa3iH/mR891AHez8F/Ya382LN69ZEUddWGhEhHCQK9qEGxTb7GUwjt/7r.";
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbTIKIPtrymhvtTvqbU07/e7gyFJqNS4S0xlfrZLOaY mitchellh"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
     ];
   };
 }

@@ -190,7 +190,7 @@ in {
       "Mod+Q".action.close-window = {};
 
       # Session
-      "Mod+Shift+E".action.quit = {};
+      # "Mod+Shift+E".action.quit = {};
 
       # Focus
       "Mod+N".action.focus-column-left = {};
@@ -269,7 +269,7 @@ in {
       whitelist = {
         prefix= [
           "$HOME/code/go/src/github.com/hashicorp"
-          "$HOME/code/go/src/github.com/mitchellh"
+          "$HOME/code/go/src/github.com/smallstepman"
         ];
 
         exact = ["$HOME/.envrc"];
@@ -301,17 +301,17 @@ in {
   programs.git = {
     enable = true;
     signing = {
-      key = "523D5DC389D273BC";
+      key = "7D9B7E8B2C83D94F";
       signByDefault = true;
     };
     settings = {
-      user.name = "Mitchell Hashimoto";
-      user.email = "m@mitchellh.com";
+      user.name = "Marcin Nowak Liebiediew";
+      user.email = "m.liebiediew@gmail.com";
       branch.autosetuprebase = "always";
       color.ui = true;
       core.askPass = ""; # needs to be empty to use terminal for ask pass
       credential.helper = "store"; # want to make this more secure
-      github.user = "mitchellh";
+      github.user = "smallstepman";
       push.default = "tracking";
       init.defaultBranch = "main";
       aliases = {
@@ -326,7 +326,7 @@ in {
     enable = true;
     env = { 
       GOPATH = "Documents/go";
-      GOPRIVATE = [ "github.com/mitchellh" ];
+      GOPRIVATE = [ "github.com/smallstepman" ];
     };
   };
 
