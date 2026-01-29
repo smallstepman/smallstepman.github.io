@@ -43,6 +43,9 @@ in systemFunc rec {
     # Snapd on Linux
     (if isLinux then inputs.nix-snapd.nixosModules.default else {})
 
+    # Niri Wayland compositor for Linux
+    (if isLinux then inputs.niri.nixosModules.niri else {})
+
     machineConfig
     userOSConfig
     home-manager.home-manager {

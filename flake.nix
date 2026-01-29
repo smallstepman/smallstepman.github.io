@@ -50,6 +50,9 @@
     jujutsu.url = "github:martinvonz/jj";
     zig.url = "github:mitchellh/zig-overlay";
 
+    # Niri - scrollable-tiling Wayland compositor
+    niri.url = "github:sodiboo/niri-flake";
+
     # Non-flakes
     theme-bobthefish.url = "github:oh-my-fish/theme-bobthefish/e3b4d4eafc23516e35f162686f08a42edf844e40";
     theme-bobthefish.flake = false;
@@ -64,6 +67,7 @@
     overlays = [
       inputs.jujutsu.overlays.default
       inputs.zig.overlays.default
+      inputs.niri.overlays.niri
 
       (final: prev:
         let
