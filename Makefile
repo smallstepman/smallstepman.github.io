@@ -66,14 +66,12 @@ secrets/restore:
 	chmod 600 $(HOME)/.ssh/* || true
 	chmod 700 $(HOME)/.gnupg/* || true
 
-# bootstrap a brand new VM. The VM should have NixOS ISO on the CD drive
-# and just set the password of the root user to "root". This will install
-# NixOS. After installing NixOS, you must reboot and set the root password
-# for the next step.
-#
-# NOTE(mitchellh): I'm sure there is a way to do this and bootstrap all
-# in one step but when I tried to merge them I got errors. One day.
-vm/bootstrap0:
+# Full VM bootstrap: provision, wait for reboot, then install config.
+# The VM should have NixOS ISO on the CD drive and root password set to "root".
+vm/bootstrap: vm/provision vm/wait vm/install
+
+# Partition disk and install base NixOS (ends with reboot)
+vm/provision:
 	ssh $(SSH_OPTIONS) -p$(NIXPORT) root@$(NIXADDR) " \
 		parted /dev/nvme0n1 -- mklabel gpt; \
 		parted /dev/nvme0n1 -- mkpart primary 512MB -8GB; \
@@ -101,12 +99,18 @@ vm/bootstrap0:
 		nixos-install --no-root-passwd && reboot; \
 	"
 
-# after bootstrap0, run this to finalize. After this, do everything else
-# in the VM unless secrets change.
-vm/bootstrap:
+# Wait for VM to come back up after reboot
+vm/wait:
+	@echo "Waiting for VM to boot..."
+	@until ssh $(SSH_OPTIONS) -p$(NIXPORT) -o ConnectTimeout=5 root@$(NIXADDR) "true" 2>/dev/null; do \
+		sleep 5; \
+	done
+	@echo "VM is ready"
+
+# Copy config and switch to it (run after vm/provision + vm/wait)
+vm/install:
 	NIXUSER=root $(MAKE) vm/copy
 	NIXUSER=root $(MAKE) vm/switch
-	# $(MAKE) vm/secrets
 	ssh $(SSH_OPTIONS) -p$(NIXPORT) $(NIXUSER)@$(NIXADDR) " \
 		sudo reboot; \
 	"

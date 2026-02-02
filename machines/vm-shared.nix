@@ -1,8 +1,7 @@
-{ config, pkgs, lib, currentSystem, currentSystemName, ... }:
+{ config, pkgs, lib, currentSystem, currentSystemName, inputs, ... }:
 
 {
   imports = [
-    ../modules/specialization/plasma.nix
     ../modules/specialization/gnome-ibus.nix
   ];
 
@@ -89,14 +88,10 @@
     gnumake
     git          # needed for niri-flake build
     killall
-    xclip
     wl-clipboard  # Wayland clipboard
 
-    # For hypervisors that support auto-resizing, this script forces it.
-    # I've noticed not everyone listens to the udev events so this is a hack.
-    (writeShellScriptBin "xrandr-auto" ''
-      xrandr --output Virtual-1 --auto
-    '')
+    # Ghostty terminal
+    inputs.ghostty.packages.${currentSystem}.default
   ] ++ lib.optionals (currentSystemName == "vm-aarch64") [
     # This is needed for the vmware user tools clipboard to work.
     # You can test if you don't need this by deleting this and seeing
@@ -110,25 +105,11 @@
     package = pkgs.niri-unstable;
   };
 
-  # Our default non-specialised desktop environment.
-  services.xserver = lib.mkIf (config.specialisation != {}) {
-    enable = true;
-    xkb.layout = "us";
-  };
-  services.desktopManager = lib.mkIf (config.specialisation != {}) {
-    gnome.enable = true;
-  };
-  services.displayManager = lib.mkIf (config.specialisation != {}) {
-    gdm.enable = true;
-  };
-
-  # Some programs need SUID wrappers, can be configured further or are
-  # started in user sessions.
-  # programs.mtr.enable = true;
-  # programs.gnupg.agent = {
-  #   enable = true;
-  #   enableSSHSupport = true;
-  # };
+  # GNOME + GDM (niri will appear as a session option in GDM)
+  services.xserver.enable = true;
+  services.xserver.xkb.layout = "us";
+  services.desktopManager.gnome.enable = true;
+  services.displayManager.gdm.enable = true;
 
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;

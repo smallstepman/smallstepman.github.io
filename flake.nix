@@ -47,26 +47,31 @@
     };
 
     # Other packages
-    jujutsu.url = "github:martinvonz/jj";
-    zig.url = "github:mitchellh/zig-overlay";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    ghostty.url = "github:ghostty-org/ghostty";
 
     # Niri - scrollable-tiling Wayland compositor
     niri.url = "github:sodiboo/niri-flake";
 
-    # Non-flakes
-    theme-bobthefish.url = "github:oh-my-fish/theme-bobthefish/e3b4d4eafc23516e35f162686f08a42edf844e40";
-    theme-bobthefish.flake = false;
-    fish-fzf.url = "github:jethrokuan/fzf/24f4739fc1dffafcc0da3ccfbbd14d9c7d31827a";
-    fish-fzf.flake = false;
-    fish-foreign-env.url = "github:oh-my-fish/plugin-foreign-env/dddd9213272a0ab848d474d0cbde12ad034e65bc";
-    fish-foreign-env.flake = false;
+    # LLM agents for Nix
+    llm-agents.url = "github:numtide/llm-agents.nix";
+
+    # Mango window control for Wayland
+    mangowc.url = "github:DreamMaoMao/mangowc";
+
+    # Which-key for wlroots compositors
+    wlr-which-key.url = "github:MaxVerevkin/wlr-which-key";
+
   };
 
   outputs = { self, nixpkgs, home-manager, darwin, ... }@inputs: let
     # Overlays is the list of overlays we want to apply from flake inputs.
     overlays = [
-      inputs.jujutsu.overlays.default
-      inputs.zig.overlays.default
+      inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri
 
       (final: prev:
@@ -81,7 +86,6 @@
 
         # Want the latest version of these
         claude-code = pkgs-unstable.claude-code;
-        nushell = pkgs-unstable.nushell;
 
         ibus = ibus_stable;
         ibus_stable = inputs.nixpkgs.legacyPackages.${prev.system}.ibus;
