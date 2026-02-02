@@ -75,13 +75,22 @@ in {
     pkgs.watch
 
     pkgs.gopls
-    pkgs.zigpkgs."0.15.2"
 
     pkgs.claude-code
     pkgs.codex
 
-    # Node is required for Copilot.vim
-    pkgs.nodejs
+    # Rust toolchain (via rust-overlay)
+    (pkgs.rust-bin.stable.latest.default.override {
+      extensions = [ "rust-src" "rust-analyzer" ];
+    })
+
+    # Python + uv
+    pkgs.python312
+    pkgs.uv
+
+    # Node.js with npx (included) + fnm for version management
+    pkgs.nodejs_22
+    pkgs.fnm
 
     # Emacs + Doom Emacs dependencies
     pkgs.emacs30
@@ -99,7 +108,7 @@ in {
     pkgs.fuzzel       # app launcher for Wayland
     pkgs.valgrind
     pkgs.zathura
-    pkgs.xfce.xfce4-terminal
+    pkgs.foot         # lightweight Wayland terminal
     pkgs.mako         # notifications
     pkgs.swaylock     # screen locker
     pkgs.grim         # screenshots
@@ -185,7 +194,7 @@ in {
 
     binds = {
       # Launch
-      "Mod+Return".action.spawn = "xfce4-terminal";
+      "Mod+Return".action.spawn = "foot";
       "Mod+D".action.spawn = "fuzzel";
       "Mod+Q".action.close-window = {};
 
@@ -241,17 +250,18 @@ in {
     };
   };
 
-  programs.waybar = lib.mkIf isLinux {
+  programs.zsh = {
     enable = true;
-    systemd.enable = true;
-    settings.mainBar = {
-      layer = "top";
-      position = "top";
-      height = 30;
-      modules-left = [ "niri/workspaces" ];
-      modules-center = [ "clock" ];
-      modules-right = [ "cpu" "memory" "network" "pulseaudio" "tray" ];
-    };
+    autosuggestion.enable = true;
+    syntaxHighlighting.enable = true;
+    shellAliases = shellAliases;
+    initContent = ''
+      # fnm (Node version manager)
+      eval "$(fnm env --use-on-cd)"
+      
+      # Starship prompt
+      eval "$(starship init zsh)"
+    '';
   };
 
   programs.bash = {
@@ -275,27 +285,6 @@ in {
         exact = ["$HOME/.envrc"];
       };
     };
-  };
-
-  programs.fish = {
-    enable = true;
-    shellAliases = shellAliases;
-    interactiveShellInit = lib.strings.concatStrings (lib.strings.intersperse "\n" ([
-      "source ${inputs.theme-bobthefish}/functions/fish_prompt.fish"
-      "source ${inputs.theme-bobthefish}/functions/fish_right_prompt.fish"
-      "source ${inputs.theme-bobthefish}/functions/fish_title.fish"
-      (builtins.readFile ./config.fish)
-      "set -g SHELL ${pkgs.fish}/bin/fish"
-    ]));
-
-    plugins = map (n: {
-      name = n;
-      src  = inputs.${n};
-    }) [
-      "fish-fzf"
-      "fish-foreign-env"
-      "theme-bobthefish"
-    ];
   };
 
   programs.git = {
@@ -330,66 +319,12 @@ in {
     };
   };
 
-  programs.jujutsu = {
-    enable = true;
-
-    # I don't use "settings" because the path is wrong on macOS at
-    # the time of writing this.
-  };
-
-  programs.alacritty = {
-    enable = !isWSL;
-
-    settings = {
-      env.TERM = "xterm-256color";
-
-      key_bindings = [
-        { key = "K"; mods = "Command"; chars = "ClearHistory"; }
-        { key = "V"; mods = "Command"; action = "Paste"; }
-        { key = "C"; mods = "Command"; action = "Copy"; }
-        { key = "Key0"; mods = "Command"; action = "ResetFontSize"; }
-        { key = "Equals"; mods = "Command"; action = "IncreaseFontSize"; }
-        { key = "Subtract"; mods = "Command"; action = "DecreaseFontSize"; }
-      ];
-    };
-  };
-
-  programs.kitty = {
-    enable = !isWSL;
-    extraConfig = builtins.readFile ./kitty;
-  };
-
-  programs.i3status = {
-    enable = isLinux && !isWSL;
-
-    general = {
-      colors = true;
-      color_good = "#8C9440";
-      color_bad = "#A54242";
-      color_degraded = "#DE935F";
-    };
-
-    modules = {
-      ipv6.enable = false;
-      "wireless _first_".enable = false;
-      "battery all".enable = false;
-    };
-  };
-
   programs.neovim = {
     enable = true;
     package = inputs.neovim-nightly-overlay.packages.${pkgs.system}.default;
   };
 
-  programs.npm = {
-    enable = isLinux;
-  };
-
   programs.atuin = {
-    enable = true;
-  };
-
-  programs.nushell = {
     enable = true;
   };
 
@@ -406,13 +341,10 @@ in {
     maxCacheTtl = 31536000;
   };
 
-  xresources.extraConfig = builtins.readFile ./Xresources;
-
   # Make cursor not tiny on HiDPI screens
   home.pointerCursor = lib.mkIf (isLinux && !isWSL) {
     name = "Vanilla-DMZ";
     package = pkgs.vanilla-dmz;
     size = 128;
-    x11.enable = true;
   };
 }

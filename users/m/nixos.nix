@@ -2,13 +2,13 @@
 
 {
   # https://github.com/nix-community/home-manager/pull/2408
-  environment.pathsToLink = [ "/share/fish" ];
+  environment.pathsToLink = [ "/share/zsh" ];
 
   # Add ~/.local/bin to PATH
   environment.localBinInPath = true;
 
-  # Since we're using fish as our shell
-  programs.fish.enable = true;
+  # Since we're using zsh as our shell
+  programs.zsh.enable = true;
 
   # We require this because we use lazy.nvim against the best wishes
   # a pure Nix system so this lets those unpatched binaries run.
@@ -22,10 +22,10 @@
     isNormalUser = true;
     home = "/home/m";
     extraGroups = [ "docker" "lxd" "wheel" ];
-    shell = pkgs.fish;
+    shell = pkgs.zsh;
     hashedPassword = "$6$mTAfbNWiUH$6HLaARy2XAsqXYLx0LcoC4d6/lgaLa3iH/mR891AHez8F/Ya382LN69ZEUddWGhEhHCQK9qEGxTb7GUwjt/7r.";
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbTIKIPtrymhvtTvqbU07/e7gyFJqNS4S0xlfrZLOaY m"
     ];
   };
 }
