@@ -46,11 +46,16 @@ in systemFunc rec {
     # Niri Wayland compositor for Linux
     (if isLinux then inputs.niri.nixosModules.niri else {})
 
+    # Mango Wayland compositor for Linux
+    (if isLinux then inputs.mangowc.nixosModules.mango else {})
+
     machineConfig
     userOSConfig
     home-manager.home-manager {
       home-manager.useGlobalPkgs = true;
       home-manager.useUserPackages = true;
+      home-manager.sharedModules =
+        if isLinux then [ inputs.mangowc.hmModules.mango ] else [];
       home-manager.users.${user} = import userHMConfig {
         isWSL = isWSL;
         inputs = inputs;

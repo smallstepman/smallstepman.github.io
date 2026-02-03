@@ -61,10 +61,10 @@
     llm-agents.url = "github:numtide/llm-agents.nix";
 
     # Mango window control for Wayland
-    mangowc.url = "github:DreamMaoMao/mangowc";
-
-    # Which-key for wlroots compositors
-    wlr-which-key.url = "github:MaxVerevkin/wlr-which-key";
+    mangowc = {
+      url = "github:DreamMaoMao/mangowc";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
   };
 

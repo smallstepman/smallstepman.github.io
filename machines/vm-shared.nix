@@ -41,6 +41,9 @@
   # replicates the default behaviour.
   networking.useDHCP = false;
 
+  # Enable NetworkManager (was previously pulled in by GNOME)
+  networking.networkmanager.enable = true;
+
   # Don't require password for sudo
   security.sudo.wheelNeedsPassword = false;
 
@@ -105,11 +108,23 @@
     package = pkgs.niri-unstable;
   };
 
-  # GNOME + GDM (niri will appear as a session option in GDM)
+  # Enable mango (Wayland compositor) - configured via home-manager
+  programs.mango.enable = true;
+
+  # greetd with tuigreet (minimal, stable, respects environment)
+  services.greetd = {
+    enable = true;
+    settings = {
+      default_session = {
+        command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions";
+        user = "greeter";
+      };
+    };
+  };
+
+  # Keep xserver for XWayland support
   services.xserver.enable = true;
   services.xserver.xkb.layout = "us";
-  services.desktopManager.gnome.enable = true;
-  services.displayManager.gdm.enable = true;
 
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;
