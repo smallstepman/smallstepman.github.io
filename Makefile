@@ -146,6 +146,20 @@ vm/switch:
 		sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"/nix-config#${NIXNAME}\" \
 	"
 
+vm/update:
+	export NIXADDR=$$(vmrun -T fusion getGuestIPAddress "/Users/m/Virtual Machines.localized/NixOS 25.11 kernel 6.x aarch64.vmwarevm/NixOS 25.11 kernel 6.x aarch64.vmx") && \
+	rsync -av -e 'ssh' \
+		--exclude='vendor/' \
+		--exclude='.git/' \
+		--exclude='.git-crypt/' \
+		--exclude='.jj/' \
+		--exclude='iso/' \
+		--rsync-path="sudo rsync" \
+		$(MAKEFILE_DIR)/ $(NIXUSER)@$$NIXADDR:/nix-config && \
+	ssh $(NIXUSER)@$$NIXADDR " \
+		sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"/nix-config#${NIXNAME}\" \
+	"
+
 # Build a WSL installer
 .PHONY: wsl
 wsl:
