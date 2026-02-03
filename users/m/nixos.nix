@@ -21,7 +21,7 @@
   users.users.m = {
     isNormalUser = true;
     home = "/home/m";
-    extraGroups = [ "docker" "lxd" "wheel" ];
+    extraGroups = [ "docker" "lxd" "wheel" "networkmanager" ];
     shell = pkgs.zsh;
     hashedPassword = "$6$mTAfbNWiUH$6HLaARy2XAsqXYLx0LcoC4d6/lgaLa3iH/mR891AHez8F/Ya382LN69ZEUddWGhEhHCQK9qEGxTb7GUwjt/7r.";
     openssh.authorizedKeys.keys = [

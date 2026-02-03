@@ -113,6 +113,10 @@ in {
     pkgs.swaylock     # screen locker
     pkgs.grim         # screenshots
     pkgs.slurp        # region selection
+
+    # Wayland utilities
+    inputs.mangowc.packages.${pkgs.system}.default  # window control
+    pkgs.wlr-which-key                              # which-key for wlroots
   ]);
 
   #---------------------------------------------------------------------
@@ -146,6 +150,90 @@ in {
     "rectangle/RectangleConfig.json".text = builtins.readFile ./RectangleConfig.json;
   } else {}) // (if isLinux then {
     "ghostty/config".text = builtins.readFile ./ghostty.linux;
+
+    # wlr-which-key configuration
+    "wlr-which-key/config.yaml".text = ''
+      font: JetBrains Mono 12
+      background: "#282828d0"
+      color: "#fbf1c7"
+      border: "#8ec07c"
+      separator: " → "
+      border_width: 2
+      corner_r: 10
+      padding: 15
+      anchor: center
+
+      menu:
+        # Applications
+        - key: a
+          desc: Apps
+          submenu:
+            - key: t
+              desc: Terminal
+              cmd: foot
+            - key: b
+              desc: Browser
+              cmd: firefox
+            - key: f
+              desc: Files
+              cmd: nautilus
+            - key: e
+              desc: Editor
+              cmd: nvim
+
+        # Window management
+        - key: w
+          desc: Window
+          submenu:
+            - key: f
+              desc: Fullscreen
+              cmd: mmsg togglefullscreen
+            - key: v
+              desc: Float
+              cmd: mmsg togglefloating
+            - key: q
+              desc: Close
+              cmd: mmsg killclient
+
+        # Power menu
+        - key: p
+          desc: Power
+          submenu:
+            - key: l
+              desc: Lock
+              cmd: swaylock
+            - key: s
+              desc: Suspend
+              cmd: systemctl suspend
+            - key: r
+              desc: Reboot
+              cmd: systemctl reboot
+            - key: q
+              desc: Shutdown
+              cmd: systemctl poweroff
+
+        # Screenshots
+        - key: s
+          desc: Screenshot
+          submenu:
+            - key: s
+              desc: Full screen
+              cmd: grim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
+            - key: r
+              desc: Region
+              cmd: grim -g "$(slurp)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
+            - key: w
+              desc: Window
+              cmd: grim -g "$(slurp -o)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
+
+        # Quick actions
+        - key: c
+          desc: Clipboard
+          cmd: wl-paste
+        - key: "?"
+          desc: Help
+          cmd: foot -e sh -c "cat ~/.config/wlr-which-key/config.yaml | less"
+    '';
   } else {});
 
   #---------------------------------------------------------------------
@@ -166,7 +254,7 @@ in {
       };
     };
 
-    outputs."eDP-1".scale = 2.0;
+    outputs."Virtual-1".scale = 2.0;
 
     layout = {
       gaps = 16;
@@ -248,6 +336,74 @@ in {
       # Lock
       "Mod+Escape".action.spawn = "swaylock";
     };
+  };
+
+  # Mango Wayland compositor configuration (Linux only)
+  wayland.windowManager.mango = lib.mkIf isLinux {
+    enable = true;
+    settings = ''
+      # Mango config - keybindings matching niri (Colemak: n/e/i/o = left/down/up/right)
+      monitorrule=name:Virtual-1,scale:2.0
+
+      # Launch applications
+      bind=SUPER,Return,spawn,foot
+      bind=SUPER,d,spawn,fuzzel
+      bind=SUPER,q,killclient
+
+      # Focus navigation (Colemak layout)
+      bind=SUPER,n,focusdir,left
+      bind=SUPER,e,focusdir,down
+      bind=SUPER,i,focusdir,up
+      bind=SUPER,o,focusdir,right
+
+      # Move windows (Colemak layout)
+      bind=SUPER+SHIFT,n,movetodir,left
+      bind=SUPER+SHIFT,e,movetodir,down
+      bind=SUPER+SHIFT,i,movetodir,up
+      bind=SUPER+SHIFT,o,movetodir,right
+
+      # Workspaces (view = focus, tag = move window)
+      bind=SUPER,1,view,1
+      bind=SUPER,2,view,2
+      bind=SUPER,3,view,3
+      bind=SUPER,4,view,4
+      bind=SUPER,5,view,5
+      bind=SUPER,6,view,6
+      bind=SUPER,7,view,7
+      bind=SUPER,8,view,8
+      bind=SUPER,9,view,9
+
+      bind=SUPER+SHIFT,1,tag,1
+      bind=SUPER+SHIFT,2,tag,2
+      bind=SUPER+SHIFT,3,tag,3
+      bind=SUPER+SHIFT,4,tag,4
+      bind=SUPER+SHIFT,5,tag,5
+      bind=SUPER+SHIFT,6,tag,6
+      bind=SUPER+SHIFT,7,tag,7
+      bind=SUPER+SHIFT,8,tag,8
+      bind=SUPER+SHIFT,9,tag,9
+
+      # Layout
+      bind=SUPER,f,togglefullscreen
+      bind=SUPER+SHIFT,f,togglefloating
+
+      # Screenshots (using grim + slurp)
+      bind=NONE,Print,spawn_shell,grim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
+      bind=SUPER,Print,spawn_shell,grim -g "$(slurp)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
+
+      # Lock screen
+      bind=SUPER,Escape,spawn,swaylock
+
+      # Which-key menu
+      bind=SUPER,space,spawn,wlr-which-key
+
+      # Quit mango
+      bind=SUPER+SHIFT,q,quit
+    '';
+    autostart_sh = ''
+      # Start notification daemon
+      mako &
+    '';
   };
 
   programs.zsh = {
