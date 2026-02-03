@@ -93,7 +93,7 @@ in {
     pkgs.fnm
 
     # Emacs + Doom Emacs dependencies
-    pkgs.emacs30
+    pkgs.emacs30-pgtk
     pkgs.cmake       # for vterm
     pkgs.libtool     # for vterm
     pkgs.shellcheck  # for shell script linting
@@ -117,6 +117,10 @@ in {
     # Wayland utilities
     inputs.mangowc.packages.${pkgs.system}.default  # window control
     pkgs.wlr-which-key                              # which-key for wlroots
+
+    # Wallpaper
+    pkgs.waypaper                                   # wallpaper manager (Wayland)
+    pkgs.swaybg                                     # wallpaper backend
   ]);
 
   #---------------------------------------------------------------------
@@ -142,6 +146,16 @@ in {
     ".gdbinit".source = ./gdbinit;
     ".inputrc".source = ./inputrc;
   };
+
+  # Clone wallpaper repos on first activation; no-op if already present.
+  home.activation.cloneWallpapers = lib.hm.dag.entryAnywhere ''
+    if [ ! -d "$HOME/.config/wallpaper/walls" ]; then
+      ${pkgs.git}/bin/git clone --depth=1 https://github.com/dharmx/walls "$HOME/.config/wallpaper/walls"
+    fi
+    if [ ! -d "$HOME/.config/wallpaper/aesthetic-wallpapers" ]; then
+      ${pkgs.git}/bin/git clone --depth=1 https://github.com/D3Ext/aesthetic-wallpapers "$HOME/.config/wallpaper/aesthetic-wallpapers"
+    fi
+  '';
 
   xdg.configFile = {
     "rofi/config.rasi".text = builtins.readFile ./rofi;
@@ -227,6 +241,9 @@ in {
               cmd: grim -g "$(slurp -o)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
 
         # Quick actions
+        - key: v
+          desc: Wallpaper
+          cmd: waypaper
         - key: c
           desc: Clipboard
           cmd: wl-paste
