@@ -73,6 +73,7 @@
     overlays = [
       inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri
+      inputs.llm-agents.overlays.default
 
       (final: prev:
         let
