@@ -164,3 +164,8 @@ vm/update:
 .PHONY: wsl
 wsl:
 	 nix build ".#nixosConfigurations.wsl.config.system.build.installer"
+
+# Create a fresh NixOS VM in VMware Fusion
+.PHONY: vm/create
+vm/create:
+	@$(MAKEFILE_DIR)/scripts/vm-create.sh
