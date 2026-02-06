@@ -66,6 +66,18 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Declarative disk partitioning
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Declarative git repo management
+    git-repo-manager = {
+      url = "github:hakoerber/git-repo-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
   outputs = { self, nixpkgs, home-manager, darwin, ... }@inputs: let
@@ -74,6 +86,7 @@
       inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri
       inputs.llm-agents.overlays.default
+      inputs.git-repo-manager.overlays.git-repo-manager
 
       (final: prev:
         let

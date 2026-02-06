@@ -9,6 +9,9 @@ MAKEFILE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 # The name of the nixosConfiguration in the flake
 NIXNAME ?= vm-aarch64
 
+# Block device for NixOS installation
+NIXBLOCKDEVICE ?= nvme0n1
+
 # SSH options that are used. These aren't meant to be overridden but are
 # reused a lot so we just store them up here.
 SSH_OPTIONS=-o PubkeyAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no
@@ -66,53 +69,37 @@ secrets/restore:
 	chmod 600 $(HOME)/.ssh/* || true
 	chmod 700 $(HOME)/.gnupg/* || true
 
-# Full VM bootstrap: provision, wait for reboot, then install config.
-# The VM should have NixOS ISO on the CD drive and root password set to "root".
-vm/bootstrap: vm/provision vm/wait vm/install
-
-# Partition disk and install base NixOS (ends with reboot)
-vm/provision:
+# Copy config and switch to it (run after vm/provision + vm/wait)
+vm/bootstrap:
+	NIXUSER=root $(MAKE) vm/copy
+	NIXUSER=root $(MAKE) vm/install
 	ssh $(SSH_OPTIONS) -p$(NIXPORT) root@$(NIXADDR) " \
-		parted /dev/nvme0n1 -- mklabel gpt; \
-		parted /dev/nvme0n1 -- mkpart primary 512MB -8GB; \
-		parted /dev/nvme0n1 -- mkpart primary linux-swap -8GB 100\%; \
-		parted /dev/nvme0n1 -- mkpart ESP fat32 1MB 512MB; \
-		parted /dev/nvme0n1 -- set 3 esp on; \
-		sleep 1; \
-		mkfs.ext4 -L nixos /dev/nvme0n1p1; \
-		mkswap -L swap /dev/nvme0n1p2; \
-		mkfs.fat -F 32 -n boot /dev/nvme0n1p3; \
-		sleep 1; \
-		mount /dev/disk/by-label/nixos /mnt; \
-		mkdir -p /mnt/boot; \
-		mount /dev/disk/by-label/boot /mnt/boot; \
-		nixos-generate-config --root /mnt; \
-		sed --in-place '/system\.stateVersion = .*/a \
-			nix.package = pkgs.nixVersions.latest;\n \
-			nix.extraOptions = \"experimental-features = nix-command flakes\";\n \
-			environment.systemPackages = with pkgs; [ git ];\n \
-			services.openssh.enable = true;\n \
-			services.openssh.settings.PasswordAuthentication = true;\n \
-			services.openssh.settings.PermitRootLogin = \"yes\";\n \
-			users.users.root.initialPassword = \"root\";\n \
-		' /mnt/etc/nixos/configuration.nix; \
-		nixos-install --no-root-passwd && reboot; \
+		sudo reboot; \
 	"
 
-# Wait for VM to come back up after reboot
-vm/wait:
-	@echo "Waiting for VM to boot..."
-	@until ssh $(SSH_OPTIONS) -p$(NIXPORT) -o ConnectTimeout=5 root@$(NIXADDR) "true" 2>/dev/null; do \
-		sleep 5; \
-	done
-	@echo "VM is ready"
+# Create a fresh NixOS VM in VMware Fusion
+.PHONY: vm/create
+vm/create:
+	@$(MAKEFILE_DIR)/scripts/vm-create.sh
 
-# Copy config and switch to it (run after vm/provision + vm/wait)
+
+# Partition disk using disko and install NixOS
 vm/install:
-	NIXUSER=root $(MAKE) vm/copy
-	NIXUSER=root $(MAKE) vm/switch
 	ssh $(SSH_OPTIONS) -p$(NIXPORT) $(NIXUSER)@$(NIXADDR) " \
-		sudo reboot; \
+		cd /nix-config && \
+		git config --global --add safe.directory /nix-config && \
+		git config --global user.email 'bootstrap@localhost' && \
+		git config --global user.name 'Bootstrap' && \
+		git init -q && \
+		git add -A && \
+		git commit -q -m 'bootstrap' && \
+		sudo nix --experimental-features 'nix-command flakes' run \
+			github:nix-community/disko -- \
+			--mode disko \
+			/nix-config/machines/hardware/disko-vm.nix && \
+		sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-install \
+			--flake /nix-config#$(NIXNAME) \
+			--no-root-passwd \
 	"
 
 # copy our secrets into the VM
@@ -147,7 +134,7 @@ vm/switch:
 	"
 
 vm/update:
-	export NIXADDR=$$(vmrun -T fusion getGuestIPAddress "/Users/m/Virtual Machines.localized/NixOS 25.11 kernel 6.x aarch64.vmwarevm/NixOS 25.11 kernel 6.x aarch64.vmx") && \
+	export NIXADDR=$$(vmrun -T fusion getGuestIPAddress "/Users/m/Virtual Machines.localized/NixOS 25.11 aarch64.vmwarevm/NixOS 25.11 aarch64.vmx") && \
 	rsync -av -e 'ssh' \
 		--exclude='vendor/' \
 		--exclude='.git/' \
@@ -165,7 +152,11 @@ vm/update:
 wsl:
 	 nix build ".#nixosConfigurations.wsl.config.system.build.installer"
 
-# Create a fresh NixOS VM in VMware Fusion
-.PHONY: vm/create
-vm/create:
-	@$(MAKEFILE_DIR)/scripts/vm-create.sh
+
+# One-command bootstrap using nixos-anywhere (experimental on aarch64)
+.PHONY: vm/anywhere
+vm/anywhere:
+	nix run github:nix-community/nixos-anywhere -- \
+		--flake ".#$(NIXNAME)" \
+		--kexec "https://github.com/nix-community/nixos-images/releases/latest/download/nixos-kexec-installer-noninteractive-aarch64-linux.tar.gz" \
+		root@$(NIXADDR)

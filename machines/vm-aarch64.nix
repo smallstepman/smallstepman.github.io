@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }: {
   imports = [
     ./hardware/vm-aarch64.nix
+    ./hardware/disko-vm.nix
     ./vm-shared.nix
   ];
 
