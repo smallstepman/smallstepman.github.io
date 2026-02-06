@@ -18,11 +18,8 @@ let
     gs = "git status";
     gt = "git tag";
 
-    jd = "jj desc";
-    jf = "jj git fetch";
-    jn = "jj new";
-    jp = "jj git push";
-    js = "jj st";
+    ll = "ls -lh";
+    la = "ls -a";
   } // (if isLinux then {
     # Two decades of using a Mac has made this such a strong memory
     # that I'm just going to keep it consistent.
@@ -121,6 +118,7 @@ in {
     # Wallpaper
     pkgs.waypaper                                   # wallpaper manager (Wayland)
     pkgs.swaybg                                     # wallpaper backend
+    pkgs.git-repo-manager                           # declarative git repo sync
   ]);
 
   #---------------------------------------------------------------------
@@ -147,18 +145,31 @@ in {
     ".inputrc".source = ./inputrc;
   };
 
-  # Clone wallpaper repos on first activation; no-op if already present.
-  home.activation.cloneWallpapers = lib.hm.dag.entryAnywhere ''
-    if [ ! -d "$HOME/.config/wallpaper/walls" ]; then
-      ${pkgs.git}/bin/git clone --depth=1 https://github.com/dharmx/walls "$HOME/.config/wallpaper/walls"
-    fi
-    if [ ! -d "$HOME/.config/wallpaper/aesthetic-wallpapers" ]; then
-      ${pkgs.git}/bin/git clone --depth=1 https://github.com/D3Ext/aesthetic-wallpapers "$HOME/.config/wallpaper/aesthetic-wallpapers"
-    fi
-  '';
+  # Sync git repos after network is up (runs async via timer to avoid blocking activation)
+  systemd.user.services.grm-sync = {
+    Unit = {
+      Description = "Sync git repositories via grm";
+      After = [ "network-online.target" ];
+      Wants = [ "network-online.target" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.git-repo-manager}/bin/grm repos sync config --config %h/.config/grm/repos.yaml";
+    };
+  };
+
+  systemd.user.timers.grm-sync = {
+    Unit.Description = "Sync git repositories on boot and daily";
+    Timer = {
+      OnStartupSec = "30s";
+      OnUnitActiveSec = "1d";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
 
   xdg.configFile = {
     "rofi/config.rasi".text = builtins.readFile ./rofi;
+    "grm/repos.yaml".source = ./grm-repos.yaml;
   } // (if isDarwin then {
     # Rectangle.app. This has to be imported manually using the app.
     "rectangle/RectangleConfig.json".text = builtins.readFile ./RectangleConfig.json;

@@ -1,0 +1,26 @@
+---
+trees:
+  - root: ~/.config
+    repos:
+      - name: nvim
+        remotes:
+          - name: origin
+            url: "https://github.com/LazyVim/starter.git"
+            type: https
+      - name: emacs
+        remotes:
+          - name: origin
+            url: "https://github.com/doomemacs/doomemacs.git"
+            type: https
+  - root: ~/.config/wallpaper
+    repos:
+      - name: walls
+        remotes:
+          - name: origin
+            url: "https://github.com/dharmx/walls.git"
+            type: https
+      - name: aesthetic-wallpapers
+        remotes:
+          - name: origin
+            url: "https://github.com/D3Ext/aesthetic-wallpapers.git"
+            type: https

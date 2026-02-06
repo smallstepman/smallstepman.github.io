@@ -46,6 +46,9 @@ in systemFunc rec {
     # Niri Wayland compositor for Linux
     (if isLinux then inputs.niri.nixosModules.niri else {})
 
+    # Disko for declarative disk partitioning
+    (if isLinux then inputs.disko.nixosModules.disko else {})
+
     # Mango Wayland compositor for Linux
     (if isLinux then inputs.mangowc.nixosModules.mango else {})
 
