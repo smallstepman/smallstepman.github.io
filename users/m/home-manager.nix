@@ -119,6 +119,26 @@ in {
     pkgs.waypaper                                   # wallpaper manager (Wayland)
     pkgs.swaybg                                     # wallpaper backend
     pkgs.git-repo-manager                           # declarative git repo sync
+
+    # Bootstrap script - run once after fresh install
+    (pkgs.writeShellScriptBin "setup-my-tools" ''
+      set -e
+
+      echo "==> Syncing git repositories..."
+      ${pkgs.git-repo-manager}/bin/grm repos sync config --config ~/.config/grm/repos.yaml
+
+      echo "==> Setting up Neovim (Lazy sync)..."
+      ${pkgs.neovim}/bin/nvim --headless "+Lazy! sync" +qa || true
+
+      echo "==> Setting up Doom Emacs..."
+      if [ -x ~/.config/emacs/bin/doom ]; then
+        ~/.config/emacs/bin/doom sync
+      else
+        echo "    Doom not found, skipping"
+      fi
+
+      echo "==> Bootstrap complete!"
+    '')
   ]);
 
   #---------------------------------------------------------------------
@@ -145,27 +165,6 @@ in {
     ".inputrc".source = ./inputrc;
   };
 
-  # Sync git repos after network is up (runs async via timer to avoid blocking activation)
-  systemd.user.services.grm-sync = {
-    Unit = {
-      Description = "Sync git repositories via grm";
-      After = [ "network-online.target" ];
-      Wants = [ "network-online.target" ];
-    };
-    Service = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.git-repo-manager}/bin/grm repos sync config --config %h/.config/grm/repos.yaml";
-    };
-  };
-
-  systemd.user.timers.grm-sync = {
-    Unit.Description = "Sync git repositories on boot and daily";
-    Timer = {
-      OnStartupSec = "30s";
-      OnUnitActiveSec = "1d";
-    };
-    Install.WantedBy = [ "timers.target" ];
-  };
 
   xdg.configFile = {
     "rofi/config.rasi".text = builtins.readFile ./rofi;
