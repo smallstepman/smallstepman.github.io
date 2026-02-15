@@ -78,6 +78,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Secrets management
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    sopsidy = {
+      url = "github:timewave-computer/sopsidy";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
   outputs = { self, nixpkgs, home-manager, darwin, ... }@inputs: let
@@ -117,21 +127,6 @@
       user   = "m";
     };
 
-    nixosConfigurations.vm-aarch64-prl = mkSystem "vm-aarch64-prl" rec {
-      system = "aarch64-linux";
-      user   = "m";
-    };
-
-    nixosConfigurations.vm-aarch64-utm = mkSystem "vm-aarch64-utm" rec {
-      system = "aarch64-linux";
-      user   = "m";
-    };
-
-    nixosConfigurations.vm-intel = mkSystem "vm-intel" rec {
-      system = "x86_64-linux";
-      user   = "m";
-    };
-
     nixosConfigurations.wsl = mkSystem "wsl" {
       system = "x86_64-linux";
       user   = "m";
@@ -142,6 +137,34 @@
       system = "aarch64-darwin";
       user   = "m";
       darwin = true;
+    };
+
+    # Sopsidy secret collector script (rbw/bitwarden backend)
+    # Built for common host systems since collect-secrets runs locally,
+    # not on the target VM.
+    packages.aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "aarch64-darwin"; };
+      hosts = {
+        inherit (self.nixosConfigurations) vm-aarch64;
+      };
+    };
+    packages.x86_64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "x86_64-darwin"; };
+      hosts = {
+        inherit (self.nixosConfigurations) vm-aarch64;
+      };
+    };
+    packages.aarch64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "aarch64-linux"; };
+      hosts = {
+        inherit (self.nixosConfigurations) vm-aarch64;
+      };
+    };
+    packages.x86_64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
+      hosts = {
+        inherit (self.nixosConfigurations) vm-aarch64;
+      };
     };
   };
 }

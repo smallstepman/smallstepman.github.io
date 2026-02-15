@@ -20,11 +20,20 @@ let
 
     ll = "ls -lh";
     la = "ls -a";
+
+    cc = "claude";
+    oc = "opencode";
+    
+    rs = "cargo";
   } // (if isLinux then {
     # Two decades of using a Mac has made this such a strong memory
     # that I'm just going to keep it consistent.
     pbcopy = "xclip";
     pbpaste = "xclip -o";
+
+    # NOTE: with-amp / with-openai are shell functions (see zsh initContent below).
+    # Shell aliases can't wrap commands; these placeholders exist only for discoverability.
+    # Actual definitions: with-openai() { OPENAI_API_KEY=$(rbw get openai-api-key) "$@"; }
   } else {});
 
   # For our MANPAGER env var
@@ -55,26 +64,21 @@ in {
   # per-project flakes sourced with direnv and nix-shell, so this is
   # not a huge list.
   home.packages = [
-    pkgs._1password-cli
     pkgs.asciinema
     pkgs.bat
     pkgs.chezmoi
     pkgs.eza
     pkgs.fd
     pkgs.fzf
-    pkgs.gh
     pkgs.htop
     pkgs.jq
+    pkgs.rbw
     pkgs.ripgrep
-    pkgs.sentry-cli
     pkgs.starship
     pkgs.tree
     pkgs.watch
 
     pkgs.gopls
-
-    pkgs.claude-code
-    pkgs.codex
 
     # Rust toolchain (via rust-overlay)
     (pkgs.rust-bin.stable.latest.default.override {
@@ -98,7 +102,23 @@ in {
     # This is automatically setup on Linux
     pkgs.cachix
     pkgs.gettext
+    pkgs._1password-cli
+    pkgs.claude-code
+    pkgs.codex
+    pkgs.sentry-cli
   ]) ++ (lib.optionals (isLinux && !isWSL) [
+    # Wrapper scripts: inject secrets from rbw per-process (not global env)
+    # gh is provided by programs.gh (with gitCredentialHelper); auth via shell function below
+    # Claude Code uses native apiKeyHelper instead (see home.file below)
+    (pkgs.writeShellScriptBin "codex" ''
+      OPENAI_API_KEY=$(${pkgs.rbw}/bin/rbw get "openai-api-key") \
+        exec ${pkgs.codex}/bin/codex "$@"
+    '')
+    (pkgs.writeShellScriptBin "sentry-cli" ''
+      SENTRY_AUTH_TOKEN=$(${pkgs.rbw}/bin/rbw get "sentry-auth-token") \
+        exec ${pkgs.sentry-cli}/bin/sentry-cli "$@"
+    '')
+    pkgs.claude-code
     pkgs.chromium
     pkgs.clang
     pkgs.firefox
@@ -153,9 +173,9 @@ in {
     PAGER = "less -FirSwX";
     MANPAGER = "${manpager}/bin/manpager";
 
+  } // (if isDarwin then {
     AMP_API_KEY = "op://Private/Amp_API/credential";
     OPENAI_API_KEY = "op://Private/OpenAPI_Personal/credential";
-  } // (if isDarwin then {
     # See: https://github.com/NixOS/nixpkgs/issues/390751
     DISPLAY = "nixpkgs-390751";
   } else {});
@@ -163,7 +183,12 @@ in {
   home.file = {
     ".gdbinit".source = ./gdbinit;
     ".inputrc".source = ./inputrc;
-  };
+  } // (if isLinux then {
+    # Claude Code apiKeyHelper: fetches token from rbw on demand (auto-refreshes every 5min)
+    ".claude/settings.json".text = builtins.toJSON {
+      apiKeyHelper = "${pkgs.rbw}/bin/rbw get claude-oauth-token";
+    };
+  } else {});
 
 
   xdg.configFile = {
@@ -173,6 +198,10 @@ in {
     # Rectangle.app. This has to be imported manually using the app.
     "rectangle/RectangleConfig.json".text = builtins.readFile ./RectangleConfig.json;
   } else {}) // (if isLinux then {
+    # Prevent home-manager from managing rbw config as a read-only store symlink;
+    # the rbw-config systemd service writes the real config with sops email.
+    "rbw/config.json".enable = lib.mkForce false;
+
     "ghostty/config".text = builtins.readFile ./ghostty.linux;
 
     # wlr-which-key configuration
@@ -441,10 +470,18 @@ in {
     initContent = ''
       # fnm (Node version manager)
       eval "$(fnm env --use-on-cd)"
-      
+
       # Starship prompt
       eval "$(starship init zsh)"
-    '';
+    '' + (if isLinux then ''
+
+      # gh: inject GITHUB_TOKEN per-invocation from rbw (no global env var)
+      gh() { GITHUB_TOKEN=$(rbw get github-token) command gh "$@"; }
+
+      # Ad-hoc API key injection (usage: with-openai some-command --flag)
+      with-openai() { OPENAI_API_KEY=$(rbw get openai-api-key) "$@"; }
+      with-amp() { AMP_API_KEY=$(rbw get amp-api-key) "$@"; }
+    '' else "");
   };
 
   programs.bash = {
@@ -470,6 +507,25 @@ in {
     };
   };
 
+  # gh with credential helper: replaces credential.helper = "store"
+  programs.gh = {
+    enable = true;
+    gitCredentialHelper.enable = true;
+  };
+
+  # rbw (Bitwarden) configuration.
+  # macOS: brew-managed, manual setup (`brew install rbw && rbw register`).
+  # Linux/VM: Nix-managed package. Config file is written by the rbw-config
+  #           systemd service (reads email from sops), NOT by home-manager.
+  programs.rbw = lib.mkIf isLinux {
+    enable = true;
+    settings = {
+      base_url = "https://api.bitwarden.eu";
+      email = "overwritten-by-systemd";
+      lock_timeout = 86400; # 24 hours
+      pinentry = pkgs.pinentry-tty;
+    };
+  };
   programs.git = {
     enable = true;
     signing = {
@@ -482,7 +538,7 @@ in {
       branch.autosetuprebase = "always";
       color.ui = true;
       core.askPass = ""; # needs to be empty to use terminal for ask pass
-      credential.helper = "store"; # want to make this more secure
+      # Git credentials handled by programs.gh.gitCredentialHelper
       github.user = "smallstepman";
       push.default = "tracking";
       init.defaultBranch = "main";

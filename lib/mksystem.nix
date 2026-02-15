@@ -52,6 +52,10 @@ in systemFunc rec {
     # Mango Wayland compositor for Linux
     (if isLinux then inputs.mangowc.nixosModules.mango else {})
 
+    # Secrets management (sops-nix + sopsidy)
+    (if isLinux then inputs.sops-nix.nixosModules.sops else {})
+    (if isLinux then inputs.sopsidy.nixosModules.default else {})
+
     machineConfig
     userOSConfig
     home-manager.home-manager {
