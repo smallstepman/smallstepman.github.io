@@ -54,6 +54,10 @@ in systemFunc rec {
 
     # Noctalia shell module for Linux
     (if isLinux then inputs.noctalia.nixosModules.default else {})
+    
+    # Secrets management (sops-nix + sopsidy)
+    (if isLinux then inputs.sops-nix.nixosModules.sops else {})
+    (if isLinux then inputs.sopsidy.nixosModules.default else {})
 
     machineConfig
     userOSConfig
