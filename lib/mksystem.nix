@@ -52,13 +52,16 @@ in systemFunc rec {
     # Mango Wayland compositor for Linux
     (if isLinux then inputs.mangowc.nixosModules.mango else {})
 
+    # Noctalia shell module for Linux
+    (if isLinux then inputs.noctalia.nixosModules.default else {})
+
     machineConfig
     userOSConfig
     home-manager.home-manager {
       home-manager.useGlobalPkgs = true;
       home-manager.useUserPackages = true;
       home-manager.sharedModules =
-        if isLinux then [ inputs.mangowc.hmModules.mango ] else [];
+        if isLinux then [ inputs.mangowc.hmModules.mango inputs.noctalia.homeModules.default ] else [];
       home-manager.users.${user} = import userHMConfig {
         isWSL = isWSL;
         inputs = inputs;

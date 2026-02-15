@@ -108,6 +108,9 @@
     package = pkgs.niri-unstable;
   };
 
+  # Enable Noctalia shell service for Wayland sessions
+  services.noctalia-shell.enable = true;
+
   # Enable mango (Wayland compositor) - configured via home-manager
   programs.mango.enable = true;
 
