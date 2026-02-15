@@ -1,6 +1,8 @@
 { config, pkgs, lib, currentSystem, currentSystemName, inputs, ... }:
 
 {
+  sops.hostPubKey = lib.removeSuffix "\n" (builtins.readFile ./generated/vm-age-pubkey);
+
   imports = [
     ../modules/specialization/gnome-ibus.nix
   ];
@@ -44,8 +46,13 @@
   # Enable NetworkManager (was previously pulled in by GNOME)
   networking.networkmanager.enable = true;
 
-  # Don't require password for sudo
-  security.sudo.wheelNeedsPassword = false;
+  # Require password for sudo but cache it for 10 minutes.
+  # Blocks automated privilege escalation (LLM agents, malicious deps)
+  # while staying low-friction for interactive use.
+  security.sudo.wheelNeedsPassword = true;
+  security.sudo.extraConfig = ''
+    Defaults timestamp_timeout=10
+  '';
 
   # Virtualization settings
   virtualisation.docker.enable = true;
@@ -69,8 +76,9 @@
   # "sudo tailscale up". If you don't use tailscale, you should comment
   # out or delete all of this.
   services.tailscale.enable = true;
+  services.tailscale.authKeyFile = config.sops.secrets."tailscale/auth-key".path;
 
-  # Define a user account. Don't forget to set a password with ‘passwd’.
+  # Define a user account. Don't forget to set a password with 'passwd'.
   users.mutableUsers = false;
 
   # Manage fonts. We pull these from a secret directory since most of these
@@ -126,10 +134,38 @@
   services.xserver.enable = true;
   services.xserver.xkb.layout = "us";
 
+  # Secrets management (sops-nix + sopsidy)
+  # VM pubkey is read from machines/generated/vm-age-pubkey when present.
+  sops.defaultSopsFile = ./secrets.yaml;
+  sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+  sops.age.generateKey = true;
+  sops.age.sshKeyPaths = [];
+  sops.gnupg.sshKeyPaths = [];
+  sops.secrets."tailscale/auth-key" = {
+    collect.rbw.id = "tailscale-auth-key";
+  };
+  sops.secrets."rbw/master-password" = {
+    collect.rbw.id = "bitwarden-master-password";
+    owner = "m";
+    mode = "0400";
+  };
+  sops.secrets."rbw/email" = {
+    collect.rbw.id = "bitwarden-email";
+    owner = "m";
+    mode = "0400";
+  };
+  sops.secrets."user/hashed-password" = {
+    collect.rbw.id = "nixos-hashed-password";
+    neededForUsers = true;
+  };
+
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;
-  services.openssh.settings.PasswordAuthentication = true;
+  services.openssh.settings.PasswordAuthentication = false;
+  services.openssh.settings.KbdInteractiveAuthentication = false;
+  services.openssh.settings.X11Forwarding = false;
   services.openssh.settings.PermitRootLogin = "no";
+  services.openssh.settings.AllowUsers = [ "m" ];
 
   # Enable flatpak. I don't use any flatpak apps but I do sometimes
   # test them so I keep this enabled.
@@ -139,9 +175,14 @@
   # and release snaps so we keep this enabled.
   services.snap.enable = true;
 
-  # Disable the firewall since we're in a VM and we want to make it
-  # easy to visit stuff in here. We only use NAT networking anyways.
-  networking.firewall.enable = false;
+  # Firewall: trust VMware NAT + Tailscale interfaces.
+  # enp+ covers the VMware virtual NIC inside the guest (enp2s0).
+  networking.firewall = {
+    enable = true;
+    trustedInterfaces = [ "tailscale0" "enp+" ];
+    allowedTCPPorts = [ 22 ];
+    allowedUDPPorts = [ config.services.tailscale.port ];
+  };
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions
