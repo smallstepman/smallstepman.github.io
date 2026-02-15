@@ -30,6 +30,7 @@ let
     # that I'm just going to keep it consistent.
     pbcopy = "xclip";
     pbpaste = "xclip -o";
+    noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
 
     # NOTE: with-amp / with-openai are shell functions (see zsh initContent below).
     # Shell aliases can't wrap commands; these placeholders exist only for discoverability.
@@ -376,6 +377,12 @@ in {
       # Start notification daemon
       mako &
     '';
+  };
+
+  # Noctalia shell configuration (Linux VM only)
+  programs.noctalia-shell = lib.mkIf (isLinux && !isWSL) {
+    enable = true;
+    settings = ./noctalia.json;
   };
 
   programs.zsh = {

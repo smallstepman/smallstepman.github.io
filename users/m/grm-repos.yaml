@@ -12,7 +12,7 @@ trees:
           - name: origin
             url: "https://github.com/doomemacs/doomemacs.git"
             type: https
-  - root: ~/.config/wallpaper
+  - root: ~/Pictures/Wallpapers
     repos:
       - name: walls
         remotes:

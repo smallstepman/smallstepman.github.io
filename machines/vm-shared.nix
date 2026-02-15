@@ -57,6 +57,11 @@
   # Virtualization settings
   virtualisation.docker.enable = true;
 
+  # Noctalia prerequisites (wifi/bluetooth/power/battery integrations)
+  hardware.bluetooth.enable = true;
+  services.power-profiles-daemon.enable = true;
+  services.upower.enable = true;
+
   # Select internationalisation properties.
   i18n = {
     defaultLocale = "en_US.UTF-8";
@@ -115,6 +120,9 @@
     enable = true;
     package = pkgs.niri-unstable;
   };
+
+  # Enable Noctalia shell service for Wayland sessions
+  services.noctalia-shell.enable = true;
 
   # Enable mango (Wayland compositor) - configured via home-manager
   programs.mango.enable = true;
