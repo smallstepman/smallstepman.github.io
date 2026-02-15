@@ -433,6 +433,19 @@ in {
     '';
   };
 
+  # Noctalia shell configuration (Linux VM only)
+  programs.noctalia-shell = lib.mkIf (isLinux && !isWSL) {
+    enable = true;
+    settings = {
+      bar = {
+        density = "compact";
+        position = "top";
+      };
+      colorSchemes.predefinedScheme = "Noctalia (default)";
+      general.radiusRatio = 0.9;
+    };
+  };
+
   programs.zsh = {
     enable = true;
     autosuggestion.enable = true;
