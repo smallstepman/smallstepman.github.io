@@ -200,7 +200,7 @@
         "id": "calendar-month-card"
       },
       {
-        "enabled": true,
+        "enabled": false,
         "id": "weather-card"
       }
     ]
@@ -245,7 +245,7 @@
       {
         "colorScheme": "Noctalia (default)",
         "darkMode": true,
-        "generationMethod": "muted",
+        "generationMethod": "vibrant",
         "paletteColors": [
           "#a9aca0",
           "#9aa092",
@@ -302,24 +302,24 @@
     "shortcuts": {
       "left": [
         {
+          "id": "NoctaliaPerformance"
+        },
+        {
           "id": "Network"
         },
-        {
-          "id": "WallpaperSelector"
-        },
-        {
-          "id": "NoctaliaPerformance"
-        }
-      ],
-      "right": [
         {
           "id": "Notifications"
         },
         {
-          "id": "PowerProfile"
+          "id": "KeepAwake"
+        }
+      ],
+      "right": [
+        {
+          "id": "WallpaperSelector"
         },
         {
-          "id": "KeepAwake"
+          "id": "DarkMode"
         },
         {
           "id": "NightLight"
@@ -343,13 +343,13 @@
         "enabled": false,
         "id": "brightness-card"
       },
-      {
-        "enabled": true,
+      { 
+        "enabled": false,
         "id": "weather-card"
       },
-      {
-        "enabled": true,
-        "id": "media-sysmon-card"
+      { 
+        "enabled": false,
+        "id": "media-system-card"
       }
     ]
   },
@@ -470,6 +470,8 @@
     "overlayLayer": true,
     "backgroundOpacity": 1,
     "respectExpireTimeout": false,
+    "enableMarkdown": true,
+    "clearDismissed": true,
     "lowUrgencyDuration": 3,
     "normalUrgencyDuration": 8,
     "criticalUrgencyDuration": 15,
@@ -525,49 +527,25 @@
     "schedulingMode": "location",
     "manualSunrise": "06:30",
     "manualSunset": "18:30",
-    "generationMethod": "muted",
+    "generationMethod": "vibrant",
     "monitorForColors": ""
   },
   "templates": {
     "activeTemplates": [
-      {
-        "enabled": true,
-        "id": "emacs"
-      },
-      {
-        "enabled": true,
-        "id": "ghostty"
-      },
-      {
-        "enabled": true,
-        "id": "niri"
-      },
-      {
-        "enabled": true,
-        "id": "mango"
-      },
-      {
-        "enabled": true,
-        "id": "code"
-      },
-      {
-        "enabled": true,
-        "id": "yazi"
-      },
-      {
-        "enabled": true,
-        "id": "fuzzel"
-      },
-      {
-        "enabled": true,
-        "id": "foot"
-      },
-      {
-        "enabled": true,
-        "id": "btop"
-      }
+        {
+            "id": "btop",
+            "enabled": true
+        }, 
+        {
+            "id": "ghostty",
+            "enabled": true
+        },
+        {
+            "id": "yazi",
+            "enabled": true
+        }
     ],
-    "enableUserTheming": false
+    "enableUserTheming": true
   },
   "nightLight": {
     "enabled": false,
@@ -579,9 +557,9 @@
     "manualSunset": "18:30"
   },
   "hooks": {
-    "enabled": false,
-    "wallpaperChange": "",
-    "darkModeChange": "",
+    "enabled": true,
+    "wallpaperChange": "noctalia-theme-reload",
+    "darkModeChange": "noctalia-theme-reload",
     "screenLock": "",
     "screenUnlock": "",
     "performanceModeEnabled": "",

@@ -25,6 +25,8 @@ let
     oc = "opencode";
     
     rs = "cargo";
+
+    nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
   } // (if isLinux then {
     # Two decades of using a Mac has made this such a strong memory
     # that I'm just going to keep it consistent.
@@ -78,6 +80,89 @@ in {
     pkgs.starship
     pkgs.tree
     pkgs.watch
+    pkgs.nerd-fonts.symbols-only  # icon font for Doom Emacs (+icons) and terminal apps
+    pkgs.emacs-all-the-icons-fonts  # all-the-icons font family for Emacs
+
+    # CLI tools
+    pkgs.yazi          # terminal file manager
+    pkgs.btop          # system monitor
+    pkgs.gnumake       # make
+    pkgs.just          # command runner
+    pkgs.tmux          # terminal multiplexer
+    pkgs.tig           # git TUI
+    pkgs.difi          # terminal git diff reviewer
+    pkgs.agent-of-empires  # terminal session manager for AI agents
+
+    # llm-agents.nix — AI coding agents
+    pkgs.llm-agents.amp
+    # pkgs.llm-agents.code
+    pkgs.llm-agents.copilot-cli
+    pkgs.llm-agents.crush
+    pkgs.llm-agents.cursor-agent
+    pkgs.llm-agents.droid
+    pkgs.llm-agents.eca
+    pkgs.llm-agents.forge
+    pkgs.llm-agents.gemini-cli
+    # pkgs.llm-agents.goose-cli
+    pkgs.llm-agents.jules
+    pkgs.llm-agents.kilocode-cli
+    pkgs.llm-agents.letta-code
+    pkgs.llm-agents.mistral-vibe
+    pkgs.llm-agents.nanocoder
+    pkgs.llm-agents.opencode
+    pkgs.llm-agents.pi
+    pkgs.llm-agents.qoder-cli
+    pkgs.llm-agents.qwen-code
+
+    # llm-agents.nix — Claude Code ecosystem
+    # pkgs.llm-agents.auto-claude
+    pkgs.llm-agents.catnip
+    pkgs.llm-agents.ccstatusline
+    pkgs.llm-agents.claude-code-router
+    pkgs.llm-agents.claude-plugins
+    pkgs.llm-agents.claudebox
+    pkgs.llm-agents.sandbox-runtime
+    pkgs.llm-agents.skills-installer
+
+    # llm-agents.nix — ACP ecosystem
+    pkgs.llm-agents.claude-code-acp
+    pkgs.llm-agents.codex-acp
+
+    # llm-agents.nix — usage analytics
+    pkgs.llm-agents.ccusage
+    pkgs.llm-agents.ccusage-amp
+    pkgs.llm-agents.ccusage-codex
+    pkgs.llm-agents.ccusage-opencode
+    pkgs.llm-agents.ccusage-pi
+
+    # llm-agents.nix — workflow & project management
+    pkgs.llm-agents.agent-deck
+    pkgs.llm-agents.backlog-md
+    pkgs.llm-agents.beads
+    # pkgs.llm-agents.beads-rust
+    pkgs.llm-agents.cc-sdd
+    # pkgs.llm-agents.chainlink
+    pkgs.llm-agents.openspec
+    pkgs.llm-agents.spec-kit
+    pkgs.llm-agents.vibe-kanban
+    pkgs.llm-agents.workmux
+
+    # llm-agents.nix — code review
+    pkgs.llm-agents.coderabbit-cli
+    pkgs.llm-agents.tuicr
+
+    # llm-agents.nix — utilities
+    # pkgs.llm-agents.agent-browser
+    pkgs.llm-agents.ck
+    # pkgs.llm-agents.coding-agent-search
+    pkgs.llm-agents.copilot-language-server
+    # pkgs.llm-agents.handy
+    pkgs.llm-agents.happy-coder
+    # pkgs.llm-agents.localgpt
+    # pkgs.llm-agents.mcporter
+    # pkgs.llm-agents.openclaw
+    pkgs.llm-agents.openskills
+    # pkgs.llm-agents.qmd
 
     pkgs.gopls
 
@@ -94,11 +179,6 @@ in {
     pkgs.nodejs_22
     pkgs.fnm
 
-    # Emacs + Doom Emacs dependencies
-    pkgs.emacs30-pgtk
-    pkgs.cmake       # for vterm
-    pkgs.libtool     # for vterm
-    pkgs.shellcheck  # for shell script linting
   ] ++ (lib.optionals isDarwin [
     # This is automatically setup on Linux
     pkgs.cachix
@@ -119,16 +199,22 @@ in {
       SENTRY_AUTH_TOKEN=$(${pkgs.rbw}/bin/rbw get "sentry-auth-token") \
         exec ${pkgs.sentry-cli}/bin/sentry-cli "$@"
     '')
+
+    # Called by Noctalia hooks/user-templates on wallpaper/dark-mode changes
+    (pkgs.writeShellScriptBin "noctalia-theme-reload" ''
+      # Reload Noctalia theme in running Emacs daemon
+      ${pkgs.emacs-pgtk}/bin/emacsclient -e \
+        '(progn (add-to-list (quote custom-theme-load-path) "~/.local/share/noctalia/emacs-themes/") (load-theme (quote noctalia) t))' \
+        2>/dev/null || true
+    '')
+
     pkgs.claude-code
     pkgs.chromium
     pkgs.clang
     pkgs.firefox
     pkgs.fuzzel       # app launcher for Wayland
     pkgs.valgrind
-    pkgs.zathura
     pkgs.foot         # lightweight Wayland terminal
-    pkgs.mako         # notifications
-    pkgs.swaylock     # screen locker
     pkgs.grim         # screenshots
     pkgs.slurp        # region selection
 
@@ -137,8 +223,6 @@ in {
     pkgs.wlr-which-key                              # which-key for wlroots
 
     # Wallpaper
-    pkgs.waypaper                                   # wallpaper manager (Wayland)
-    pkgs.swaybg                                     # wallpaper backend
     pkgs.git-repo-manager                           # declarative git repo sync
 
     # Bootstrap script - run once after fresh install
@@ -151,12 +235,8 @@ in {
       echo "==> Setting up Neovim (Lazy sync)..."
       ${pkgs.neovim}/bin/nvim --headless "+Lazy! sync" +qa || true
 
-      echo "==> Setting up Doom Emacs..."
-      if [ -x ~/.config/emacs/bin/doom ]; then
-        ~/.config/emacs/bin/doom sync
-      else
-        echo "    Doom not found, skipping"
-      fi
+      echo "==> Regenerating Noctalia color templates..."
+      noctalia-shell ipc call colorscheme regenerate || true
 
       echo "==> Bootstrap complete!"
     '')
@@ -207,25 +287,66 @@ in {
 
     # wlr-which-key configuration
     "wlr-which-key/config.yaml".text = builtins.readFile ./wlr-which-key-config.yaml;
+
+    # Noctalia user templates and theme template inputs
+    "noctalia/user-templates.toml".source = ./noctalia-user-templates.toml;
+    "noctalia/emacs-template.el".source = ./doom/themes/noctalia-template.el;
+
+    # Neovim matugen template (input for Noctalia user template → nvim base16 theme)
+    "nvim/lua/matugen-template.lua".source = ./lazyvim/lua/matugen-template.lua;
   } else {});
 
   #---------------------------------------------------------------------
   # Programs
   #---------------------------------------------------------------------
 
+  # Doom Emacs (via nix-doom-emacs-unstraightened)
+  programs.doom-emacs = {
+    enable = true;
+    doomDir = ./doom;
+    emacs = pkgs.emacs-pgtk;
+    # :config literate has no effect in unstraightened; tangle config.org at build time
+    tangleArgs = "--all config.org";
+  };
+
+  # Emacs daemon as a systemd user service (Linux only; macOS has no systemd)
+  services.emacs = lib.mkIf isLinux {
+    enable = true;
+    defaultEditor = false; # we set EDITOR to nvim elsewhere
+  };
+
   programs.gpg.enable = !isDarwin;
 
   # Niri Wayland compositor configuration (Linux only)
   programs.niri.settings = lib.mkIf isLinux {
+    hotkey-overlay = {
+      skip-at-startup = true;
+    };
+    prefer-no-csd = true; # Client Side Decorations (title bars etc)
     input = {
+      mod-key = "Control";  # or "Super", "Control", etc.
       keyboard.xkb.layout = "us";
-      keyboard.repeat-delay = 200;
-      keyboard.repeat-rate = 40;
+      keyboard.repeat-delay = 150;
+      keyboard.repeat-rate = 50;
       touchpad = {
         tap = true;
         natural-scroll = true;
       };
     };
+
+    window-rules = [
+      {
+        geometry-corner-radius = {
+          top-left = 12.0;
+          top-right = 12.0;
+          bottom-right = 12.0;
+          bottom-left = 12.0;
+        };
+      }
+      {
+        clip-to-geometry = true;
+      }
+    ];
 
     outputs."Virtual-1".scale = 2.0;
 
@@ -472,6 +593,185 @@ in {
       };
     };
   };
+  
+  programs.vscode = {
+    enable = true;
+    profiles = {
+      default = {
+        extensions = with pkgs.vscode-extensions; [
+          # Themes
+          dracula-theme.theme-dracula
+
+          # Vim
+          vscodevim.vim
+
+          # Markdown
+          yzhang.markdown-all-in-one
+          bierner.markdown-mermaid
+
+          # Nix
+          bbenoist.nix
+
+          # Python
+          charliermarsh.ruff
+          ms-python.python
+          ms-python.vscode-pylance
+          ms-python.debugpy
+
+          # Jupyter
+          ms-toolsai.jupyter
+          ms-toolsai.jupyter-keymap
+          ms-toolsai.jupyter-renderers
+
+          # Rust
+          rust-lang.rust-analyzer
+          vadimcn.vscode-lldb
+
+          # GitHub
+          github.vscode-github-actions
+          github.copilot-chat
+
+          # Remote Development
+          ms-vscode-remote.remote-ssh
+          ms-vscode-remote.remote-ssh-edit
+          ms-vscode.remote-explorer
+
+          # Docker
+          ms-azuretools.vscode-docker
+
+          # Terraform
+          hashicorp.terraform
+
+          # LaTeX
+          james-yu.latex-workshop
+
+          # SQL
+          # mtxr.sqltools
+
+          # Swift
+          # sweetpad.sweetpad
+
+          # Additional extensions (add manually if not in nixpkgs):
+          rooveterinaryinc.roo-cline
+          alefragnani.project-manager
+          anthropic.claude-code
+          bodil.file-browser
+          kahole.magit
+          vspacecode.vspacecode
+          vspacecode.whichkey
+          # - anfeket.mono-bw
+          # - danprince.vsnetrw
+          # - detachhead.basedpyright
+          # - myriad-dreamin.tinymist
+          # - openai.chatgpt
+          # - sst-dev.opencode
+          # - subframe7536.custom-ui-style
+          # - jimmyzjx.leaderkey
+          # - ggabi40.newyorkatnighttheme
+        ];
+
+        userSettings = {
+          "breadcrumbs.enabled" = false;
+          "diffEditor.codeLens" = true;
+          "editor.folding" = false;
+          "editor.glyphMargin" = false;
+          "editor.lineNumbers" = "off";
+          "editor.minimap.enabled" = false;
+          "editor.scrollbar.horizontal" = "hidden";
+          "editor.scrollbar.ignoreHorizontalScrollbarInContentHeight" = true;
+          "editor.scrollbar.vertical" = "hidden";
+          "editor.scrollbar.verticalScrollbarSize" = 1;
+          "explorer.confirmDragAndDrop" = false;
+          "files.exclude" = {
+            "**/__pycache__" = true;
+            "**/.ipynb_checkpoints" = true;
+            "**/.pytest_cache" = true;
+            "**/.terraform.lock.hcl" = true;
+            "**/.terragrunt-cache" = true;
+            "**/.vscode" = true;
+            "node_modules/" = true;
+          };
+          "git.autofetch" = true;
+          "jupyter.askForKernelRestart" = false;
+          "jupyter.showOutlineButtonInNotebookToolbar" = false;
+          "markdown.preview.scrollEditorWithPreview" = false;
+          "markdown.preview.scrollPreviewWithEditor" = false;
+          "notebook.cellToolbarVisibility" = "hover";
+          "notebook.defaultFormatter" = "charliermarsh.ruff";
+          "notebook.globalToolbar" = false;
+          "remote.SSH.remoteServerListenOnSocket" = true;
+          "search.showLineNumbers" = true;
+          "telemetry.enableTelemetry" = false;
+          "telemetry.telemetryLevel" = "off";
+          "vim.statusBarColorControl" = true;
+          "vim.easymotion" = true;
+          "vim.useSystemClipboard" = true;
+          "vim.statusBarColors.normal" = "#244709";
+          "vim.statusBarColors.insert" = "#4e0b4e";
+          "vim.statusBarColors.visual" = "#676700";
+          "vim.statusBarColors.visualblock" = "#676700";
+          "vim.statusBarColors.visualline" = "#676700";
+          "vim.statusBarColors.searchinprogressmode" = ["#007aff" "#ff0000"];
+          "vim.handleKeys" = {
+            "<C-d>" = true;
+            "<C-s>" = false;
+            "<C-z>" = false;
+          };
+          "window.customTitleBarVisibility" = "never";
+          "window.density.editorTabHeight" = "compact";
+          "window.nativeTabs" = true;
+          "window.menuBarVisibility" = "hidden";
+          "workbench.editor.editorActionsLocation" = "hidden";
+          "workbench.editor.highlightModifiedTabs" = true;
+          "workbench.editor.pinnedTabSizing" = "shrink";
+          "workbench.editor.showTabs" = "none";
+          "workbench.editor.tabSizing" = "shrink";
+          "workbench.editor.tabSizingFixedMinWidth" = 38;
+          "workbench.statusBar.visible" = false;
+          "workbench.startupEditor" = "none";
+          "workbench.colorTheme" = "New York at Night Theme";
+          "workbench.colorCustomizations" = {
+            "titleBar.forground" = "#00000000";
+            "titleBar.activeForeground" = "#00000000";
+            "titleBar.background" = "#00000000";
+            "titleBar.activeBackground" = "#00000000";
+          };
+          "terminal.integrated.defaultProfile.osx" = "zsh";
+          "terminal.integrated.defaultProfile.linux" = "zsh";
+          "terminal.integrated.inheritEnv" = false;
+          "terminal.integrated.shellIntegration.enabled" = false;
+          "terminal.integrated.scrollback" = 30000;
+          "python.terminal.activateEnvironment" = false;
+          "ruff.fixAll" = true;
+          "ruff.organizeImports" = false;
+          "ruff.lint.preview" = true;
+          "ruff.nativeServer" = "on";
+          "[python]" = {
+            "editor.defaultFormatter" = "charliermarsh.ruff";
+            "editor.formatOnSave" = true;
+            "editor.codeActionsOnSave" = {
+              "source.fixAll" = "explicit";
+              "source.organizeImports" = "explicit";
+            };
+          };
+          "[json]" = {
+            "editor.defaultFormatter" = "vscode.json-language-features";
+          };
+          "[html]" = {
+            "editor.defaultFormatter" = "vscode.html-language-features";
+          };
+          "git.confirmSync" = false;
+          "git.enableSmartCommit" = true;
+          "editor.fontWeight" = 1;
+          "editor.inlineSuggest.edits.experimental.useInterleavedLinesDiff" = "always";
+          "editor.inlineSuggest.showToolbar" = "always";
+          "debug.toolBarLocation" = "hidden";
+          "github.copilot.nextEditSuggestions.enabled" = true;
+          "chat.agent.maxRequests" = 50;
+        };
+      };
+    };
+  };
 
   programs.go = {
     enable = true;
@@ -481,9 +781,43 @@ in {
     };
   };
 
-  programs.neovim = {
+  programs.lazyvim = {
     enable = true;
-    package = inputs.neovim-nightly-overlay.packages.${pkgs.system}.default;
+    configFiles = ./lazyvim;
+
+    extras = {
+      lang.nix.enable = true;
+      lang.python = {
+        enable = true;
+        installDependencies = true;        # Install ruff
+        installRuntimeDependencies = true; # Install python3
+      };
+      lang.go = {
+        enable = true;
+        installDependencies = true;        # Install gopls, gofumpt, etc.
+        installRuntimeDependencies = true; # Install go compiler
+      };
+      lang.typescript = {
+        enable = true;
+        installDependencies = false;        # Skip typescript tools
+        installRuntimeDependencies = true;  # But install nodejs
+      };
+      lang.rust.enable = true;
+
+    };
+
+    # Additional packages (optional)
+    extraPackages = with pkgs; [
+      nixd       # Nix LSP
+      alejandra  # Nix formatter
+      pyright    # Python LSP
+    ];
+
+    # Only needed for languages not covered by LazyVim extras
+    treesitterParsers = with pkgs.vimPlugins.nvim-treesitter-parsers; [
+      templ     # Go templ files
+    ];
+
   };
 
   programs.atuin = {
@@ -508,5 +842,12 @@ in {
     name = "Vanilla-DMZ";
     package = pkgs.vanilla-dmz;
     size = 128;
+  };
+
+  # Ensure writable output directories for Noctalia user templates
+  home.activation = lib.mkIf (isLinux && !isWSL) {
+    createNoctaliaThemeDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      run mkdir -p "$HOME/.local/share/noctalia/emacs-themes"
+    '';
   };
 }

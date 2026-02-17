@@ -74,6 +74,9 @@
         fcitx5-hangul
         fcitx5-mozc
       ];
+      # Use Wayland input method frontend instead of GTK_IM_MODULE
+      # See: https://fcitx-im.org/wiki/Using_Fcitx_5_on_Wayland
+      fcitx5.waylandFrontend = true;
     };
   };
 

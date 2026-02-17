@@ -42,9 +42,9 @@
     # I think technically you're not supposed to override the nixpkgs
     # used by neovim but recently I had failures if I didn't pin to my
     # own. We can always try to remove that anytime.
-    neovim-nightly-overlay = {
-      url = "github:nix-community/neovim-nightly-overlay";
-    };
+    # neovim-nightly-overlay = {
+    #   url = "github:nix-community/neovim-nightly-overlay";
+    # };
 
     # Other packages
     rust-overlay = {
@@ -59,6 +59,13 @@
 
     # LLM agents for Nix
     llm-agents.url = "github:numtide/llm-agents.nix";
+
+    # LazyVim Nix (declarative Neovim + LazyVim)
+    lazyvim.url = "github:pfassina/lazyvim-nix";
+
+    # Non-flake sources for packages we build ourselves
+    difi-src = { url = "github:oug-t/difi"; flake = false; };
+    agent-of-empires-src = { url = "github:njbrake/agent-of-empires"; flake = false; };
 
     # Mango window control for Wayland
     mangowc = {
@@ -94,15 +101,46 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Doom Emacs via nix-doom-emacs-unstraightened (builds Doom + deps with Nix)
+    nix-doom-emacs-unstraightened = {
+      url = "github:marienz/nix-doom-emacs-unstraightened";
+      # Don't pull in its nixpkgs — neither the module nor overlay uses it
+      inputs.nixpkgs.follows = "";
+    };
+
   };
 
-  outputs = { self, nixpkgs, home-manager, darwin, ... }@inputs: let
+  outputs = { self, nixpkgs, home-manager, lazyvim, darwin, ... }@inputs: let
     # Overlays is the list of overlays we want to apply from flake inputs.
     overlays = [
       inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri
       inputs.llm-agents.overlays.default
       inputs.git-repo-manager.overlays.git-repo-manager
+
+      # Build non-flake packages from source
+      (final: prev: {
+        difi = final.buildGoModule {
+          pname = "difi";
+          version = "0-unstable-2026-02-17";
+          src = inputs.difi-src;
+          vendorHash = "sha256-bV5y8zKculYULkFl9J95qebLOzdTT/LuYycqMmHKZ+g=";
+          meta.description = "Terminal-based Git diff reviewer";
+        };
+
+        agent-of-empires = final.rustPlatform.buildRustPackage {
+          pname = "agent-of-empires";
+          version = "0.11.2";
+          src = inputs.agent-of-empires-src;
+          cargoHash = "sha256-gE5FhOrBTfrn/2j7lHLrEzgYwJ6pEd5kRFY9qwgUxDY=";
+          doCheck = false; # git tests need a working git in the sandbox
+          nativeBuildInputs = with final; [ pkg-config cmake perl ];
+          buildInputs = with final; [ openssl ]
+            ++ final.lib.optionals final.stdenv.isDarwin
+              (with final.darwin.apple_sdk.frameworks; [ Security SystemConfiguration ]);
+          meta.description = "Terminal session manager for AI coding agents";
+        };
+      })
 
       (final: prev:
         let

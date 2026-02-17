@@ -117,8 +117,6 @@ vm/install:
 	$(MAKE) secrets/collect
 	rsync -av -e 'sshpass -p "$(INSTALL_SSH_PASSWORD)" ssh $(INSTALL_SSH_OPTIONS) -p$(NIXPORT)' \
 		--exclude='vendor/' \
-		--exclude='.git-crypt/' \
-		--exclude='.jj/' \
 		--exclude='iso/' \
 		--rsync-path="sudo rsync" \
 		$(MAKEFILE_DIR)/ $(NIXINSTALLUSER)@$(NIXADDR):/nix-config
@@ -157,8 +155,6 @@ vm/install:
 vm/copy:
 	rsync -av -e 'ssh $(SSH_OPTIONS) -p$(NIXPORT)' \
 		--exclude='vendor/' \
-		--exclude='.git-crypt/' \
-		--exclude='.jj/' \
 		--exclude='iso/' \
 		$(MAKEFILE_DIR)/ $(NIXUSER)@$(NIXADDR):~/.nix-config-staging
 	ssh -t $(SSH_OPTIONS) -p$(NIXPORT) $(NIXUSER)@$(NIXADDR) \

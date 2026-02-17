@@ -2,11 +2,11 @@
 trees:
   - root: ~/.config
     repos:
-      - name: nvim
-        remotes:
-          - name: origin
-            url: "https://github.com/LazyVim/starter.git"
-            type: https
+      # - name: nvim
+      #   remotes:
+      #     - name: origin
+      #       url: "https://github.com/LazyVim/starter.git"
+      #       type: https
       - name: emacs
         remotes:
           - name: origin

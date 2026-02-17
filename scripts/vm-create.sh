@@ -177,7 +177,7 @@ touch "$VM_DIR/${VM_NAME}.scoreboard"
 echo ""
 echo "Creating virtual disk..."
 if command -v vmware-vdiskmanager >/dev/null 2>&1; then
-  vmware-vdiskmanager -c -s 100GB -a nvme -t 0 "$VM_DIR/Virtual Disk.vmdk"
+  vmware-vdiskmanager -c -s 200GB -a nvme -t 0 "$VM_DIR/Virtual Disk.vmdk"
 elif [ -f "/Applications/VMware Fusion.app/Contents/Library/vmware-vdiskmanager" ]; then
   "/Applications/VMware Fusion.app/Contents/Library/vmware-vdiskmanager" -c -s 100GB -a nvme -t 0 "$VM_DIR/Virtual Disk.vmdk"
 else
@@ -193,7 +193,7 @@ echo "   ISO: $ISO_FILE"
 echo "   CPU cores count: 7"
 echo "   RAM: 32GB"
 echo "   VRAM: 8GB"
-echo "   NVMe: 150GB"
+echo "   NVMe: 200GB"
 echo "   Network: autodetect"
 echo ""
 echo "To start the VM (should start automatically):"

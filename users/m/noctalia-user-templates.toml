@@ -1,0 +1,9 @@
+[templates.emacs-noctalia]
+input_path = "~/.config/noctalia/emacs-template.el"
+output_path = "~/.local/share/noctalia/emacs-themes/noctalia-theme.el"
+post_hook = 'noctalia-theme-reload'
+
+[templates.nvim-base16]
+input_path = "~/.config/nvim/lua/matugen-template.lua"
+output_path = "~/.config/nvim/lua/matugen.lua"
+post_hook = 'pkill -SIGUSR1 nvim'

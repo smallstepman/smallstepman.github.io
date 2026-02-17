@@ -15,5 +15,8 @@
         # None yet
       ];
     };
+
+    # Override XMODIFIERS to resolve conflict between fcitx5 (base) and ibus (specialization)
+    environment.variables.XMODIFIERS = lib.mkForce "@im=ibus";
   };
 }

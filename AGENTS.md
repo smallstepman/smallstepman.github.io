@@ -332,3 +332,253 @@ sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus
 6. **Firewall disabled** - Intentionally disabled in VMs for easier development access
 7. **Determinate Nix on macOS** - Uses Determinate installer, so `nix.enable = false` in darwin config
 8. **Home-manager integration** - Integrated as a NixOS/darwin module, not standalone; uses `useGlobalPkgs = true`
+
+# Summary of Your Nixos-Config Repository Exploration
+
+       Based on my thorough examination of your repository, here is the complete breakdown of the current setup:
+
+       ---
+       1. FLAKE.NIX - INPUTS AND STRUCTURE
+
+       Current Inputs (lines 4-104):
+       - Primary nixpkgs: github:nixos/nixpkgs/nixos-25.11 (main stable channel)
+       - Alternative channels: nixpkgs-old-ibus, nixpkgs-unstable, nixpkgs-master for testing bleeding-edge packages
+       - System modules: nixos-wsl, nix-snapd, home-manager (nightly), darwin
+       - Development overlays: rust-overlay, niri, llm-agents, git-repo-manager
+       - Specialized tools: ghostty, lazyvim, disko, sops-nix, sopsidy
+       - Non-flake sources: difi-src, agent-of-empires-src (built from source)
+       - Wayland ecosystem: niri, mangowc, noctalia
+
+       Overlays Applied (lines 108-156):
+       - rust-overlay.overlays.default
+       - niri.overlays.niri
+       - llm-agents.overlays.default
+       - git-repo-manager.overlays.git-repo-manager
+       - Custom overlays for building non-flake packages and importing unstable packages (gh, claude-code, ibus variants)
+
+       Important Note: NO emacs-overlay is currently present in the inputs or overlays list.
+
+       Input Passing Mechanism (line 106):
+       outputs = { self, nixpkgs, home-manager, lazyvim, darwin, ... }@inputs: let
+       All inputs are captured with @inputs and passed through to mkSystem helper function (line 159: inherit overlays
+       nixpkgs inputs).
+
+       ---
+       2. LIB/MKSYSTEM.NIX - MODULE ORCHESTRATION
+
+       Key Function: Creates NixOS/Darwin systems with shared configuration patterns.
+
+       Input Parameters (lines 3-11):
+       - nixpkgs, overlays, inputs passed from flake
+       - Per-system config: system, user, optional darwin and wsl flags
+
+       Module Composition (lines 31-87):
+       1. Overlays applied globally (line 35)
+       2. Platform-specific modules conditionally loaded:
+         - WSL modules (nixos-wsl)
+         - Snapd, Niri, Disko (Linux only)
+         - Mango, Noctalia compositors (Linux only)
+         - Sops-nix/sopsidy secrets management (Linux only)
+       3. Configuration files loaded:
+         - machines/${name}.nix - Machine-specific hardware/boot config
+         - users/${user}/{darwin|nixos}.nix - OS-specific user config
+         - users/${user}/home-manager.nix - Home Manager config
+       4. Home-Manager integration (lines 64-73):
+         - useGlobalPkgs = true (reuse system pkgs)
+         - useUserPackages = true (install to user profile)
+         - Shared modules: lazyvim.homeManagerModules.default, mangowc.hmModules.mango, noctalia.homeModules.default
+       (conditionally)
+       5. Extra context arguments (lines 78-85): Passes currentSystem, currentSystemName, currentSystemUser, isWSL, inputs
+       to all modules
+
+       ---
+       3. USERS/M/HOME-MANAGER.NIX - COMPREHENSIVE BREAKDOWN
+
+       Structure: A dual-function module that takes { isWSL, inputs, ... }@params wrapper and returns the home-manager
+       config module.
+
+       Key Sections:
+
+       A. Packages (lines 67-244)
+       - Core utilities: bat, chezmoi, eza, fd, fzf, htop, jq, ripgrep, starship, tree, watch, yazi, btop, make, just,
+       tmux, tig, difi, agent-of-empires
+       - Emacs: pkgs.emacs30-pgtk + build dependencies (cmake, libtool, shellcheck)
+       - Programming languages: Rust (via rust-overlay), Python 3.12 + uv, Node.js 22 + fnm, Go
+       - AI/Coding agents (from llm-agents.nix overlay): 70+ agent tools (amp, crush, droid, eca, forge, jules, etc.)
+       - Platform-specific:
+         - macOS: claude-code, codex, sentry-cli, cachix, 1password, gettext
+         - Linux non-WSL: Wayland apps (chromium, firefox, fuzzel, foot, mako, swaylock, grim, slurp), waypaper,
+       git-repo-manager, setup-my-tools bootstrap script
+
+       B. Environment & Session Variables (lines 250-263)
+       - LANG, LC_*, EDITOR (nvim), PAGER, MANPAGER
+       - Darwin-specific: AMP_API_KEY, OPENAI_API_KEY (from 1password vaults), DISPLAY workaround
+
+       C. Configuration Files (lines 265-292)
+       - .gdbinit, .inputrc (global dotfiles)
+       - xdg.configFile.doom → symlinks ./doom directory (the Doom Emacs config)
+       - Rofi, GRM repos.yaml config
+       - Linux-specific: rbw config enforcement, ghostty terminal config, wlr-which-key
+       - Darwin-specific: Rectangle window manager config
+
+       D. Programs Configured:
+       - Editors: VSCode (extensive config), LazyVim (Neovim with extras for Nix/Python/Go/TypeScript/Rust)
+       - Git: Signing with GPG key 7D9B7E8B2C83D94F, user smallstepman, with aliases
+       - Shell: Zsh (with fnm and starship init), Bash, Direnv (whitelist rules)
+       - VCS: programs.gh with credential helper
+       - Secrets: rbw (Bitwarden) Linux-only
+       - Wayland compositors: Niri (with detailed keybindings), Mango, Noctalia
+       - Services: GPG agent (Linux), atuin, oh-my-posh
+       - Cursor: Vanilla-DMZ HiDPI (Linux non-WSL)
+
+       No explicit Emacs/Doom configuration beyond package installation - all config lives in the ./doom directory symlink.
+
+       ---
+       4. USERS/M/DOOM/ - DOOM EMACS CONFIGURATION
+
+       init.el (161 lines):
+       - Modules enabled:
+         - Completion: company +childframe, vertico +icons +childframe
+         - UI: doom theme, dashboard, modeline, nav-flash, popups, treemacs, vc-gutter, workspaces
+         - Editor: evil (vim), fold, format (+onsave), multiple-cursors
+         - Emacs: dired (+icons +ranger), electric, ibuffer, undo (+tree), vc
+         - Terminal: vterm
+         - Checkers: syntax
+         - Tools: eval, lookup (+dictionary +offline +docsets), lsp (+peek +elgot), magit (+forge), make, tree-sitter,
+       direnv, docker, terraform
+         - Languages: data, emacs-lisp, json, javascript (+lsp), markdown, python (+cython +lsp +pyright), rest, rust (+lsp
+        +tree-sitter), sh (+lsp), web (+lsp), yaml
+         - OS: macos, tty
+         - Config: literate (+org), default (+bindings +smartparens)
+
+       packages.el (117 lines):
+       - Active packages: exec-path-from-shell, flymake-shellcheck, flyspell-lazy, git-link, git-timemachine, gptel,
+       json-reformat, powerthesaurus, string-inflection, transient-posframe, vterm-toggle, ruff-format, flymake-ruff
+       - Disabled/commented: 60+ packages for future use (dired-dragon, graphviz, mermaid-mode, org-ai, md-roam, codeium,
+       copilot, telega, anki-editor, org-caldav, nov, calibredb, etc.)
+
+       config.org (500+ lines, literate config):
+       - Settings: Font (Menlo 14pt), bookmark save, no confirm-kill-emacs, frame buffer options
+       - Keymaps (Colemak layout):
+         - Workspace: C-M-1...9 (switch/delete workspaces)
+         - Navigation: C-M-w/f/p/g/j/l/u/y/r/t (functions, saves, magit, diagnostics, definitions, references, imenu)
+         - Window control: M-n/e/i/o (left/down/up/right with yabai/aerospace fallback on macOS)
+         - Vterm toggle: C-M-S-v
+         - Multiple cursors: C-M-d
+       - Yabai integration: Window focus/move commands with fallback if Emacs windows fail
+       - Aerospace integration: Alternative to yabai for newer macOS setups
+       - GPTel setup: GPT-4o-mini model with custom directives (default, arbitrage, crypto, programming, writing, chat,
+       rust)
+       - Package configs: git-link, powerthesaurus, which-key, string-inflection, rustic (LSP, clippy), ruff, lsp (inlay
+       hints), magit-todos disable
+       - Disabled sections: copilot, codeium, org-ai, org-roam, mermaid, jupyter, DAP debugger, popper
+
+       custom.el (13 lines):
+       - macOS-specific: ns-command-modifier 'control, ns-control-modifier 'meta (Mac key rebinding)
+
+       ---
+       5. MODULE ORGANIZATION STRUCTURE
+
+       Directory Layout:
+
+       /Users/m/.config/nixos-config/
+       ├── flake.nix                          # Main flake definition
+       ├── flake.lock                         # Locked dependency versions
+       ├── lib/
+       │   └── mksystem.nix                   # System builder function
+       ├── machines/
+       │   ├── vm-aarch64.nix                # ARM Linux VM config
+       │   ├── wsl.nix                        # WSL config
+       │   ├── macbook-pro-m1.nix             # macOS Darwin config
+       │   ├── vm-shared.nix                  # Shared VM settings
+       │   └── hardware/                      # HW-specific (disko, etc)
+       ├── users/
+       │   └── m/
+       │       ├── home-manager.nix           # Main HM config (called with isWSL, inputs params)
+       │       ├── darwin.nix                 # macOS-only user config (homebrew, shell)
+       │       ├── nixos.nix                  # Linux-only user config (systemd, users setup)
+       │       ├── doom/                      # Doom Emacs config
+       │       │   ├── init.el               # Module selection
+       │       │   ├── packages.el           # Package declarations
+       │       │   ├── custom.el             # Custom settings (macOS keys)
+       │       │   └── config.org            # Literate config (keybinds, package setup)
+       │       ├── lazyvim/                   # LazyVim Neovim config
+       │       └── [other config files]       # rofi, ghostty, grm-repos.yaml, etc.
+       ├── modules/                           # Custom NixOS modules
+       └── docs/, scripts/, .github/          # Documentation, scripts, CI/CD
+
+
+       Module Flow:
+       1. flake.nix outputs → nixosConfigurations.{vm-aarch64,wsl} / darwinConfigurations.macbook-pro-m1
+       2. Each calls mkSystem from lib/mksystem.nix with system params
+       3. mkSystem applies overlays, loads machine config, loads OS-specific user config, and home-manager
+       4. Home-manager receives userHMConfig (home-manager.nix) which is called with { isWSL, inputs }
+       5. Home-manager config accesses pkgs (from overlays), lib, and uses conditional logic based on
+       isDarwin/isLinux/isWSL
+
+       ---
+       6. FLAKE.LOCK - KEY OBSERVATIONS
+
+       Checked for emacs-overlay: NOT PRESENT - The flake.lock contains ~40+ dependencies but no emacs-overlay entry. Emacs
+        comes from nixpkgs directly (pkgs.emacs30-pgtk).
+
+       Current emacs version source: Standard nixpkgs at nixos-25.11 channel
+
+       ---
+       7. CURRENT EMACS/DOOM CONFIGURATION SUMMARY
+
+       How it's Currently Wired:
+       1. Installation: pkgs.emacs30-pgtk from nixpkgs in home-manager packages (line 179)
+       2. Build dependencies: cmake, libtool, shellcheck also installed
+       3. Config location: xdg.configFile.doom symlinks users/m/doom → ~/.config/doom
+       4. Bootstrap: Setup script runs ~/.config/emacs/bin/doom sync (lines 235-240) if Doom is installed
+       5. Module system: Doom init.el has 50+ modules enabled, comprehensive literate config in config.org
+       6. Key customizations:
+         - Colemak keybindings throughout
+         - Yabai/Aerospace window integration (macOS)
+         - GPTel for AI assistance
+         - LSP for Python, Rust, JavaScript, Shell, Web
+         - Vterm terminal emulator
+
+       What's Missing/Available for Enhancement:
+       - No emacs-overlay (could add for newer Emacs versions or community packages)
+       - No explicit per-language setup beyond what Doom modules provide
+       - Treemacs, magit-forge, tree-sitter all enabled but minimal custom configuration shown
+       - AI integration via gptel but copilot/codeium commented out
+
+       ---
+       8. HOW INPUTS ARE PASSED AROUND
+
+       Input Flow:
+
+       flake.nix outputs { ..., inputs } @inputs
+         ↓
+       mkSystem (inherit overlays nixpkgs inputs)
+         ↓
+       nixosConfigurations/darwinConfigurations calls mkSystem { system, user, darwin/wsl }
+         ↓
+       mksystem.nix:
+         - Applies overlays globally
+         - Loads home-manager module with:
+           import userHMConfig { isWSL = isWSL; inputs = inputs; }
+         ↓
+       home-manager.nix receives { isWSL, inputs } wrapper + { config, lib, pkgs, ... }
+         ↓
+       Can access: inputs.lazyvim, inputs.mangowc, inputs.noctalia, inputs.sops-nix, etc.
+                   pkgs (with overlays applied), lib, config (NixOS/Darwin config)
+
+
+       In home-manager.nix:
+       - Line 6: sources = import ../../nix/sources.nix; (this file appears to be missing - may be a TODO)
+       - Line 217: Uses inputs.mangowc.packages.${pkgs.system}.default for Wayland window control
+       - Lines 68-73 in mksystem.nix: Passes inputs to home-manager shared modules (lazyvim, mangowc, noctalia)
+
+       ---
+       This is a well-structured, sophisticated Nix setup with:
+       - Multi-system support (macOS, Linux VM, WSL)
+       - Declarative package management with custom overlays
+       - Integrated secret management (sops-nix)
+       - Advanced Emacs/Doom setup with literate config
+       - Multiple editor choices (Emacs, Neovim/LazyVim, VSCode)
+       - Wayland and macOS compositors configured
+       - AI agent ecosystem integration

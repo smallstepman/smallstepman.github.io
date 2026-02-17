@@ -65,7 +65,8 @@ in systemFunc rec {
       home-manager.useGlobalPkgs = true;
       home-manager.useUserPackages = true;
       home-manager.sharedModules =
-        if isLinux then [ inputs.mangowc.hmModules.mango inputs.noctalia.homeModules.default ] else [];
+        [ inputs.lazyvim.homeManagerModules.default inputs.nix-doom-emacs-unstraightened.homeModule ]
+        ++ (if isLinux then [ inputs.mangowc.hmModules.mango inputs.noctalia.homeModules.default ] else []);
       home-manager.users.${user} = import userHMConfig {
         isWSL = isWSL;
         inputs = inputs;
