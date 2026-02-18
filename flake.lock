@@ -811,7 +811,8 @@
         "noctalia": "noctalia",
         "rust-overlay": "rust-overlay",
         "sops-nix": "sops-nix",
-        "sopsidy": "sopsidy"
+        "sopsidy": "sopsidy",
+        "uniclip-src": "uniclip-src"
       }
     },
     "rust-overlay": {
@@ -1009,6 +1010,22 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "uniclip-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1710022698,
+        "narHash": "sha256-K8ssVF1CFgBXsmLso095mq9ZYrFoc78GiloM34FqpeA=",
+        "owner": "quackduck",
+        "repo": "uniclip",
+        "rev": "02f28f13455e219deb3c2d0be6352e405bb415ba",
+        "type": "github"
+      },
+      "original": {
+        "owner": "quackduck",
+        "repo": "uniclip",
         "type": "github"
       }
     },

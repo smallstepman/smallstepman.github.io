@@ -64,9 +64,10 @@ in systemFunc rec {
     home-manager.home-manager {
       home-manager.useGlobalPkgs = true;
       home-manager.useUserPackages = true;
+      home-manager.backupFileExtension = "backup";
       home-manager.sharedModules =
-        [ inputs.lazyvim.homeManagerModules.default inputs.nix-doom-emacs-unstraightened.homeModule ]
-        ++ (if isLinux then [ inputs.mangowc.hmModules.mango inputs.noctalia.homeModules.default ] else []);
+        [ inputs.lazyvim.homeManagerModules.default inputs.nix-doom-emacs-unstraightened.homeModule inputs.mangowc.hmModules.mango inputs.noctalia.homeModules.default ]
+        ++ (if darwin then [ inputs.niri.homeModules.niri ] else []);
       home-manager.users.${user} = import userHMConfig {
         isWSL = isWSL;
         inputs = inputs;

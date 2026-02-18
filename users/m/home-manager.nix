@@ -92,6 +92,7 @@ in {
     pkgs.tig           # git TUI
     pkgs.difi          # terminal git diff reviewer
     pkgs.agent-of-empires  # terminal session manager for AI agents
+    pkgs.dust          # disk usage analyzer (du alternative)
 
     # llm-agents.nix — AI coding agents
     pkgs.llm-agents.amp
@@ -179,6 +180,9 @@ in {
     pkgs.nodejs_22
     pkgs.fnm
 
+    # Clipboard sharing (macOS <-> VM via SSH tunnel)
+    pkgs.uniclip
+
   ] ++ (lib.optionals isDarwin [
     # This is automatically setup on Linux
     pkgs.cachix
@@ -187,6 +191,8 @@ in {
     pkgs.claude-code
     pkgs.codex
     pkgs.sentry-cli
+    pkgs.rsync         # newer rsync than macOS ships
+    pkgs.sshpass       # non-interactive ssh password auth
   ]) ++ (lib.optionals (isLinux && !isWSL) [
     # Wrapper scripts: inject secrets from rbw per-process (not global env)
     # gh is provided by programs.gh (with gitCredentialHelper); auth via shell function below
@@ -212,6 +218,7 @@ in {
     pkgs.chromium
     pkgs.clang
     pkgs.firefox
+    pkgs.activitywatch # automated time tracker (Linux only; Darwin via homebrew cask)
     pkgs.fuzzel       # app launcher for Wayland
     pkgs.valgrind
     pkgs.foot         # lightweight Wayland terminal
@@ -246,6 +253,10 @@ in {
   # Env vars and dotfiles
   #---------------------------------------------------------------------
 
+  home.sessionPath = lib.optionals isDarwin [
+    "/Applications/VMware Fusion.app/Contents/Library"
+  ];
+
   home.sessionVariables = {
     LANG = "en_US.UTF-8";
     LC_CTYPE = "en_US.UTF-8";
@@ -255,8 +266,6 @@ in {
     MANPAGER = "${manpager}/bin/manpager";
 
   } // (if isDarwin then {
-    AMP_API_KEY = "op://Private/Amp_API/credential";
-    OPENAI_API_KEY = "op://Private/OpenAPI_Personal/credential";
     # See: https://github.com/NixOS/nixpkgs/issues/390751
     DISPLAY = "nixpkgs-390751";
   } else {});
@@ -318,7 +327,7 @@ in {
   programs.gpg.enable = !isDarwin;
 
   # Niri Wayland compositor configuration (Linux only)
-  programs.niri.settings = lib.mkIf isLinux {
+  programs.niri.settings = lib.mkIf (isLinux && !isWSL) {
     hotkey-overlay = {
       skip-at-startup = true;
     };
@@ -433,7 +442,7 @@ in {
   };
 
   # Mango Wayland compositor configuration (Linux only)
-  wayland.windowManager.mango = lib.mkIf isLinux {
+  wayland.windowManager.mango = lib.mkIf (isLinux && !isWSL) {
     enable = true;
     settings = ''
       # Mango config - keybindings matching niri (Colemak: n/e/i/o = left/down/up/right)
@@ -517,7 +526,11 @@ in {
 
       # Starship prompt
       eval "$(starship init zsh)"
-    '' + (if isLinux then ''
+    '' + (if isDarwin then ''
+
+      # Homebrew
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    '' else "") + (if isLinux then ''
 
       # gh: inject GITHUB_TOKEN per-invocation from rbw (no global env var)
       gh() { GITHUB_TOKEN=$(rbw get github-token) command gh "$@"; }
@@ -573,12 +586,13 @@ in {
   programs.git = {
     enable = true;
     signing = {
-      key = "7D9B7E8B2C83D94F";
+      key = "247AE5FC6A838272";
       signByDefault = true;
     };
     settings = {
       user.name = "Marcin Nowak Liebiediew";
       user.email = "m.liebiediew@gmail.com";
+      gpg.program = if isDarwin then "/opt/homebrew/bin/gpg" else "${pkgs.gnupg}/bin/gpg";
       branch.autosetuprebase = "always";
       color.ui = true;
       core.askPass = ""; # needs to be empty to use terminal for ask pass
@@ -849,5 +863,26 @@ in {
     createNoctaliaThemeDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run mkdir -p "$HOME/.local/share/noctalia/emacs-themes"
     '';
+  };
+
+  # Uniclip clipboard client: connects to macOS server via SSH reverse tunnel
+  systemd.user.services.uniclip = lib.mkIf (isLinux && !isWSL) {
+    Unit = {
+      Description = "Uniclip clipboard client (connects to macOS server via SSH tunnel)";
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${pkgs.writeShellScript "uniclip-client" ''
+        export UNICLIP_PASSWORD=$(${pkgs.rbw}/bin/rbw get uniclip-password)
+        export WAYLAND_DISPLAY=wayland-1
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export PATH=${lib.makeBinPath [ pkgs.wl-clipboard ]}:$PATH
+        exec ${pkgs.uniclip}/bin/uniclip --secure 127.0.0.1:53701
+      ''}";
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 }

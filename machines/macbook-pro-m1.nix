@@ -74,4 +74,11 @@
   environment.systemPackages = with pkgs; [
     cachix
   ];
+
+  # sudo with Touch ID and Apple Watch
+  security.pam.services.sudo_local = {
+    touchIdAuth = true;
+    watchIdAuth = true;
+    reattach = true;
+  };
 }
