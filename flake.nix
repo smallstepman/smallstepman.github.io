@@ -67,6 +67,7 @@
     difi-src = { url = "github:oug-t/difi"; flake = false; };
     agent-of-empires-src = { url = "github:njbrake/agent-of-empires"; flake = false; };
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
+    beads-viewer-src = { url = "github:Dicklesworthstone/beads_viewer"; flake = false; };
 
     # Mango window control for Wayland
     mangowc = {
@@ -147,6 +148,15 @@
           vendorHash = "sha256-ugrWrB0YVs/oWAR3TC3bEpt1VXQC1c3oLrvFJxlR8pw=";
           patches = [ ./patches/uniclip-bind-and-env-password.patch ];
           meta.description = "Universal clipboard - copy on one device, paste on another";
+        };
+
+        bv = final.buildGoModule {
+          pname = "bv";
+          version = "0-unstable-2026-02-18";
+          src = inputs.beads-viewer-src;
+          vendorHash = null; # uses vendored dependencies
+          subPackages = [ "cmd/bv" ];
+          meta.description = "Graph-aware TUI for the Beads issue tracker";
         };
       })
 

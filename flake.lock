@@ -16,6 +16,22 @@
         "type": "github"
       }
     },
+    "beads-viewer-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1771265388,
+        "narHash": "sha256-CUnsMTmJsbCEZNhxc3+Ck8GbFQpE8UYNLU3to+OmRRQ=",
+        "owner": "Dicklesworthstone",
+        "repo": "beads_viewer",
+        "rev": "b14e9c43854256766ff8490c04b61d33685f5a1f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Dicklesworthstone",
+        "repo": "beads_viewer",
+        "type": "github"
+      }
+    },
     "blueprint": {
       "inputs": {
         "nixpkgs": [
@@ -414,11 +430,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1771253715,
-        "narHash": "sha256-xEMerB3SlsiDFguHIvxOltxs9gj0jyCrNDC0nudwt7A=",
+        "lastModified": 1771427464,
+        "narHash": "sha256-VhAD/KfXc5NudSjzhsiU27asKu99jwrb7TsD2BRpLZs=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "23833180b905a5eab8ffe805c6d9658548668848",
+        "rev": "b9565d386f29e6b10cc7c513be3697e7c6694f9c",
         "type": "github"
       },
       "original": {
@@ -791,6 +807,7 @@
     "root": {
       "inputs": {
         "agent-of-empires-src": "agent-of-empires-src",
+        "beads-viewer-src": "beads-viewer-src",
         "darwin": "darwin",
         "difi-src": "difi-src",
         "disko": "disko",
