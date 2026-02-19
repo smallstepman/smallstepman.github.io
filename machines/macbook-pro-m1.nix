@@ -50,6 +50,21 @@
     };
   };
 
+  # Determinate's nix.conf may not include nix.custom.conf; manage both.
+  environment.etc."nix/nix.conf".text = ''
+    build-users-group = nixbld
+    !include /etc/nix/nix.custom.conf
+  '';
+
+  environment.etc."nix/nix.custom.conf".text = ''
+    experimental-features = nix-command flakes
+  '';
+
+  # Make ad-hoc nixpkgs usage honor unfree defaults.
+  environment.etc."nixpkgs/config.nix".text = ''
+    { allowUnfree = true; }
+  '';
+
   # zsh is the default shell on Mac and we want to make sure that we're
   # configuring the rc correctly with nix-darwin paths.
   programs.zsh.enable = true;

@@ -8,6 +8,15 @@ let
   isLinux = pkgs.stdenv.isLinux;
 
   shellAliases = {
+    ".."   = "cd ..";
+    "..."  = "cd ../..";
+    "...." = "cd ../../..";
+    "....." = "cd ../../../..";
+    "......" = "cd ../../../../..";
+    "......." = "cd ../../../../../..";
+    "........" = "cd ../../../../../../..";
+
+    
     ga = "git add";
     gc = "git commit";
     gco = "git checkout";
@@ -523,9 +532,6 @@ in {
     initContent = ''
       # fnm (Node version manager)
       eval "$(fnm env --use-on-cd)"
-
-      # Starship prompt
-      eval "$(starship init zsh)"
     '' + (if isDarwin then ''
 
       # Homebrew
@@ -562,6 +568,29 @@ in {
         exact = ["$HOME/.envrc"];
       };
     };
+  };
+
+  programs.starship = {
+    enable = false;
+    settings = builtins.fromTOML (builtins.readFile ./starship.toml);
+  };
+
+  programs.atuin = {
+    enable = true;
+  };
+
+  programs.oh-my-posh = {
+    enable = true;
+    settings = builtins.fromJSON (builtins.readFile ./oh-my-posh.json);
+  };
+
+  services.gpg-agent = {
+    enable = isLinux;
+    pinentry.package = pkgs.pinentry-tty;
+
+    # cache the keys forever so we don't get asked for a password
+    defaultCacheTtl = 31536000;
+    maxCacheTtl = 31536000;
   };
 
   # gh with credential helper: replaces credential.helper = "store"
@@ -832,23 +861,6 @@ in {
       templ     # Go templ files
     ];
 
-  };
-
-  programs.atuin = {
-    enable = true;
-  };
-
-  programs.oh-my-posh = {
-    enable = true;
-  };
-
-  services.gpg-agent = {
-    enable = isLinux;
-    pinentry.package = pkgs.pinentry-tty;
-
-    # cache the keys forever so we don't get asked for a password
-    defaultCacheTtl = 31536000;
-    maxCacheTtl = 31536000;
   };
 
   # Make cursor not tiny on HiDPI screens
