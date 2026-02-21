@@ -17,3 +17,13 @@ machines/generated/*
 
 # bv (beads viewer) local config and caches
 .bv/
+
+.opencode/skills/*
+.opencode/command/*
+.opencode/command/*
+.github/skills/*
+.github/agents/*
+.github/prompts/*
+.github/command/*
+.logs
+.vscode
