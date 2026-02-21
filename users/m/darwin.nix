@@ -12,7 +12,6 @@ in
   homebrew = {
     enable = true;
     casks  = [
-      "1password"
       "activitywatch"
       "karabiner-elements"
       "claude"

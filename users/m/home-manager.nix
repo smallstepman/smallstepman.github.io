@@ -29,6 +29,10 @@ let
 
     ll = "ls -lh";
     la = "ls -a";
+    ls = "eza --group-directories-first";
+    magit = "emacsclient -c -a '' -e '(magit-status)'";
+    "nix-gc" = "nix-collect-garbage -d";
+    "nix-update-flakes" = "nix flake update";
 
     cc = "claude";
     oc = "opencode";
@@ -76,17 +80,13 @@ in {
   # per-project flakes sourced with direnv and nix-shell, so this is
   # not a huge list.
   home.packages = [
-    pkgs.asciinema
     pkgs.bat
-    pkgs.chezmoi
     pkgs.eza
     pkgs.fd
     pkgs.fzf
-    pkgs.htop
     pkgs.jq
     pkgs.rbw
     pkgs.ripgrep
-    pkgs.starship
     pkgs.tree
     pkgs.watch
     pkgs.nerd-fonts.symbols-only  # icon font for Doom Emacs (+icons) and terminal apps
@@ -102,6 +102,7 @@ in {
     pkgs.difi          # terminal git diff reviewer
     pkgs.agent-of-empires  # terminal session manager for AI agents
     pkgs.dust          # disk usage analyzer (du alternative)
+    pkgs.zoxide
 
     # llm-agents.nix — AI coding agents
     pkgs.llm-agents.amp
@@ -109,12 +110,12 @@ in {
     pkgs.llm-agents.copilot-cli
     pkgs.llm-agents.crush
     pkgs.llm-agents.cursor-agent
-    pkgs.llm-agents.droid
+    # pkgs.llm-agents.droid
     pkgs.llm-agents.eca
     pkgs.llm-agents.forge
-    pkgs.llm-agents.gemini-cli
+    # pkgs.llm-agents.gemini-cli
     # pkgs.llm-agents.goose-cli
-    pkgs.llm-agents.jules
+    # pkgs.llm-agents.jules
     pkgs.llm-agents.kilocode-cli
     pkgs.llm-agents.letta-code
     pkgs.llm-agents.mistral-vibe
@@ -148,9 +149,10 @@ in {
     # llm-agents.nix — workflow & project management
     pkgs.llm-agents.agent-deck
     pkgs.llm-agents.backlog-md
-    pkgs.llm-agents.beads
-    # pkgs.llm-agents.beads-rust
-    pkgs.llm-agents.cc-sdd
+    pkgs.llm-agents.beads # bd — Beads CLI
+    pkgs.bv               # beads_viewer — graph-aware TUI for Beads issue tracker
+    pkgs.llm-agents.beads-rust
+    # pkgs.llm-agents.cc-sdd
     # pkgs.llm-agents.chainlink
     pkgs.llm-agents.openspec
     pkgs.llm-agents.spec-kit
@@ -162,16 +164,16 @@ in {
     pkgs.llm-agents.tuicr
 
     # llm-agents.nix — utilities
-    # pkgs.llm-agents.agent-browser
     pkgs.llm-agents.ck
-    # pkgs.llm-agents.coding-agent-search
     pkgs.llm-agents.copilot-language-server
-    # pkgs.llm-agents.handy
     pkgs.llm-agents.happy-coder
+    pkgs.llm-agents.openskills
+    # pkgs.llm-agents.agent-browser
+    # pkgs.llm-agents.coding-agent-search
+    # pkgs.llm-agents.handy
     # pkgs.llm-agents.localgpt
     # pkgs.llm-agents.mcporter
     # pkgs.llm-agents.openclaw
-    pkgs.llm-agents.openskills
     # pkgs.llm-agents.qmd
 
     pkgs.gopls
@@ -197,9 +199,6 @@ in {
     pkgs.skhd
     pkgs.cachix
     pkgs.gettext
-    pkgs._1password-cli
-    pkgs.claude-code
-    pkgs.codex
     pkgs.sentry-cli
     pkgs.rsync         # newer rsync than macOS ships
     pkgs.sshpass       # non-interactive ssh password auth
@@ -306,10 +305,11 @@ in {
       source = ./activitywatch;
       recursive = true;
     };
+    "kanata-tray" = {
       source = ./kanata/tray;
       recursive = true;
     };
-    "kanata".source = {
+    "kanata" = {
       source = ./kanata/config-macbook-iso;
       recursive = true;
     };
@@ -319,8 +319,6 @@ in {
     # Prevent home-manager from managing rbw config as a read-only store symlink;
     # the rbw-config systemd service writes the real config with sops email.
     "rbw/config.json".enable = lib.mkForce false;
-
-    "ghostty/config".text = builtins.readFile ./ghostty.linux;
 
     # wlr-which-key configuration
     "wlr-which-key/config.yaml".text = builtins.readFile ./wlr-which-key-config.yaml;
@@ -549,6 +547,9 @@ in {
     syntaxHighlighting.enable = true;
     shellAliases = shellAliases;
     initContent = ''
+      # vscode shell integration (if running inside vscode, which is true for vscode terminal and false for external terminal; this allows us to use the same shell config in both without bloating the external terminal with vscode-specific stuff)
+      [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
+
       # fnm (Node version manager)
       eval "$(fnm env --use-on-cd)"
     '' + (if isDarwin then ''
@@ -587,6 +588,12 @@ in {
         exact = ["$HOME/.envrc"];
       };
     };
+  };
+
+  programs.zoxide = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
   };
 
   programs.starship = {
@@ -722,11 +729,9 @@ in {
   };
 
   # Ensure writable output directories for Noctalia user templates
-  home.activation = lib.mkIf (isLinux && !isWSL) {
-    createNoctaliaThemeDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  home.activation.createNoctaliaThemeDirs = lib.mkIf (isLinux && !isWSL) (lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run mkdir -p "$HOME/.local/share/noctalia/emacs-themes"
-    '';
-  };
+  '');
 
   # Uniclip clipboard client: connects to macOS server via SSH reverse tunnel
   systemd.user.services.uniclip = lib.mkIf (isLinux && !isWSL) {
