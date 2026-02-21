@@ -1,0 +1,510 @@
+{
+    "breadcrumbs.enabled": false,
+    "diffEditor.codeLens": true,
+    "editor.defaultFoldingRangeProvider": "charliermarsh.ruff",
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.folding": false,
+    "editor.glyphMargin": false,
+    "editor.lineNumbers": "off",
+    "editor.minimap.enabled": false,
+    "editor.scrollbar.horizontal": "hidden",
+    "editor.scrollbar.ignoreHorizontalScrollbarInContentHeight": true,
+    "editor.scrollbar.vertical": "hidden",
+    "editor.scrollbar.verticalScrollbarSize": 1,
+    "explorer.confirmDragAndDrop": false,
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.ipynb_checkpoints": true,
+        "**/.pytest_cache": true,
+        "**/.terraform.lock.hcl": true,
+        "**/.terragrunt-cache": true,
+        "**/.vscode": true,
+        "node_modules/": true
+    },
+    "filePathBar.pathStyle": "relative",
+    "git.autofetch": true,
+    "jupyter.askForKernelRestart": false,
+    "jupyter.showOutlineButtonInNotebookToolbar": false,
+    "markdown.preview.scrollEditorWithPreview": false,
+    "markdown.preview.scrollPreviewWithEditor": false,
+    "notebook.cellToolbarVisibility": "hover",
+    "notebook.defaultFormatter": "charliermarsh.ruff",
+    "notebook.globalToolbar": false,
+    "notebook.globalToolbarShowLabel": "dynamic",
+    "remote.SSH.remoteServerListenOnSocket": true,
+    "remote.SSH.remotePlatform": {},
+    "search.showLineNumbers": true,
+    "telemetry.enableTelemetry": false,
+    "telemetry.telemetryLevel": "off",
+    "vim.statusBarColorControl": true,
+    "vscode_custom_css.imports": [
+        "file://${userHome}/.config/vscode.css"
+    ],
+    "window.customTitleBarVisibility": "never",
+    "window.density.editorTabHeight": "compact",
+    "window.nativeTabs": true,
+    "workbench.editor.editorActionsLocation": "hidden",
+    "workbench.editor.highlightModifiedTabs": true,
+    "workbench.editor.pinnedTabSizing": "shrink",
+    "workbench.editor.showTabs": "none",
+    "workbench.editor.tabSizing": "shrink",
+    "workbench.editor.tabSizingFixedMinWidth": 38,
+    "workbench.editor.wrapTabs": false,
+    "workbench.colorCustomizations": {
+        "titleBar.forground": "#00000000",
+        "titleBar.activeForeground": "#00000000",
+        "titleBar.background": "#00000000",
+        "titleBar.activeBackground": "#00000000",
+        "statusBar.background": "#4e0b4e",
+        "statusBar.noFolderBackground": "#4e0b4e",
+        "statusBar.debuggingBackground": "#4e0b4e",
+        "statusBar.foreground": "#ff0000",
+        "statusBar.debuggingForeground": "#ff0000"
+    },
+    "vim.easymotion": true,
+    "vim.useSystemClipboard": true,
+    "vim.normalModeKeyBindingsNonRecursive": [
+        {
+            "before": [
+                "<space>"
+            ],
+            "commands": [
+                {
+                    "command": "_setContext",
+                    "args": [
+                        "leaderkeyState",
+                        "SPC"
+                    ]
+                },
+                {
+                    "command": "leaderkey.render",
+                    "args": "SPC"
+                }
+            ]
+        },
+        {
+            "before": [
+                ","
+            ],
+            "commands": [
+                {
+                    "command": "_setContext",
+                    "args": [
+                        "leaderkeyState",
+                        ","
+                    ]
+                },
+                {
+                    "command": "leaderkey.render",
+                    "args": ","
+                }
+            ]
+        },
+        {
+            "before": [
+                "_"
+            ],
+            "commands": [
+                "vsnetrw.open"
+            ],
+            "when": "editorLangId != vsnetrw"
+        },
+        {
+            "before": [
+                "q"
+            ],
+            "commands": [
+                "vsnetrw.close"
+            ],
+            "when": "editorTextFocus && editorLangId == 'vsnetrw' && vim.mode =~ /^(?!SearchInProgressMode|CommandlineInProgress).*$/"
+        },
+        {
+            "before": [
+                "<space>"
+            ],
+            "commands": [
+                "vspacecode.space"
+            ]
+        },
+        {
+            "before": [
+                ","
+            ],
+            "commands": [
+                "vspacecode.space",
+                {
+                    "command": "whichkey.triggerKey",
+                    "args": "m"
+                }
+            ]
+        }
+    ],
+    "vim.visualModeKeyBindingsNonRecursive": [
+        {
+            "before": [
+                "<space>"
+            ],
+            "commands": [
+                {
+                    "command": "_setContext",
+                    "args": [
+                        "leaderkeyState",
+                        "SPC"
+                    ]
+                },
+                {
+                    "command": "leaderkey.render",
+                    "args": "SPC"
+                }
+            ]
+        },
+        {
+            "before": [
+                ","
+            ],
+            "commands": [
+                {
+                    "command": "_setContext",
+                    "args": [
+                        "leaderkeyState",
+                        ","
+                    ]
+                },
+                {
+                    "command": "leaderkey.render",
+                    "args": ","
+                }
+            ]
+        },
+        {
+            "before": [
+                "<space> a f"
+            ],
+            "commands": [
+                "vspacecode.space"
+            ]
+        },
+        {
+            "before": [
+                ", a f"
+            ],
+            "commands": [
+                "vspacecode.space",
+                {
+                    "command": "whichkey.triggerKey",
+                    "args": "m"
+                }
+            ]
+        },
+        {
+            "before": [
+                ">"
+            ],
+            "commands": [
+                "editor.action.indentLines"
+            ]
+        },
+        {
+            "before": [
+                "<"
+            ],
+            "commands": [
+                "editor.action.outdentLines"
+            ]
+        }
+    ],
+    "vim.statusBarColors.searchinprogressmode": [
+        "#007aff",
+        "#ff0000"
+    ],
+    "vim.statusBarColors.visual": "#676700",
+    "vim.statusBarColors.visualblock": "#676700",
+    "vim.statusBarColors.visualline": "#676700",
+    "vim.statusBarColors.normal": "#244709",
+    "vim.statusBarColors.insert": "#4e0b4e",
+    "vim.handleKeys": {
+        "<C-d>": true,
+        "<C-s>": false,
+        "<C-z>": false
+    },
+    "vspacecode.bindingOverrides": [
+        {
+            "keys": "w.q",
+            "name": "Magit Status",
+            "type": "command",
+            "command": "workbench.action.closeEditorsAndGroup"
+        },
+        {
+            "keys": "g.g",
+            "name": "Magit Status",
+            "type": "command",
+            "command": "magit.status"
+        },
+        {
+            "keys": "c.a.a",
+            "name": "AutoFix",
+            "type": "command",
+            "command": "editor.action.autoFix"
+        },
+        {
+            "keys": "c.r",
+            "name": "Rename symbol",
+            "type": "command",
+            "command": "editor.action.rename"
+        },
+        {
+            "keys": "c.i",
+            "name": "organize imports",
+            "type": "command",
+            "command": "editor.action.organizeImports"
+        },
+        {
+            "keys": "z.z",
+            "name": "Toggle multicursor",
+            "type": "command",
+            "command": "workbench.action.toggleMultiCursorModifier"
+        },
+        {
+            "keys": "/",
+            "name": "Search in project",
+            "type": "command",
+            "command": "workbench.action.quickTextSearch"
+        },
+        {
+            "keys": " ",
+            "name": "Find file",
+            "type": "command",
+            "command": "workbench.action.quickOpen"
+        },
+        {
+            "keys": [
+                "."
+            ],
+            "name": "Find file",
+            "type": "command",
+            "command": "vsnetrw.open"
+        },
+        {
+            "keys": "o",
+            "name": "+Open",
+            "icon": "gear",
+            "type": "bindings",
+            "bindings": [
+                {
+                    "key": "T",
+                    "name": "Open terminal",
+                    "icon": "refresh",
+                    "type": "command",
+                    "command": "workbench.action.createTerminalEditor"
+                }
+            ]
+        },
+        {
+            "keys": "p.o",
+            "name": "Open folder",
+            "icon": "folder-opened",
+            "type": "command",
+            "command": "workbench.action.files.openFolder"
+        },
+        {
+            "keys": "p.p",
+            "name": "Open project",
+            "icon": "project",
+            "type": "command",
+            "command": "projectManager.listProjects"
+        },
+        {
+            "keys": "p.P",
+            "name": "Open project in new window",
+            "icon": "empty-window",
+            "type": "command",
+            "command": "projectManager.listProjectsNewWindow"
+        },
+        {
+            "keys": "p.m",
+            "name": "+Project manager",
+            "icon": "gear",
+            "type": "bindings",
+            "bindings": [
+                {
+                    "key": "r",
+                    "name": "Refresh projects",
+                    "icon": "refresh",
+                    "type": "command",
+                    "command": "projectManager.refreshProjects"
+                },
+                {
+                    "key": "e",
+                    "name": "Edit projects",
+                    "icon": "edit",
+                    "type": "command",
+                    "command": "projectManager.editProjects"
+                },
+                {
+                    "key": "s",
+                    "name": "Save project",
+                    "icon": "save",
+                    "type": "command",
+                    "command": "projectManager.saveProject"
+                },
+                {
+                    "key": "v",
+                    "name": "View sidebar",
+                    "icon": "eye",
+                    "type": "command",
+                    "command": "workbench.view.extension.project-manager"
+                }
+            ]
+        }
+    ],
+    "continue.enableTabAutocomplete": false,
+    "continue.telemetryEnabled": false,
+    "ruff.lint.run": "onSave",
+    "ruff.fixAll": true,
+    "ruff.organizeImports": false,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        }
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "workbench.startupEditor": "none",
+    "[html]": {
+        "editor.defaultFormatter": "vscode.html-language-features"
+    },
+    "roo-cline.allowedCommands": [
+        "npm test",
+        "npm install",
+        "tsc",
+        "uv run",
+        "fd",
+        "find",
+        "ls",
+        "git remote -v",
+        "gh issue list",
+        "gh issue view",
+        "duckdb discord_dump.duckdb",
+        "grep",
+        "cat",
+        "mkdir",
+        "docker",
+        "git diff",
+        "k3d",
+        "uv run python",
+        "docker exec",
+        "cd",
+        "helm",
+        "chmod",
+        "./scripts",
+        "./scripts/02_dagster_setup.sh",
+        "sed",
+        "echo",
+        "sleep",
+        "base64",
+        "curl",
+        "tail",
+        "head",
+        "git status",
+        "./curl_example.sh",
+        "workspaces/backtesting/curl_example.sh",
+        "./tests/",
+        "./tests/test_dagster_job.sh",
+        "rg",
+        "xargs",
+        "bats",
+        "uv add",
+        "gh",
+        ".github/workflows/scripts",
+        "true",
+        "scripts",
+        "terraform",
+        "source",
+        "flux",
+        "export",
+        "terragrunt",
+        "npm",
+        "npx",
+        "cargo",
+        "./setup-dev.sh",
+        "make",
+        "ENVIRONMENT=staging",
+        "just",
+        "op item list",
+        "osascript",
+        "kubectl logs",
+        "kubectl get",
+        "kubectl describe",
+        "uv pip"
+    ],
+    "terminal.integrated.defaultProfile.osx": "zsh",
+    "terminal.integrated.inheritEnv": false,
+    "python.terminal.activateEnvironment": false,
+    "custom-ui-style.electron": {
+        "frame": false
+    },
+    "workbench.statusBar.visible": false,
+    "terminal.integrated.shellIntegration.enabled": false,
+    "sqltools.useNodeRuntime": true,
+    "terminal.integrated.scrollback": 30000,
+    "terminal.integrated.fontWeightBold": 1,
+    "editor.fontWeight": 1,
+    "editor.inlineSuggest.edits.experimental.useInterleavedLinesDiff": "always",
+    "editor.inlineSuggest.showToolbar": "always",
+    "inlineChat.lineEmptyHint": true,
+    "terragrunt-navigator.featureToggles": {
+        "ReplaceStrings": true
+    },
+    "window.menuBarVisibility": "hidden",
+    "workbench.experimental.share.enabled": true,
+    "debug.toolBarLocation": "hidden",
+    "window.newWindowProfile": "Default",
+    "terminal.integrated.defaultProfile.linux": "zsh",
+    "git.confirmSync": false,
+    "git.enableSmartCommit": true,
+    "workbench.colorTheme": "New York at Night Theme",
+    "search.exclude": {
+        "dependencies/": true
+    },
+    "ruff.lint.preview": true,
+    "ruff.nativeServer": "on",
+    "explorer.fileNesting.patterns": {
+        "*.ts": "${capture}.js",
+        "*.js": "${capture}.js.map, ${capture}.min.js, ${capture}.d.ts",
+        "*.jsx": "${capture}.js",
+        "*.tsx": "${capture}.ts",
+        "tsconfig.json": "tsconfig.*.json",
+        "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb, bun.lock",
+        "Cargo.toml": "Cargo.lock",
+        "*.sqlite": "${capture}.${extname}-*",
+        "*.db": "${capture}.${extname}-*",
+        "*.sqlite3": "${capture}.${extname}-*",
+        "*.db3": "${capture}.${extname}-*",
+        "*.sdb": "${capture}.${extname}-*",
+        "*.s3db": "${capture}.${extname}-*"
+    },
+    "firedbg.showWelcome": false,
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "chat.tools.terminal.autoApprove": {
+        "xcodebuild": true,
+        "xcbeautify": true,
+        "uuidgen": true,
+        "xcrun": true,
+        "latexmk": true,
+        "docker compose": true,
+        "cargo check": true
+    },
+    "chat.agent.maxRequests": 50,
+    "parallels-desktop.extension.path": "/Users/m/.parallels-desktop-vscode",
+    "parallels-desktop.prlctl.path": "/usr/local/bin/prlctl",
+    "parallels-desktop.brew.path": "/opt/homebrew/bin/brew",
+    "parallels-desktop.git.path": "/opt/homebrew/bin/git",
+    "parallels-desktop.hashicorp.packer.path": "/opt/homebrew/bin/packer",
+    "parallels-desktop.extension.download.path": "/Users/m/.parallels-desktop-vscode/downloads",
+    "parallels-desktop.devops-service.path": "/Users/m/.parallels-desktop-vscode/tools/prldevops",
+    "vscode-kanata.includesAndWorkspaces": "workspace"
+}
