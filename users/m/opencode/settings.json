@@ -1,0 +1,40 @@
+{
+  "small_model": "github-copilot/gpt-5-mini",
+  "agent": {
+    "general": {
+      "model": "github-copilot/gpt-5-mini"
+    },
+    "explore": {
+      "model": "github-copilot/gpt-5-mini"
+    },
+    "compaction": {
+      "model": "github-copilot/gpt-5-mini"
+    }
+  },
+  "plugin": [
+    "@bastiangx/opencode-unmoji",
+    "@howaboua/opencode-planning-toolkit",
+    "@knikolov/opencode-plugin-simple-memory",
+    "@mailshieldai/opencode-canvas",
+    "@plannotator/opencode",
+    "@ramarivera/opencode-model-announcer",
+    "@ramtinj95/opencode-tokenscope",
+    "@simonwjackson/opencode-direnv",
+    "@slkiser/opencode-quota",
+    "@spoons-and-mirrors/subtask2",
+    "@tarquinen/opencode-dcp@latest",
+    "@tarquinen/opencode-smart-title",
+    "@zenobius/opencode-background"
+  ],
+  "mcp": {
+    "with-context": {
+      "enabled": true,
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "with-context-mcp"
+      ]
+    }
+  }
+}

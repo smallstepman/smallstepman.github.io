@@ -6,6 +6,7 @@ let
   sources = import ../../nix/sources.nix;
   isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;
+  opencodeAwesome = import ./opencode/awesome.nix { inherit pkgs lib; };
 
   shellAliases = {
     ".."   = "cd ..";
@@ -120,7 +121,6 @@ in {
     pkgs.llm-agents.letta-code
     pkgs.llm-agents.mistral-vibe
     pkgs.llm-agents.nanocoder
-    pkgs.llm-agents.opencode
     pkgs.llm-agents.pi
     pkgs.llm-agents.qoder-cli
     pkgs.llm-agents.qwen-code
@@ -300,6 +300,12 @@ in {
   xdg.configFile = {
     "rofi/config.rasi".text = builtins.readFile ./rofi;
     "grm/repos.yaml".source = ./grm-repos.yaml;
+    "opencode/plugins/superpowers.js".source = opencodeAwesome.superpowersPlugin;
+    "opencode/skills/superpowers" = {
+      source = opencodeAwesome.superpowersSkillsDir;
+      recursive = true;
+    };
+    "ghostty/config".text = builtins.readFile ./ghostty.cfg;
   } // (if isDarwin then {
     "activitywatch/scripts" = {
       source = ./activitywatch;
@@ -663,6 +669,29 @@ in {
     };
   };
   
+  programs.opencode = {
+    enable = true;
+    package = pkgs.llm-agents.opencode;
+    settings = builtins.fromJSON (builtins.readFile ./opencode/settings.json);
+    agents = opencodeAwesome.agents;
+    commands = opencodeAwesome.commands;
+    themes = opencodeAwesome.themes;
+    rules = ''
+      You are an intelligent and observant agent.
+      
+      You are on NixOS. Prefer `nix run nixpkgs#<tool>` over installing tools globally.
+      If instructed to commit, do not use gpg signing.
+
+      ## Agents
+      Delegate tasks to subagents frequently.
+
+      ## Think deeply about everything.
+      Break problems down, abstract them out, understand the fundamentals.
+    '';
+
+
+  };
+
   programs.vscode = {
     enable = true;
     profiles = {
@@ -728,9 +757,20 @@ in {
     size = 128;
   };
 
+  # Keep package.json writable so opencode can update/install plugin deps at runtime.
+  home.activation.ensureOpencodePackageJsonWritable = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run mkdir -p "$HOME/.config/opencode"
+    packageJson="$HOME/.config/opencode/package.json"
+    if [ -L "$packageJson" ]; then
+      run rm -f "$packageJson"
+    fi
+    run cp ${./opencode/package.json} "$packageJson"
+    run chmod u+w "$packageJson"
+  '';
+
   # Ensure writable output directories for Noctalia user templates
   home.activation.createNoctaliaThemeDirs = lib.mkIf (isLinux && !isWSL) (lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run mkdir -p "$HOME/.local/share/noctalia/emacs-themes"
+    run mkdir -p "$HOME/.local/share/noctalia/emacs-themes"
   '');
 
   # Uniclip clipboard client: connects to macOS server via SSH reverse tunnel
