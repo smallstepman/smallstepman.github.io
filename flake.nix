@@ -68,6 +68,7 @@
     agent-of-empires-src = { url = "github:njbrake/agent-of-empires"; flake = false; };
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
     beads-viewer-src = { url = "github:Dicklesworthstone/beads_viewer"; flake = false; };
+    aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
 
     # Mango window control for Wayland
     mangowc = {

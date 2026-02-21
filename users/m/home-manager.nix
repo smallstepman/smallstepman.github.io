@@ -302,7 +302,10 @@ in {
     "rofi/config.rasi".text = builtins.readFile ./rofi;
     "grm/repos.yaml".source = ./grm-repos.yaml;
   } // (if isDarwin then {
-    "kanata-tray".source = {
+    "activitywatch/scripts" = {
+      source = ./activitywatch;
+      recursive = true;
+    };
       source = ./kanata/tray;
       recursive = true;
     };

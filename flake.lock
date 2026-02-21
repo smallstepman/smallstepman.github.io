@@ -16,6 +16,23 @@
         "type": "github"
       }
     },
+    "aw-import-screentime-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1761488015,
+        "narHash": "sha256-QsgQBXMoUR3F6ZKJkoyF1F8w5+7AnPDltchr13DEPJA=",
+        "owner": "ActivityWatch",
+        "repo": "aw-import-screentime",
+        "rev": "8d6bf4a84bac840c8af577652ee70514ef3e6bc1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ActivityWatch",
+        "repo": "aw-import-screentime",
+        "rev": "8d6bf4a84bac840c8af577652ee70514ef3e6bc1",
+        "type": "github"
+      }
+    },
     "beads-viewer-src": {
       "flake": false,
       "locked": {
@@ -807,6 +824,7 @@
     "root": {
       "inputs": {
         "agent-of-empires-src": "agent-of-empires-src",
+        "aw-import-screentime-src": "aw-import-screentime-src",
         "beads-viewer-src": "beads-viewer-src",
         "darwin": "darwin",
         "difi-src": "difi-src",

@@ -1,5 +1,13 @@
 { inputs, pkgs, ... }:
 
+let
+  awImportScreentimeSrc = pkgs.applyPatches {
+    name = "aw-import-screentime-src";
+    src = inputs.aw-import-screentime-src;
+    patches = [ ../../patches/aw-import-screentime.patch ];
+  };
+  awAutomationScriptsRoot = "/Users/USER/.config/activitywatch/scripts";
+in
 {
   homebrew = {
     enable = true;
@@ -14,6 +22,7 @@
       "leader-key"
       "lm-studio"
       "loop"
+      "launchcontrol"
       "mullvad-vpn"
       "rectangle"
       "spotify"
@@ -115,6 +124,57 @@
       LimitLoadToSessionType = "Aqua";
       ProcessType = "Interactive";
       ThrottleInterval = 20;
+    };
+  };
+
+  launchd.user.agents.activitywatch-sync-aw-to-calendar = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/usr/bin/osascript"
+        "-l"
+        "JavaScript"
+        "${awAutomationScriptsRoot}/synchronize.js"
+      ];
+      RunAtLoad = true;
+      StartInterval = 1800;
+      WorkingDirectory = awAutomationScriptsRoot;
+      StandardOutPath = "/tmp/aw-sync-aw-to-calendar.out.log";
+      StandardErrorPath = "/tmp/aw-sync-aw-to-calendar.err.log";
+    };
+  };
+
+  launchd.user.agents.activitywatch-sync-ios-screentime-to-aw = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/Applications/LaunchControl.app/Contents/MacOS/fdautil"
+        "exec"
+        "/bin/bash"
+        "${awAutomationScriptsRoot}/run_sync.sh"
+      ];
+      EnvironmentVariables = {
+        AW_IMPORT_SRC = "${awImportScreentimeSrc}";
+      };
+      RunAtLoad = true;
+      StartInterval = 3600;
+      WorkingDirectory = awAutomationScriptsRoot;
+      StandardOutPath = "/tmp/aw-sync-ios-screentime-to-aw.out.log";
+      StandardErrorPath = "/tmp/aw-sync-ios-screentime-to-aw.err.log";
+    };
+  };
+
+  launchd.user.agents.activitywatch-bucketize-aw-and-sync-to-calendar = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/usr/bin/osascript"
+        "-l"
+        "JavaScript"
+        "${awAutomationScriptsRoot}/bucketize.js"
+      ];
+      RunAtLoad = true;
+      StartInterval = 900;
+      WorkingDirectory = awAutomationScriptsRoot;
+      StandardOutPath = "/tmp/aw-bucketize-aw-and-sync-to-calendar.out.log";
+      StandardErrorPath = "/tmp/aw-bucketize-aw-and-sync-to-calendar.err.log";
     };
   };
 }
