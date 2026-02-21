@@ -1,0 +1,65 @@
+(defalias
+  ewsf1 C-A-1
+  ewsf2 C-A-2
+  ewsf3 C-A-3
+  ewsf4 C-A-4
+  ewsf5 C-A-5
+  ewsf6 C-A-6
+  ewsf7 C-A-7
+  ewsprev C-A-8
+  ewsnext C-A-9
+  ewskill C-A-0
+
+  ;; Emacs shortcuts
+  wkill C-M-q
+  fn-up C-M-w
+  class-up C-M-S-w
+  lsp-up (tap-dance-eager 190 (@fn-up @class-up))
+  filesave C-M-f
+  snipe-search C-M-S-f
+  snipe-or-save (tap-dance-eager 190 (@snipe-search @filesave))
+  pg-up-ow C-M-p
+  magit C-M-g
+  lsp-diagnostic-popup C-M-j
+  lsp-code-actions C-M-S-j
+  lsp-show-definition C-M-l
+  lsp-goto-parent-module C-M-S-l
+  lsp-show-reference C-M-u
+  lsp-rust-related-tests C-M-S-u
+  lsp-imenu-multi C-M-y
+  lsp-ui-imenu C-M-S-y
+  lsp-open-in-other-window C-M-;
+  lsp-rust-external-doc C-M-S-;
+  lsp-err (tap-dance-eager 300 (@lsp-diagnostic-popup @lsp-code-actions))
+  lsp-def (tap-dance-eager 300 (@lsp-show-definition @lsp-goto-parent-module))
+  lsp-ref (tap-dance-eager 300 (@lsp-show-reference @lsp-rust-related-tests))
+  lsp-sym (tap-dance-eager 300 (@lsp-imenu-multi @lsp-ui-imenu))
+  lsp-open (tap-dance-eager 300 (@lsp-open-in-other-window @lsp-rust-external-doc))
+
+  ;; Additional Emacs shortcuts
+  fn-dn C-M-r
+  class-dn C-M-S-r
+  lsp-dn (tap-dance-eager 190 (@fn-dn @class-dn))
+  pg-dn-ow C-M-t
+  mcursor C-M-d
+
+  ;; Other shortcuts
+  zap M-z
+  clock-in C-M-c
+  lsp-ext-v C-M-v
+  yazi C-M-b
+  bkill C-M-k
+  bmax C-M-m
+  bnext C-M-,
+  bprev C-M-/
+)
+
+(deflayer code-navigation
+  _ _ _ _ _ _ _ _ _ _ _ _ _
+  _ @ewsf1 @ewsf2 @ewsf3 @ewsf4 @ewsf5 @ewsf6 @ewsf7 _ _ _ @ewsprev @ewsnext @ewskill
+  _ @wkill @lsp-up @snipe-or-save @pg-up-ow @magit _ _ @lsp-err @lsp-def @lsp-ref @lsp-sym @lsp-open _
+  _  _    @lsp-dn _   @pg-dn-ow @mcursor _ _ _ _ _ _ _
+  _ _ @zap  C-x   @clock-in @lsp-ext-v @yazi _ _ @bkill @bmax @bprev @bnext 
+  _ _ _ _                         _                    _ _ _ _ _ _
+)
+

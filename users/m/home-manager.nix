@@ -194,6 +194,7 @@ in {
 
   ] ++ (lib.optionals isDarwin [
     # This is automatically setup on Linux
+    pkgs.skhd
     pkgs.cachix
     pkgs.gettext
     pkgs._1password-cli
@@ -282,7 +283,14 @@ in {
   home.file = {
     ".gdbinit".source = ./gdbinit;
     ".inputrc".source = ./inputrc;
-  } // (if isLinux then {
+  } // (if isDarwin then {
+    # not gonna manage plists, but keep them here to remember
+    # "Library/Preferences/com.MrKai77.Loop.plist".source = ./com.MrKai77.Loop.plist;
+    # "Library/Preferences/com.brnbw.Leader-Key.plist".source = ./com.brnbw.Leader-Key.plist;
+    # "Library/Preferences/com.knollsoft.Rectangle.plist".source = ./com.knollsoft.Rectangle.plist;
+    # not ready yet to freeze it
+    # "Library/Application Support/Leader Key/config.json".source = ./leader-key-config.json;
+  } else {}) // (if isLinux then {
     # Claude Code apiKeyHelper: fetches token from rbw on demand (auto-refreshes every 5min)
     ".claude/settings.json".text = builtins.toJSON {
       apiKeyHelper = "${pkgs.rbw}/bin/rbw get claude-oauth-token";
@@ -294,8 +302,16 @@ in {
     "rofi/config.rasi".text = builtins.readFile ./rofi;
     "grm/repos.yaml".source = ./grm-repos.yaml;
   } // (if isDarwin then {
-    # Rectangle.app. This has to be imported manually using the app.
+    "kanata-tray".source = {
+      source = ./kanata/tray;
+      recursive = true;
+    };
+    "kanata".source = {
+      source = ./kanata/config-macbook-iso;
+      recursive = true;
+    };
     "rectangle/RectangleConfig.json".text = builtins.readFile ./RectangleConfig.json;
+    "karabiner/karabiner.json".source = ./kanata/karabiner.json; # keeping it in kanata/ since i dont use it directly with karabiner, but via kanata
   } else {}) // (if isLinux then {
     # Prevent home-manager from managing rbw config as a read-only store symlink;
     # the rbw-config systemd service writes the real config with sops email.

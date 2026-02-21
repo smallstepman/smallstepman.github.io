@@ -1,0 +1,49 @@
+(include components/media-key-emojis.kbd)
+(include components/home-row-mod.kbd)
+
+(defcfg
+  process-unmapped-keys yes
+  macos-dev-names-include ("Apple Internal Keyboard / Trackpad"))
+
+(defvar
+  tap-timeout     200
+  hold-timeout    150)
+
+(deftemplate th (if-tapped if-held) 
+  (tap-hold $tap-timeout $hold-timeout $if-tapped $if-held))
+
+(deftemplate stacked-layer (layer1 layer2)
+  (multi (layer-while-held $layer1) (layer-while-held $layer2)))
+
+(defsrc
+  esc        f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  nubs     1  2  3  4  5  6  7  8  9  0  -   =   bspc
+  tab       q  w  e  r  t  y  u  i  o  p  [   ]   ret
+  caps       a  s  d  f  g  h  j  k  l  ;  '   \
+  lsft   grv  z  x  c  v  b  n  m  ,  .  /       rsft 
+  fn lctl lalt lmet  spc  rmet ralt left down up rght)
+
+(defalias
+  tty A-M-S-v
+  .|🔢 (t! th . (layer-while-held special-chars))
+  🧭|🪐 (t! th spc (t! stacked-layer navigation code-navigation))
+  🧭|🤴 (t! th C-spc (t! stacked-layer navigation code-navigation)))
+
+(deflayer base
+  esc          @🔅 @🔆 @🏠 @🔍 @🎤 @🌙 @⏪ @⏯️ @⏭️ @🔇 @🔉 @🔊
+  `         f1  f2  f3  f4  f5  f6  f7  f8  f9  f10 f11 f12     \
+  tab        q   w   f   p   g  XX XX  j  l   u   y   ;     (t! th return ')
+  bspc        @LM @LC @LA @LS d  XX XX  h  @RS @RA @RC @RM
+  del grv      z   x   c   v   b  XX XX  k  m   ,           /
+  _ _ _ @tty           @🧭|🤴          @🧭|🪐 @.|🔢 _ _ _ _)
+(include components/layer-non-alphabetic-characters.kbd)
+(include components/layer-code-editor-navigation.kbd)
+(deflayermap navigation
+  caps (t! th esc bspc)
+  k home
+  l left
+  ; down
+  ' up
+  \ rght
+  return end
+  rsft del)

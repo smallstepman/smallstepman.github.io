@@ -6,6 +6,7 @@
     casks  = [
       "1password"
       "activitywatch"
+      "karabiner-elements"
       "claude"
       "discord"
       "gimp"
@@ -45,6 +46,12 @@
 
   # Required for some settings like homebrew to know what user to apply to.
   system.primaryUser = "m";
+  services.skhd = {
+    enable = true;
+    package = pkgs.skhd;
+    skhdConfig = builtins.readFile ./skhdrc;
+  };
+
 
   # Uniclip: encrypted clipboard sharing between macOS and NixOS VM.
   # Server listens on localhost only; an SSH reverse tunnel carries traffic to the VM.
@@ -90,6 +97,24 @@
       KeepAlive = true;
       StandardOutPath = "/tmp/uniclip-tunnel.log";
       StandardErrorPath = "/tmp/uniclip-tunnel.log";
+    };
+  };
+
+
+  launchd.user.agents.kanata-tray = {
+    serviceConfig = {
+      ProgramArguments = [ "sudo" "/opt/homebrew/bin/kanata-tray" ];
+      EnvironmentVariables = {
+        KANATA_TRAY_CONFIG_DIR = "/Users/m/.config/kanata-tray";
+        KANATA_TRAY_LOG_DIR = "/tmp";
+      };
+      StandardOutPath = "/tmp/kanata-try.out.log";
+      StandardErrorPath = "/tmp/kanata-tray.err.log";
+      RunAtLoad = true;
+      KeepAlive = true;
+      LimitLoadToSessionType = "Aqua";
+      ProcessType = "Interactive";
+      ThrottleInterval = 20;
     };
   };
 }

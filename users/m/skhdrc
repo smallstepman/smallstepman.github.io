@@ -1,0 +1,50 @@
+f11 [
+  "VMWare Fusion" : osascript -e 'tell app "System Events"' -e 'key code 14 using control down' -e 'delay 0.05' -e 'key code 123 using control down' -e 'end'
+  *               : osascript -e 'tell application "System Events" to key code 123 using control down'
+] 
+f12 [
+  "VMWare Fusion" : osascript -e 'tell app "System Events"' -e 'key code 14 using control down' -e 'delay 0.05' -e 'key code 124 using control down' -e 'end'
+  *               : osascript -e 'tell application "System Events" to key code 124 using control down'
+] 
+ctrl - 0x1B [
+  "VMWare Fusion" ~
+  *    : open -g "rectangle://execute-action?name=smaller"
+] 
+ctrl - 0x18 [
+  "VMWare Fusion" ~
+  *    : open -g "rectangle://execute-action?name=larger"
+] 
+ctrl - x [
+  "VMWare Fusion" ~
+  *   : shortcuts run OpenSpotlight
+  "Emacs" ~ 
+  "Code" ~ 
+]
+cmd - b  [
+  "VMWare Fusion" ~
+  *   ~
+  "calendar" : osascript \
+                -e 'tell application "System Events"' \
+                -e '  tell process "Calendar"' \
+                -e '    if (exists menu item "Hide Calendar List" of menu "View" of menu bar 1) then' \
+                -e '      click menu item "Hide Calendar List" of menu "View" of menu bar 1' \
+                -e '    else' \
+                -e '      click menu item "Show Calendar List" of menu "View" of menu bar 1' \
+                -e '    end if' \
+                -e '  end tell' \
+                -e 'end tell'
+  "reminders" : osascript -e 'tell application "System Events" to keystroke "s" using {command down, option down}'
+  "safari" : osascript -e 'tell application "System Events" to keystroke "l" using {command down, shift down}'
+]
+ctrl - s [
+  "VMWare Fusion" ~
+  *   : open -a /Applications/Safari.app
+] 
+ctrl - return [
+  "VMWare Fusion" ~
+  *   : open -a /Applications/Ghostty.app
+] 
+ctrl - d [
+  "VMWare Fusion" ~
+  *   : open -a /Applications/Ghostty.app
+] 
