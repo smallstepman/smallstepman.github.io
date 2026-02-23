@@ -11,30 +11,16 @@
       "model": "github-copilot/gpt-5-mini"
     }
   },
+  "autoupdate": false,
   "plugin": [
-    "@bastiangx/opencode-unmoji",
-    "@howaboua/opencode-planning-toolkit",
-    "@knikolov/opencode-plugin-simple-memory",
-    "@mailshieldai/opencode-canvas",
-    "@plannotator/opencode",
-    "@ramarivera/opencode-model-announcer",
-    "@ramtinj95/opencode-tokenscope",
-    "@simonwjackson/opencode-direnv",
-    "@slkiser/opencode-quota",
-    "@spoons-and-mirrors/subtask2",
-    "@tarquinen/opencode-dcp@latest",
-    "@tarquinen/opencode-smart-title",
-    "@zenobius/opencode-background"
+    "@bastiangx/opencode-unmoji@0.3.11",
+    "@openspoon/subtask2@0.3.9",
+    "@plannotator/opencode@0.6.3",
+    "@ramtinj95/opencode-tokenscope@1.5.2",
+    "@slkiser/opencode-quota@1.1.2",
+    "@tarquinen/opencode-smart-title@0.1.7"
   ],
-  "mcp": {
-    "with-context": {
-      "enabled": true,
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "with-context-mcp"
-      ]
-    }
-  }
+  "mcp": {}
 }
+
+

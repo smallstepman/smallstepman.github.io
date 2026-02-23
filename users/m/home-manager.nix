@@ -44,11 +44,16 @@ let
     kubectl = "kubecolor";
 
     nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
+
+    openspec-in-progress = "openspec list --json | jq -r '.changes[] | select(.status == \"in-progress\").name'";
   } // (if isLinux then {
     pbcopy = "wl-copy --type text/plain";
     pbpaste = "wl-paste --type text/plain";
     noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
-  } else {});
+    nix-config = "nvim /nix-config";
+  } else (if isDarwin then {
+    nix-config = "nvim ~/.config/nix-config";
+  } else {}));
 
   # For our MANPAGER env var
   # https://github.com/sharkdp/bat/issues/1145

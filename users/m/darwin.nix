@@ -23,7 +23,6 @@ in
       "loop"
       "launchcontrol"
       "mullvad-vpn"
-      "rectangle"
       "spotify"
     ];
 
@@ -161,7 +160,6 @@ in
       StandardErrorPath = "/tmp/uniclip-tunnel.log";
     };
   };
-
 
   launchd.user.agents.kanata-tray = {
     serviceConfig = {
