@@ -1,3 +1,4 @@
+# https://cloud.githubusercontent.com/assets/6175959/18551554/35137fc6-7b59-11e6-81a0-bef19ed5db5e.png
 f11 [
   "VMWare Fusion" : osascript -e 'tell app "System Events"' -e 'key code 14 using control down' -e 'delay 0.05' -e 'key code 123 using control down' -e 'end'
   *               : osascript -e 'tell application "System Events" to key code 123 using control down'
@@ -14,6 +15,14 @@ ctrl - 0x18 [
   "VMWare Fusion" ~
   *    : open -g "rectangle://execute-action?name=larger"
 ] 
+cmd - 0x18 [
+  "notes" : osascript -e 'tell application "System Events" to keystroke "." using {command down, shift down}'
+  * ~
+]
+cmd - 0x1B [
+  "notes" : osascript -e 'tell application "System Events" to keystroke "," using {command down, shift down}'
+  * ~
+]
 ctrl - x [
   "VMWare Fusion" ~
   *   : shortcuts run OpenSpotlight

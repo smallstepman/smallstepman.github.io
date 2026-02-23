@@ -3,9 +3,7 @@
 {
   sops.hostPubKey = lib.removeSuffix "\n" (builtins.readFile ./generated/vm-age-pubkey);
 
-  imports = [
-    ../modules/specialization/gnome-ibus.nix
-  ];
+  imports = [ ];
 
   # Be careful updating this.
   boot.kernelPackages = pkgs.linuxPackages_latest;
@@ -38,7 +36,7 @@
   networking.hostName = "dev";
 
   # Set your time zone.
-  time.timeZone = "America/Los_Angeles";
+  time.timeZone = "Europe/Warsaw";
 
   # The global useDHCP flag is deprecated, therefore explicitly set to false here.
   # Per-interface useDHCP will be mandatory in the future, so this generated config

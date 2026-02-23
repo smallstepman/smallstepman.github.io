@@ -195,6 +195,12 @@ https://gist.github.com/ethan-leba/760054f36a2f7c144c6b06ab6458fae6
 #+RESULTS:
 : aerospace-window-down
 
+** agent-shell
+#+begin_src emacs-lisp
+(use-package! agent-shell
+  :commands (agent-shell))
+#+end_src
+
 ** copilot/codeium
 #+begin_src emacs-lisp
 ;; we recommend using use-package to organize your init.el
@@ -342,6 +348,13 @@ https://gist.github.com/ethan-leba/760054f36a2f7c144c6b06ab6458fae6
 ;;   :after smart-mode-line
 ;;   :config
 ;;   (mini-modeline-mode t))
+#+end_src
+** nyan-mode
+#+begin_src emacs-lisp
+(use-package! nyan-mode
+  :config
+  (nyan-mode 1)
+  (nyan-start-animation))
 #+end_src
 ** ob-mermaid
 #+begin_src emacs-lisp
@@ -531,52 +544,4 @@ https://gist.github.com/ethan-leba/760054f36a2f7c144c6b06ab6458fae6
 ;; (use-package! shackle
 ;;   :config )
 #+end_src
-** TODO sql
-*** [[https://bitspook.in/blog/using-org-mode-as-an-sql-playground/][Using org-mode as an SQL playground]] [2022-02-04 pią 17:52]
-** TODO xwidgets & xwwp
-#+begin_src emacs-lisp
-;; (use-package! xwwp-full
-;;   :config
-;;   (setq xwidget-webkit-enable-plugins t)
-;;   ;; (xwwp-follow-link-completion-backend 'ido)
-;;   (map! :map xwidget-webkit-mode-map :n "f" #'xwwp-ace-toggle
-;;                                      :n "e" #'xwidget-webkit-scroll-up
-;;                                      :n "<up>" #'xwidget-webkit-scroll-up
-;;                                      :n "i" #'xwidget-webkit-scroll-down
-;;                                      :n "<down>" #'xwidget-webkit-scroll-down
-;;                                      :in "<escape>" #'xwidget-webkit-end-edit-textarea)
-;;   ;; (setq +lookup-open-url-fn #'+lookup-xwidget-webkit-open-url-fn)
-;;   ;; (setq browse-url-browser-function 'xwidget-webkit-browse-url)
-;; )
-#+end_src
 
-#+RESULTS:
-: t
-
-** KILL online search
-#+begin_src emacs-lisp
-;; (setq +lookup-provider-url-alist '(
-;;  ("Rust Crates" "https://docs.rs/releases/search?query=%s")
-;;  ("Rust Docs" "https://doc.rust-lang.org/std/?search=%s")
-;;  ("SourceGraph" "https://sourcegraph.com/search?q=context:global+repo:%%5Egithub%%5C.com/dfinity.%%2B%%24+%s&patternType=regexp&case=yes")
-;;  ("Internet Computer Wiki" "https://wiki.internetcomputer.org/w/index.php?search=%s")
-;;  ("Google" +lookup--online-backend-google "https://google.com/search?q=%s")
-;;  ("DevDocs.io" "https://devdocs.io/#q=%s")
-;;  ("StackOverflow" "https://stackoverflow.com/search?q=%s")
-;;  ("Github" "https://github.com/search?ref=simplesearch&q=%s")
-;;  ("Youtube" "https://youtube.com/results?aq=f&oq=&search_query=%s")
-;;  ("Wolfram alpha" "https://wolframalpha.com/input/?i=%s")
-;;  ("Wikipedia" "https://wikipedia.org/search-redirect.php?language=en&go=Go&search=%s")
-
-;;  ("Google images" "https://www.google.com/images?q=%s")
-;;  ("Google maps" "https://maps.google.com/maps?q=%s")
-;;  ("Doom Emacs issues" "https://github.com/hlissner/doom-emacs/issues?q=is%%3Aissue+%s")
-;;  ("Project Gutenberg" "http://www.gutenberg.org/ebooks/search/?query=%s")
-;;  ("DuckDuckGo" +lookup--online-backend-duckduckgo "https://duckduckgo.com/?q=%s")
-;; ))
-;;;###autoload
-;; (defun +lookup--online-backend-docs-rs (query)
-;;   (interactive)
-;;   "Search google, starting with QUERY, with live autocompletion."
-;;   (browse-url (concat "http://duckduckgo.com/" query)))
-#+end_src

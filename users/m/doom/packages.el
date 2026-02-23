@@ -6,6 +6,7 @@
 (package! git-link)
 (package! git-timemachine)
 (package! gptel)
+(package! agent-shell :recipe (:host github :repo "xenodium/agent-shell"))
 (package! json-reformat)
 (package! powerthesaurus) ;; TODO https://github.com/SavchenkoValeriy/emacs-powerthesaurus
 (package! string-inflection :recipe (:host github :repo "akicho8/string-inflection" :files ("string-inflection.el")))
@@ -77,7 +78,7 @@
 ;;(package! evil-tree-edit) ;; TODO
 ;;(package! kbd-mode    :recipe (:host github :repo "kmonad/kbd-mode" :files ("kbd-mode.el")))
 ;;(package! motoko-mode :recipe (:host github :repo "dfinity/motoko"  :files ("emacs/motoko-mode.el")))
-;;(package! nyan-mode)
+(package! nyan-mode)
 ;;(package! org-analyzer) ;; TODO
 ;;(package! lsp-tailwindcss :recipe (:host github :repo "merrickluo/lsp-tailwindcss")) ;; TODO
 ;;(package! gitmoji :recipe (:host github :repo "janusvm/emacs-gitmoji" :files ("*.el" "data")))

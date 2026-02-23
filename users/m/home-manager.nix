@@ -9,28 +9,30 @@ let
   opencodeAwesome = import ./opencode/awesome.nix { inherit pkgs lib; };
 
   shellAliases = {
-    ".."   = "cd ..";
-    "..."  = "cd ../..";
-    "...." = "cd ../../..";
-    "....." = "cd ../../../..";
-    "......" = "cd ../../../../..";
-    "......." = "cd ../../../../../..";
+          ".." = "cd ..";
+         "..." = "cd ../..";
+        "...." = "cd ../../..";
+       "....." = "cd ../../../..";
+      "......" = "cd ../../../../..";
+     "......." = "cd ../../../../../..";
     "........" = "cd ../../../../../../..";
 
     
+    g  = "git";
+    gs = "git status";
     ga = "git add";
     gc = "git commit";
+    gl = "git prettylog";
+    gp = "git push";
+    gt = "git tag";
     gco = "git checkout";
     gcp = "git cherry-pick";
     gdiff = "git diff";
-    gl = "git prettylog";
-    gp = "git push";
-    gs = "git status";
-    gt = "git tag";
 
-    ll = "ls -lh";
-    la = "ls -a";
-    ls = "eza --group-directories-first";
+    l = "ls";
+    lah = "eza -alh --color=auto --group-directories-first --icons";
+    la = "eza -la";
+    ll = "eza -lh --color=auto --group-directories-first --icons"; 
     magit = "emacsclient -c -a '' -e '(magit-status)'";
     "nix-gc" = "nix-collect-garbage -d";
     "nix-update-flakes" = "nix flake update";
@@ -39,18 +41,13 @@ let
     oc = "opencode";
     
     rs = "cargo";
+    kubectl = "kubecolor";
 
     nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
   } // (if isLinux then {
-    # Two decades of using a Mac has made this such a strong memory
-    # that I'm just going to keep it consistent.
-    pbcopy = "xclip";
-    pbpaste = "xclip -o";
+    pbcopy = "wl-copy --type text/plain";
+    pbpaste = "wl-paste --type text/plain";
     noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
-
-    # NOTE: with-amp / with-openai are shell functions (see zsh initContent below).
-    # Shell aliases can't wrap commands; these placeholders exist only for discoverability.
-    # Actual definitions: with-openai() { OPENAI_API_KEY=$(rbw get openai-api-key) "$@"; }
   } else {});
 
   # For our MANPAGER env var
@@ -68,9 +65,6 @@ in {
   # Disabled for now since we mismatch our versions. See flake.nix for details.
   home.enableNixpkgsReleaseCheck = false;
 
-  # We manage our own Nushell config via Chezmoi
-  home.shell.enableNushellIntegration = false;
-
   xdg.enable = true;
 
   #---------------------------------------------------------------------
@@ -84,8 +78,13 @@ in {
     pkgs.bat
     pkgs.eza
     pkgs.fd
+    pkgs.bws
     pkgs.fzf
     pkgs.jq
+    pkgs.fluxcd
+    pkgs.kubecolor
+    pkgs.kubectl
+    pkgs.kubernetes-helm
     pkgs.rbw
     pkgs.ripgrep
     pkgs.tree
@@ -176,6 +175,7 @@ in {
     # pkgs.llm-agents.openclaw
     # pkgs.llm-agents.qmd
 
+    pkgs.go
     pkgs.gopls
 
     # Rust toolchain (via rust-overlay)
@@ -306,6 +306,10 @@ in {
       recursive = true;
     };
     "ghostty/config".text = builtins.readFile ./ghostty.cfg;
+    "tmux/menus/doomux.sh" = {
+      source = ./tmux/doomux.sh;
+      executable = true;
+    };
   } // (if isDarwin then {
     "activitywatch/scripts" = {
       source = ./activitywatch;
@@ -320,7 +324,7 @@ in {
       recursive = true;
     };
     "rectangle/RectangleConfig.json".text = builtins.readFile ./RectangleConfig.json;
-    "karabiner/karabiner.json".source = ./kanata/karabiner.json; # keeping it in kanata/ since i dont use it directly with karabiner, but via kanata
+    # "karabiner/karabiner.json".source = ./kanata/karabiner.json; # keeping it in kanata/ since i dont use it directly with karabiner, but via kanata
   } else {}) // (if isLinux then {
     # Prevent home-manager from managing rbw config as a read-only store symlink;
     # the rbw-config systemd service writes the real config with sops email.
@@ -357,6 +361,25 @@ in {
   };
 
   programs.gpg.enable = !isDarwin;
+
+  programs.tmux = {
+    enable = true;
+    keyMode = "vi";
+    mouse = true;
+    extraConfig = ''
+      set -g @menus_location_x 'C'
+      set -g @menus_trigger 'Space'
+      set -g @menus_main_menu '${config.home.homeDirectory}/.config/tmux/menus/doomux.sh'
+      set -g @menus_display_commands 'No'
+      run-shell ~/.local/share/tmux/plugins/tmux-menus/menus.tmux
+      set -g status-keys vi
+      setw -g mode-keys vi
+      set -g base-index 1
+      setw -g pane-base-index 1
+      set -g renumber-windows on
+      set -g set-clipboard on
+    '';
+  };
 
   # Niri Wayland compositor configuration (Linux only)
   programs.niri.settings = lib.mkIf (isLinux && !isWSL) {
@@ -558,6 +581,18 @@ in {
 
       # fnm (Node version manager)
       eval "$(fnm env --use-on-cd)"
+      bindkey -v
+
+      # Doom-like leader key in zsh vi normal mode when running inside tmux.
+      tmux-leader-menu() {
+        if [[ -n "$TMUX" ]]; then
+          tmux run-shell ~/.config/tmux/menus/doomux.sh
+        else
+          zle vi-forward-char
+        fi
+      }
+      zle -N tmux-leader-menu
+      bindkey -M vicmd " " tmux-leader-menu
     '' + (if isDarwin then ''
 
       # Homebrew
@@ -665,6 +700,7 @@ in {
         cleanup = "!git branch --merged | grep  -v '\\*\\|master\\|develop' | xargs -n 1 -r git branch -d";
         prettylog = "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(r) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative";
         root = "rev-parse --show-toplevel";
+        ce = "git commit --amend --no-edit";
       };
     };
   };
@@ -688,8 +724,6 @@ in {
       ## Think deeply about everything.
       Break problems down, abstract them out, understand the fundamentals.
     '';
-
-
   };
 
   programs.vscode = {
@@ -766,6 +800,16 @@ in {
     fi
     run cp ${./opencode/package.json} "$packageJson"
     run chmod u+w "$packageJson"
+  '';
+
+  # tmux-menus needs a writable plugin directory for cache files.
+  home.activation.installWritableTmuxMenus = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    src=${pkgs.tmuxPlugins."tmux-menus"}/share/tmux-plugins/tmux-menus
+    dst="$HOME/.local/share/tmux/plugins/tmux-menus"
+    run mkdir -p "$HOME/.local/share/tmux/plugins"
+    run rm -rf "$dst"
+    run cp -R "$src" "$dst"
+    run chmod -R u+w "$dst"
   '';
 
   # Ensure writable output directories for Noctalia user templates

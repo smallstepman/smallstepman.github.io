@@ -5,7 +5,7 @@
     # Pin our primary nixpkgs repository. This is the main nixpkgs repository
     # we'll use for our configurations. Be very careful changing this because
     # it'll impact your entire system.
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/c217913993d6c6f6805c3b1a3bda5e639adfde6d";
 
     # Used to get ibus 1.5.29 which has some quirks we want to test.
     nixpkgs-old-ibus.url = "github:nixos/nixpkgs/e2dd4e18cc1c7314e24154331bae07df76eb582f";
@@ -27,9 +27,6 @@
     nix-snapd.inputs.nixpkgs.follows = "nixpkgs";
 
     home-manager = {
-      # We need to use nightly home-manager because it contains this
-      # fix we need for nushell nightly:
-      # https://github.com/nix-community/home-manager/commit/a69ebd97025969679de9f930958accbe39b4c705
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -38,13 +35,6 @@
       url = "github:nix-darwin/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # I think technically you're not supposed to override the nixpkgs
-    # used by neovim but recently I had failures if I didn't pin to my
-    # own. We can always try to remove that anytime.
-    # neovim-nightly-overlay = {
-    #   url = "github:nix-community/neovim-nightly-overlay";
-    # };
 
     # Other packages
     rust-overlay = {
@@ -67,6 +57,7 @@
     difi-src = { url = "github:oug-t/difi"; flake = false; };
     agent-of-empires-src = { url = "github:njbrake/agent-of-empires"; flake = false; };
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
+    tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
     beads-viewer-src = { url = "github:Dicklesworthstone/beads_viewer"; flake = false; };
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
 
@@ -158,6 +149,15 @@
           vendorHash = null; # uses vendored dependencies
           subPackages = [ "cmd/bv" ];
           meta.description = "Graph-aware TUI for the Beads issue tracker";
+        };
+
+        tmuxPlugins = prev.tmuxPlugins // {
+          "tmux-menus" = final.tmuxPlugins.mkTmuxPlugin {
+            pluginName = "tmux-menus";
+            version = "0-unstable-2026-02-21";
+            src = inputs.tmux-menus-src;
+            rtpFilePath = "menus.tmux";
+          };
         };
       })
 
