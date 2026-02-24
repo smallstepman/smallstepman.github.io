@@ -13,6 +13,7 @@
   },
   "autoupdate": false,
   "plugin": [
+    "opencode-copilot-auth@latest",
     "@bastiangx/opencode-unmoji@0.3.11",
     "@openspoon/subtask2@0.3.9",
     "@plannotator/opencode@0.6.3",
@@ -20,7 +21,19 @@
     "@slkiser/opencode-quota@1.1.2",
     "@tarquinen/opencode-smart-title@0.1.7"
   ],
-  "mcp": {}
+  "mcp": {},
+  "provider": {
+    "github-copilot": {
+      "models": {
+        "gpt-5.3-codex": {
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          }
+        }
+      }
+    }
+  }
 }
 
 

@@ -39,13 +39,14 @@ let
 
     cc = "claude";
     oc = "opencode";
-    
+    ocd = "opencode-dev";
+    openspec-in-progress = "openspec list --json | jq -r '.changes[] | select(.status == \"in-progress\").name'";
+
     rs = "cargo";
     kubectl = "kubecolor";
 
     nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
 
-    openspec-in-progress = "openspec list --json | jq -r '.changes[] | select(.status == \"in-progress\").name'";
   } // (if isLinux then {
     pbcopy = "wl-copy --type text/plain";
     pbpaste = "wl-paste --type text/plain";
@@ -63,6 +64,10 @@ let
     cat "$1" | col -bx | bat --language man --style plain
   ''));
 in {
+  imports = [
+    (import ./opencode/modules/home-manager.nix { inherit isWSL; })
+  ];
+
   # Home-manager 22.11 requires this be set. We never set it so we have
   # to use the old state version.
   home.stateVersion = "18.09";
@@ -140,8 +145,8 @@ in {
     pkgs.llm-agents.skills-installer
 
     # llm-agents.nix — ACP ecosystem
-    pkgs.llm-agents.claude-code-acp
-    pkgs.llm-agents.codex-acp
+    # pkgs.llm-agents.claude-code-acp
+    # pkgs.llm-agents.codex-acp
 
     # llm-agents.nix — usage analytics
     pkgs.llm-agents.ccusage
@@ -772,14 +777,15 @@ in {
         installRuntimeDependencies = true;  # But install nodejs
       };
       lang.rust.enable = true;
+      ai.copilot.enable = true;
 
     };
 
     # Additional packages (optional)
     extraPackages = with pkgs; [
-      nixd       # Nix LSP
-      alejandra  # Nix formatter
-      pyright    # Python LSP
+      nixd        # Nix LSP
+      alejandra   # Nix formatter
+      pyright     # Python LSP
     ];
 
     # Only needed for languages not covered by LazyVim extras
@@ -842,4 +848,5 @@ in {
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };
+
 }

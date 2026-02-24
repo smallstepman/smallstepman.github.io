@@ -159,6 +159,26 @@
             rtpFilePath = "menus.tmux";
           };
         };
+
+        opencode-dev =
+          let
+            pkgs-unstable = import inputs.nixpkgs-unstable {
+              system = prev.system;
+              config.allowUnfree = true;
+            };
+            src = builtins.fetchTarball {
+              url = "https://github.com/anomalyco/opencode/archive/0a74fcd65dcceb1315d9e2580b97fa970f8bd154.tar.gz";
+              sha256 = "0zk9m1xcy5nd9p55h9fyr0r5s9m47lpzwb2h7xkxirrxfd41gknw";
+            };
+            node_modules = final.callPackage (src + "/nix/node_modules.nix") {
+              rev = "pr-13485";
+              bun = pkgs-unstable.bun;
+            };
+          in
+          final.callPackage (src + "/nix/opencode.nix") {
+            inherit node_modules;
+            bun = pkgs-unstable.bun;
+          };
       })
 
       (final: prev:

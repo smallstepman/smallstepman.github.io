@@ -9,6 +9,8 @@ let
   awAutomationScriptsRoot = "/Users/USER/.config/activitywatch/scripts";
 in
 {
+  imports = [ ./opencode/modules/darwin.nix ];
+
   homebrew = {
     enable = true;
     casks  = [
