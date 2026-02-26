@@ -6,7 +6,7 @@ let
     src = inputs.aw-import-screentime-src;
     patches = [ ../../patches/aw-import-screentime.patch ];
   };
-  awAutomationScriptsRoot = "/Users/USER/.config/activitywatch/scripts";
+  awAutomationScriptsRoot = "/Users/m/.config/activitywatch/scripts";
   vmStaticIp = "192.168.130.3";
   openWebUiStateDir = "/Users/m/.local/state/open-webui";
   openWebUiPackage =
@@ -234,7 +234,7 @@ in
         KANATA_TRAY_CONFIG_DIR = "/Users/m/.config/kanata-tray";
         KANATA_TRAY_LOG_DIR = "/tmp";
       };
-      StandardOutPath = "/tmp/kanata-try.out.log";
+      StandardOutPath = "/tmp/kanata-tray.out.log";
       StandardErrorPath = "/tmp/kanata-tray.err.log";
       RunAtLoad = true;
       KeepAlive = true;
