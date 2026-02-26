@@ -6,11 +6,11 @@ Visit https://smallstepmna.github.io/
 
 Study install scripts in `docs/` dir. 
 
-For detailed walktrough, visit upstream repo.
+For detailed walkthrough, visit upstream repo.
 
 For repository layout and scaling notes (rpi/vps/GPU servers), see `/docs/project-structure-review.md`.
 
-## Acknoledgment
+## Acknowledgment
 
 I forked it from here: https://github.com/mitchellh/nixos-config
 
