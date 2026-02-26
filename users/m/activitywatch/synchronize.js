@@ -117,7 +117,7 @@ function getBuckets() {
     return JSON.parse(json);
 }
 
-function findBucketId(prefix) {
+function findBucketId(prefix, options = {}) {
     const buckets = getBuckets();
     const hostname = getHostname();
 
@@ -125,9 +125,13 @@ function findBucketId(prefix) {
     const target = `${prefix}_${hostname}`;
     if (buckets[target]) return target;
 
+    const { exclude = null } = options;
+
     // 2. Search for any bucket with prefix
     for (const id in buckets) {
-        if (id.includes(prefix)) {
+        if (!id.startsWith(`${prefix}_`)) continue;
+        if (exclude && id.includes(exclude)) continue;
+        if (id) {
             return id;
         }
     }
@@ -135,11 +139,11 @@ function findBucketId(prefix) {
 }
 
 function getWindowBucketId() {
-    return findBucketId("aw-watcher-window_dynamic-host");
+    return findBucketId("aw-watcher-window", { exclude: "_ios-" });
 }
 
 function getAfkBucketId() {
-    return findBucketId("aw-watcher-afk_dynamic-host");
+    return findBucketId("aw-watcher-afk", { exclude: "_ios-" });
 }
 
 function getEvents(bucketId, startIso) {

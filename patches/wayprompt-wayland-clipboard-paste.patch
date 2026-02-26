@@ -1,0 +1,57 @@
+--- a/src/Wayland.zig
++++ b/src/Wayland.zig
+@@ -3,6 +3,7 @@
+ const ascii = std.ascii;
+ const posix = std.posix;
+ const mem = std.mem;
++const process = std.process;
+ const math = std.math;
+ const unicode = std.unicode;
+ const debug = std.debug;
+@@ -488,6 +489,12 @@
+                     @as(xkb.State.Component, @enumFromInt(xkb.State.Component.mods_effective)),
+                 ) == 1) {
+                     switch (@intFromEnum(keysym)) {
++                        xkb.Keysym.v => {
++                            if (self.w.mode == .getpin) {
++                                self.pasteClipboard();
++                            }
++                            return;
++                        },
+                         xkb.Keysym.BackSpace, xkb.Keysym.w => {
+                             if (self.w.mode == .getpin) {
+                                 self.w.config.secbuf.reset(self.w.config.alloc) catch self.w.abort(error.OutOfMemory);
+@@ -531,6 +538,33 @@
+             .leave => {},
+             .repeat_info => {},
+         }
++    }
++
++
++    fn pasteClipboard(self: *Seat) void {
++        const result = process.Child.run(.{
++            .allocator = self.w.config.alloc,
++            .argv = &[_][]const u8{
++                "wl-paste",
++                "--no-newline",
++                "--type",
++                "text/plain",
++            },
++            .max_output_bytes = 4096,
++        }) catch return;
++        defer self.w.config.alloc.free(result.stdout);
++        defer self.w.config.alloc.free(result.stderr);
++
++        switch (result.term) {
++            .Exited => |code| if (code != 0) return,
++            else => return,
++        }
++
++        if (result.stdout.len == 0) return;
++        self.w.config.secbuf.appendSlice(result.stdout) catch return;
++
++        // We only get keyboard input when a surface exists.
++        self.w.surface.?.render() catch self.w.abort(error.OutOfMemory);
+     }
+ 
+     fn bindTouch(seat: *Seat) !void {

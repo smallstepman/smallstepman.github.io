@@ -443,17 +443,47 @@ function fetchActivityWatchData(start, end) {
     // 1. Get Classes
     const classJson = makeReq(`${API_BASE}/settings/classes`, null, "GET");
     const catArr = classJson.filter(i => i.rule.type !== "none").map(i => [i.name, i.rule]);
+
+    // 2. Resolve bucket IDs at runtime to avoid hardcoded host/device identifiers.
+    const buckets = makeReq(`${API_BASE}/buckets/`, null, "GET");
+    const bucketIds = Object.keys(buckets);
+    const runtimeHostname = $.NSProcessInfo.processInfo.hostName.js || "";
+    const runtimeHostnames = Array.from(new Set([
+        runtimeHostname,
+        runtimeHostname.split(".")[0]
+    ].filter(Boolean)));
+    const findBucketId = (label, matchers) => {
+        for (const matcher of matchers) {
+            const bucketId = bucketIds.find(matcher);
+            if (bucketId) return bucketId;
+        }
+        throw new Error(`ActivityWatch bucket not found for ${label}`);
+    };
+    const macbookAfkBucketId = findBucketId("macbook afk", [
+        id => id.startsWith("aw-watcher-afk_") && !id.startsWith("aw-watcher-afk_ios-") && runtimeHostnames.some(host => id.endsWith(host)),
+        id => id.startsWith("aw-watcher-afk_") && !id.startsWith("aw-watcher-afk_ios-")
+    ]);
+    const macbookWindowBucketId = findBucketId("macbook window", [
+        id => id.startsWith("aw-watcher-window_") && !id.startsWith("aw-watcher-window_ios-") && runtimeHostnames.some(host => id.endsWith(host)),
+        id => id.startsWith("aw-watcher-window_") && !id.startsWith("aw-watcher-window_ios-")
+    ]);
+    const phoneAfkBucketId = findBucketId("ios afk", [
+        id => id.startsWith("aw-watcher-afk_ios-")
+    ]);
+    const phoneWindowBucketId = findBucketId("ios window", [
+        id => id.startsWith("aw-watcher-window_ios-")
+    ]);
     
-    // 2. Query
+    // 3. Query
     const query = {
         "timeperiods": [`${formatDateForAW(start)}/${formatDateForAW(end)}`],
         "query": [
-            "macbook_afk_events = query_bucket(find_bucket('aw-watcher-afk_dynamic-host'));",
-            "macbook_window_events = query_bucket(find_bucket('aw-watcher-window_dynamic-host'));",
+            `macbook_afk_events = query_bucket(find_bucket('${macbookAfkBucketId}'));`,
+            `macbook_window_events = query_bucket(find_bucket('${macbookWindowBucketId}'));`,
             "macbook_window_events = filter_period_intersect(macbook_window_events, filter_keyvals(macbook_afk_events, 'status', ['not-afk']));",
 
-            "phone_afk_events = query_bucket(find_bucket('aw-watcher-afk_ios-dynamic-device'));",
-            "phone_events = query_bucket(find_bucket('aw-watcher-window_ios-dynamic-device'));",
+            `phone_afk_events = query_bucket(find_bucket('${phoneAfkBucketId}'));`,
+            `phone_events = query_bucket(find_bucket('${phoneWindowBucketId}'));`,
             "phone_events = filter_period_intersect(phone_events, filter_keyvals(phone_afk_events, 'status', ['not-afk']));",
 
             "events = union_no_overlap(macbook_window_events, phone_events);", 

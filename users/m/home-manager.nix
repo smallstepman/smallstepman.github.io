@@ -50,10 +50,15 @@ let
   } // (if isLinux then {
     pbcopy = "wl-copy --type text/plain";
     pbpaste = "wl-paste --type text/plain";
+    open = "xdg-open";
     noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
     nix-config = "nvim /nix-config";
+    niks = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --impure --flake '/nixos-config#vm-aarch64'";
+    nikt = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --impure --flake '/nixos-config#vm-aarch64'";
   } else (if isDarwin then {
     nix-config = "nvim ~/.config/nix-config";
+    niks = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --impure --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --impure --flake '.#macbook-pro-m1'";
+    nikt = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --impure --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --impure --flake '.#macbook-pro-m1'";
   } else {}));
 
   # For our MANPAGER env var
@@ -126,11 +131,11 @@ in {
     # pkgs.llm-agents.gemini-cli
     # pkgs.llm-agents.goose-cli
     # pkgs.llm-agents.jules
-    pkgs.llm-agents.kilocode-cli
-    pkgs.llm-agents.letta-code
-    pkgs.llm-agents.mistral-vibe
-    pkgs.llm-agents.nanocoder
-    pkgs.llm-agents.pi
+    # pkgs.llm-agents.kilocode-cli
+    # pkgs.llm-agents.letta-code
+    # pkgs.llm-agents.mistral-vibe
+    # pkgs.llm-agents.nanocoder
+    # pkgs.llm-agents.pi
     pkgs.llm-agents.qoder-cli
     pkgs.llm-agents.qwen-code
 
@@ -236,7 +241,10 @@ in {
     pkgs.claude-code
     pkgs.chromium
     pkgs.clang
-    pkgs.firefox
+    (pkgs.librewolf.override {
+      extraPolicies = config.programs.librewolf.policies;
+    })
+    pkgs.pywalfox-native
     pkgs.activitywatch # automated time tracker (Linux only; Darwin via homebrew cask)
     pkgs.fuzzel       # app launcher for Wayland
     pkgs.valgrind
@@ -257,9 +265,6 @@ in {
 
       echo "==> Syncing git repositories..."
       ${pkgs.git-repo-manager}/bin/grm repos sync config --config ~/.config/grm/repos.yaml
-
-      echo "==> Setting up Neovim (Lazy sync)..."
-      ${pkgs.neovim}/bin/nvim --headless "+Lazy! sync" +qa || true
 
       echo "==> Regenerating Noctalia color templates..."
       noctalia-shell ipc call colorscheme regenerate || true
@@ -315,12 +320,12 @@ in {
       source = opencodeAwesome.superpowersSkillsDir;
       recursive = true;
     };
-    "ghostty/config".text = builtins.readFile ./ghostty.cfg;
     "tmux/menus/doomux.sh" = {
       source = ./tmux/doomux.sh;
       executable = true;
     };
   } // (if isDarwin then {
+    "ghostty/config".text = builtins.readFile ./ghostty.darwin.cfg;
     "activitywatch/scripts" = {
       source = ./activitywatch;
       recursive = true;
@@ -336,6 +341,7 @@ in {
     "rectangle/RectangleConfig.json".text = builtins.readFile ./RectangleConfig.json;
     # "karabiner/karabiner.json".source = ./kanata/karabiner.json; # keeping it in kanata/ since i dont use it directly with karabiner, but via kanata
   } else {}) // (if isLinux then {
+    "ghostty/config".text = builtins.readFile ./ghostty.vm.cfg;
     # Prevent home-manager from managing rbw config as a read-only store symlink;
     # the rbw-config systemd service writes the real config with sops email.
     "rbw/config.json".enable = lib.mkForce false;
@@ -361,7 +367,7 @@ in {
     doomDir = ./doom;
     emacs = pkgs.emacs-pgtk;
     # :config literate has no effect in unstraightened; tangle config.org at build time
-    tangleArgs = "--all config.org";
+    # tangleArgs = "--all config.org";
   };
 
   # Emacs daemon as a systemd user service (Linux only; macOS has no systemd)
@@ -398,7 +404,8 @@ in {
     };
     prefer-no-csd = true; # Client Side Decorations (title bars etc)
     input = {
-      mod-key = "Control";  # or "Super", "Control", etc.
+      
+      mod-key = "Alt";  # Ctrl ; Alt; Super;
       keyboard.xkb.layout = "us";
       keyboard.repeat-delay = 150;
       keyboard.repeat-rate = 50;
@@ -450,126 +457,84 @@ in {
 
     binds = {
       # Launch
-      "Mod+Return".action.spawn = "foot";
-      "Mod+D".action.spawn = "fuzzel";
+      "Mod+T" = {
+        action.spawn = "ghostty";
+        repeat = false;
+      };
+      "Mod+S" = {
+        action.spawn = "librewolf";
+        repeat = false;
+      };
+      "Mod+Space".action.spawn = "wlr-which-key";
       "Mod+Q".action.close-window = {};
-
-      # Session
-      # "Mod+Shift+E".action.quit = {};
-
-      # Focus
-      "Mod+N".action.focus-column-left = {};
-      "Mod+E".action.focus-window-down = {};
-      "Mod+I".action.focus-window-up = {};
-      "Mod+O".action.focus-column-right = {};
-
-      # Move
-      "Mod+Shift+N".action.move-column-left = {};
-      "Mod+Shift+E".action.move-window-down = {};
-      "Mod+Shift+I".action.move-window-up = {};
-      "Mod+Shift+O".action.move-column-right = {};
-
-      # Workspaces
-      "Mod+1".action.focus-workspace = 1;
-      "Mod+2".action.focus-workspace = 2;
-      "Mod+3".action.focus-workspace = 3;
-      "Mod+4".action.focus-workspace = 4;
-      "Mod+5".action.focus-workspace = 5;
-      "Mod+6".action.focus-workspace = 6;
-      "Mod+7".action.focus-workspace = 7;
-      "Mod+8".action.focus-workspace = 8;
-      "Mod+9".action.focus-workspace = 9;
-
-      "Mod+Shift+1".action.move-column-to-workspace = 1;
-      "Mod+Shift+2".action.move-column-to-workspace = 2;
-      "Mod+Shift+3".action.move-column-to-workspace = 3;
-      "Mod+Shift+4".action.move-column-to-workspace = 4;
-      "Mod+Shift+5".action.move-column-to-workspace = 5;
-      "Mod+Shift+6".action.move-column-to-workspace = 6;
-      "Mod+Shift+7".action.move-column-to-workspace = 7;
-      "Mod+Shift+8".action.move-column-to-workspace = 8;
-      "Mod+Shift+9".action.move-column-to-workspace = 9;
-
       # Layout
       "Mod+R".action.switch-preset-column-width = {};
       "Mod+F".action.maximize-column = {};
       "Mod+Shift+F".action.fullscreen-window = {};
       "Mod+Minus".action.set-column-width = "-10%";
       "Mod+Equal".action.set-column-width = "+10%";
+      "Mod+W".action.toggle-column-tabbed-display = {};
+      "Mod+Slash".action.toggle-overview = {};
 
-      # Screenshots
-      "Print".action.screenshot = {};
-      "Mod+Print".action.screenshot-window = {};
+      # # Screenshots
+      # "Print".action.screenshot = {};
+      # "Mod+Print".action.screenshot-window = {};
 
-      # Lock
-      "Mod+Escape".action.spawn = "swaylock";
+      # # Lock
+      # "Mod+Escape".action.spawn = "swaylock";
+
+      # Session
+      # "Mod+Shift+E".action.quit = {};
+
+      # Focus
+      "Mod+N".action.focus-column-left = {};
+      "Mod+E".action.focus-window-or-workspace-down = {};
+      "Mod+I".action.focus-window-or-workspace-up = {};
+      "Mod+O".action.focus-column-right = {};
+
+      # Move
+      "Mod+H".action.consume-or-expel-window-left = {};
+      "Mod+L".action.move-column-left = {};
+      "Mod+U".action.move-window-down-or-to-workspace-down = {};
+      "Mod+Y".action.move-window-up-or-to-workspace-up = {};
+      "Mod+Semicolon".action.move-column-right = {};
+      "Mod+Return".action.consume-or-expel-window-right = {};
+
+      # Workspaces
+      "Mod+f1".action.focus-workspace = 1;
+      "Mod+f2".action.focus-workspace = 2;
+      "Mod+f3".action.focus-workspace = 3;
+      "Mod+f4".action.focus-workspace = 4;
+      "Mod+f5".action.focus-workspace = 5;
+      "Mod+f6".action.focus-workspace = 6;
+      "Mod+f7".action.focus-workspace = 7;
+      "Mod+f8".action.focus-workspace = 8;
+      "Mod+f9".action.focus-workspace = 9;
+
+      "Shift+f1".action.move-column-to-workspace = 1;
+      "Shift+f2".action.move-column-to-workspace = 2;
+      "Shift+f3".action.move-column-to-workspace = 3;
+      "Shift+f4".action.move-column-to-workspace = 4;
+      "Shift+f5".action.move-column-to-workspace = 5;
+      "Shift+f6".action.move-column-to-workspace = 6;
+      "Shift+f7".action.move-column-to-workspace = 7;
+      "Shift+f8".action.move-column-to-workspace = 8;
+      "Shift+f9".action.move-column-to-workspace = 9;
+
     };
+  };
+
+  # Wayprompt password prompt for Wayland sessions (Linux only)
+  programs.wayprompt = lib.mkIf (isLinux && !isWSL) {
+    enable = true;
+    package = pkgs.wayprompt;
   };
 
   # Mango Wayland compositor configuration (Linux only)
   wayland.windowManager.mango = lib.mkIf (isLinux && !isWSL) {
     enable = true;
-    settings = ''
-      # Mango config - keybindings matching niri (Colemak: n/e/i/o = left/down/up/right)
-      monitorrule=name:Virtual-1,scale:2.0
-
-      # Launch applications
-      bind=SUPER,Return,spawn,foot
-      bind=SUPER,d,spawn,fuzzel
-      bind=SUPER,q,killclient
-
-      # Focus navigation (Colemak layout)
-      bind=SUPER,n,focusdir,left
-      bind=SUPER,e,focusdir,down
-      bind=SUPER,i,focusdir,up
-      bind=SUPER,o,focusdir,right
-
-      # Move windows (Colemak layout)
-      bind=SUPER+SHIFT,n,movetodir,left
-      bind=SUPER+SHIFT,e,movetodir,down
-      bind=SUPER+SHIFT,i,movetodir,up
-      bind=SUPER+SHIFT,o,movetodir,right
-
-      # Workspaces (view = focus, tag = move window)
-      bind=SUPER,1,view,1
-      bind=SUPER,2,view,2
-      bind=SUPER,3,view,3
-      bind=SUPER,4,view,4
-      bind=SUPER,5,view,5
-      bind=SUPER,6,view,6
-      bind=SUPER,7,view,7
-      bind=SUPER,8,view,8
-      bind=SUPER,9,view,9
-
-      bind=SUPER+SHIFT,1,tag,1
-      bind=SUPER+SHIFT,2,tag,2
-      bind=SUPER+SHIFT,3,tag,3
-      bind=SUPER+SHIFT,4,tag,4
-      bind=SUPER+SHIFT,5,tag,5
-      bind=SUPER+SHIFT,6,tag,6
-      bind=SUPER+SHIFT,7,tag,7
-      bind=SUPER+SHIFT,8,tag,8
-      bind=SUPER+SHIFT,9,tag,9
-
-      # Layout
-      bind=SUPER,f,togglefullscreen
-      bind=SUPER+SHIFT,f,togglefloating
-
-      # Screenshots (using grim + slurp)
-      bind=NONE,Print,spawn_shell,grim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
-      bind=SUPER,Print,spawn_shell,grim -g "$(slurp)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
-
-      # Lock screen
-      bind=SUPER,Escape,spawn,swaylock
-
-      # Which-key menu
-      bind=SUPER,space,spawn,wlr-which-key
-
-      # Quit mango
-      bind=SUPER+SHIFT,q,quit
-    '';
+    settings = builtins.readFile ./mangowc.cfg;
     autostart_sh = ''
-      # Start notification daemon
       mako &
     '';
   };
@@ -607,6 +572,9 @@ in {
 
       # Homebrew
       eval "$(/opt/homebrew/bin/brew shellenv)"
+
+      # NixOS VM management
+      vm() { ~/.config/nix/docs/vm.sh "$@"; }
     '' else "") + (if isLinux then ''
 
       # gh: inject GITHUB_TOKEN per-invocation from rbw (no global env var)
@@ -686,7 +654,7 @@ in {
       base_url = "https://api.bitwarden.eu";
       email = "overwritten-by-systemd";
       lock_timeout = 86400; # 24 hours
-      pinentry = pkgs.pinentry-tty;
+      pinentry = if isWSL then pkgs.pinentry-tty else pkgs.wayprompt;
     };
   };
   programs.git = {
@@ -795,6 +763,99 @@ in {
 
   };
 
+  programs.librewolf = {
+    enable = false;
+    package = pkgs.librewolf;
+    policies = {
+      # Updates & Background Services
+      AppAutoUpdate                 = false;
+      BackgroundAppUpdate           = false;
+
+      # Feature Disabling
+      DisableBuiltinPDFViewer       = true;
+      DisableFirefoxStudies         = true;
+      DisableFirefoxAccounts        = true;
+      DisableFirefoxScreenshots     = true;
+      DisableForgetButton           = true;
+      DisableMasterPasswordCreation = true;
+      DisableProfileImport          = true;
+      DisableProfileRefresh         = true;
+      DisableSetDesktopBackground   = true;
+      DisablePocket                 = true;
+      DisableTelemetry              = true;
+      DisableFormHistory            = true;
+      DisablePasswordReveal         = true;
+
+      # Access Restrictions
+      BlockAboutConfig              = false;
+      BlockAboutProfiles            = true;
+      BlockAboutSupport             = true;
+
+      # UI and Behavior
+      DisplayMenuBar                = "never";
+      DontCheckDefaultBrowser       = true;
+      HardwareAcceleration          = false;
+      OfferToSaveLogins             = false;
+      DefaultDownloadDirectory      = "/home/m/Downloads";
+      Cookies = {
+        "Allow" = [
+          "https://addy.io"
+          "https://element.io"
+          "https://discord.com"
+          "https://github.com"
+          "https://lemmy.cafe"
+          "https://proton.me"
+        ];
+        "Locked" = true;
+      };
+      ExtensionSettings = {
+        # Pywalfox (dynamic theming based on wallpaper colors)
+        "pywalfox@frewacom.org" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/pywalfox/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        # uBlock Origin
+        "uBlock0@raymondhill.net" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        "addon@darkreader.org" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/darkreader/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        "vimium-c@gdh1995.cn" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/vimium-c/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        "{446900e4-71c2-419f-a6a7-df9c091e268b}" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi";
+          installation_mode = "force_installed";
+        };
+      };
+      FirefoxHome = {
+        "Search" = false;
+      };
+      Preferences = {
+        "browser.preferences.defaultPerformanceSettings.enabled" = false;
+        "browser.startup.homepage" = "about:home";
+        "browser.toolbar.bookmarks.visibility" = "newtab";
+        "browser.toolbars.bookmarks.visibility" = "newtab";
+        "browser.urlbar.suggest.bookmark" = false;
+        "browser.urlbar.suggest.engines" = false;
+        "browser.urlbar.suggest.history" = false;
+        "browser.urlbar.suggest.openpage" = false;
+        "browser.urlbar.suggest.recentsearches" = false;
+        "browser.urlbar.suggest.topsites" = false;
+        "browser.warnOnQuit" = false;
+        "browser.warnOnQuitShortcut" = false;
+        "places.history.enabled" = "false";
+        "privacy.resistFingerprinting" = true;
+        "privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts" = true;
+      };
+    };
+  };
+
+  mozilla.librewolfNativeMessagingHosts = lib.mkIf (isLinux && !isWSL) [ pkgs.pywalfox-native ];
   # Make cursor not tiny on HiDPI screens
   home.pointerCursor = lib.mkIf (isLinux && !isWSL) {
     name = "Vanilla-DMZ";
@@ -837,14 +898,47 @@ in {
     Service = {
       Type = "simple";
       ExecStart = "${pkgs.writeShellScript "uniclip-client" ''
-        export UNICLIP_PASSWORD=$(${pkgs.rbw}/bin/rbw get uniclip-password)
-        export WAYLAND_DISPLAY=wayland-1
+        set -euo pipefail
         export XDG_RUNTIME_DIR=/run/user/$(id -u)
         export PATH=${lib.makeBinPath [ pkgs.wl-clipboard ]}:$PATH
+        if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
+          export WAYLAND_DISPLAY=wayland-1
+        elif [ -S "$XDG_RUNTIME_DIR/wayland-0" ]; then
+          export WAYLAND_DISPLAY=wayland-0
+        else
+          echo "uniclip: no wayland socket found in $XDG_RUNTIME_DIR" >&2
+          exit 1
+        fi
+        if [ ! -r /run/secrets/uniclip/password ]; then
+          echo "uniclip: /run/secrets/uniclip/password is missing" >&2
+          exit 1
+        fi
+        UNICLIP_PASSWORD="$(cat /run/secrets/uniclip/password)"
+        if [ -z "$UNICLIP_PASSWORD" ]; then
+          echo "uniclip: empty password from /run/secrets/uniclip/password" >&2
+          exit 1
+        fi
+        export UNICLIP_PASSWORD
         exec ${pkgs.uniclip}/bin/uniclip --secure 127.0.0.1:53701
       ''}";
       Restart = "on-failure";
       RestartSec = 5;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  systemd.user.services.pywalfox-boot = lib.mkIf (isLinux && !isWSL) {
+    Unit = {
+      Description = "Install and update Pywalfox for LibreWolf on boot";
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.writeShellScript "pywalfox-boot" ''
+        set -euo pipefail
+        ${pkgs.pywalfox-native}/bin/pywalfox install --browser librewolf
+        ${pkgs.pywalfox-native}/bin/pywalfox update
+      ''}";
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };

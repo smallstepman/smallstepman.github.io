@@ -537,6 +537,10 @@
             "enabled": true
         }, 
         {
+            "enabled": true,
+            "id": "pywalfox"
+        },
+        {
             "id": "ghostty",
             "enabled": true
         },

@@ -18,12 +18,15 @@ machines/generated/*
 # bv (beads viewer) local config and caches
 .bv/
 
-.opencode/skills/*
-.opencode/command/*
-.opencode/command/*
-.github/skills/*
-.github/agents/*
-.github/prompts/*
-.github/command/*
-.logs
+# beads daemon socket (can't be copied by Nix over shared folders)
+.beads/*.sock
+
+.opencode/
+.logs/
+.claude/
+.github/*
+!.github/workflows/
+!.github/workflows/**
+results/
 .vscode
+.webui_secret_key

@@ -3,282 +3,202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WSL Installer - One-Line Installation</title>
+    <title>dotfiles - one-line installers</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
             line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #c9d1d9;
+            background: #0d1117;
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            padding: 40px 20px;
         }
 
-        .container {
-            max-width: 800px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
-            margin: 20px;
-        }
+        .container { max-width: 900px; margin: 0 auto; }
 
-        h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
+        h1 { color: #e6edf3; font-size: 1.8em; margin-bottom: 4px; }
+        h2 { color: #e6edf3; font-size: 1.2em; margin: 36px 0 12px; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
+        h3 { color: #e6edf3; font-size: 1em; margin-bottom: 6px; }
+        p { margin: 8px 0; }
+        a { color: #58a6ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
 
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 1.2em;
-        }
+        .subtitle { color: #8b949e; margin-bottom: 32px; }
 
-        .install-box {
-            background: #f8f9fa;
-            border-left: 4px solid #667eea;
-            padding: 20px;
-            margin: 30px 0;
-            border-radius: 5px;
-        }
-
-        .install-command {
-            font-family: 'Courier New', monospace;
-            background: #2d2d2d;
-            color: #f8f8f2;
-            padding: 15px;
-            border-radius: 5px;
-            overflow-x: auto;
-            margin: 15px 0;
+        .cmd-block {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 12px 0;
             position: relative;
+            overflow-x: auto;
         }
-
-        .install-command code {
-            display: block;
-            white-space: pre;
-        }
+        .cmd-block code { color: #c9d1d9; white-space: pre; display: block; }
+        .cmd-block .comment { color: #8b949e; }
+        .cmd-block .prompt { color: #8b949e; user-select: none; }
 
         .copy-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 5px 15px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 0.9em;
+            position: absolute; top: 8px; right: 8px;
+            background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+            padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em;
+            font-family: inherit;
         }
+        .copy-btn:hover { background: #30363d; }
 
-        .copy-btn:hover {
-            background: #5568d3;
-        }
-
-        .copy-btn:active {
-            background: #4557c2;
-        }
-
-        .warning {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 5px;
-        }
-
-        .warning strong {
-            color: #856404;
-        }
-
-        .steps {
-            margin: 30px 0;
-        }
-
-        .step {
-            margin: 20px 0;
-            padding-left: 30px;
-            position: relative;
-        }
-
-        .step::before {
-            content: "→";
-            position: absolute;
-            left: 0;
-            color: #667eea;
-            font-weight: bold;
-            font-size: 1.5em;
-        }
-
-        .features {
+        .card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
         }
 
-        .feature {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 5px;
-            border-top: 3px solid #667eea;
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 16px;
+        }
+        .card h3 { margin-bottom: 4px; }
+        .card p { color: #8b949e; font-size: 0.9em; margin: 0; }
+
+        .section { margin: 28px 0; }
+
+        .tag {
+            display: inline-block;
+            background: #1f6feb22;
+            color: #58a6ff;
+            border: 1px solid #1f6feb44;
+            border-radius: 12px;
+            padding: 2px 10px;
+            font-size: 0.8em;
+            margin: 2px 4px 2px 0;
         }
 
-        .feature h3 {
-            color: #667eea;
-            margin-bottom: 10px;
-        }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        td, th { text-align: left; padding: 6px 12px; border-bottom: 1px solid #21262d; }
+        th { color: #8b949e; font-weight: normal; font-size: 0.85em; }
+        td code { color: #79c0ff; }
 
-        a {
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-            text-align: center;
-            color: #666;
-        }
+        footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #21262d; color: #484f58; text-align: center; font-size: 0.85em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🪟 WSL Installer</h1>
-        <p class="subtitle">One-line installation for Windows Subsystem for Linux</p>
+        <h1>dotfiles</h1>
+        <p class="subtitle">Nix-based system config for macOS, NixOS VM, and WSL</p>
 
-        <div class="install-box">
-            <h2>Quick Install</h2>
-            <p>Run this command in PowerShell (as Administrator):</p>
-            <div class="install-command">
-                <button class="copy-btn" onclick="copyToClipboard()" aria-label="Copy installation command to clipboard">Copy</button>
-                <code id="install-cmd">iex (iwr -useb https://smallstepman.github.io/wsl/install.ps1)</code>
+
+        <!-- ─── Features ────────────────────────────────── -->
+        <h2>What's Included</h2>
+        <div class="card-grid">
+            <div class="card">
+                <h3>NixOS in VM, security hardened and straight outta r/unixporn</h3>
+                <p>Niri and Noctalia with autotheming based on wallpaper, greetd, Ghostty, foot</p>
+            </div>
+            <div class="card">
+                <h3>Dev Tools</h3>
+                <p>Neovim (LazyVim), Doom Emacs, tmux, Rust, Go, Python, and Node. Deep Niri window management integrations for editors including edge-navigation passthrough and buffer-to-window tearing.</p>
+            </div>
+            <div class="card">
+                <h3>AI Agents</h3>
+                <p>Claude Code, OpenCode, 20+ agents via llm-agents.nix</p>
+            </div>
+            <div class="card">
+                <h3>Secrets</h3>
+                <p>sops-nix + sopsidy with Bitwarden/rbw backend. No "I keep my encrypted secrets in a public repo". Minimal exposure to SOPS, no secret value gets commited, most secrets handled by EU-hosted BitWarden.</p>
+            </div>
+            <div class="card">
+                <h3>Clipboard</h3>
+                <p>		Uniclip: encrypted clipboard sharing between macOS and a Linux VM — patched Uniclip over an SSH tunnel wrapped in a systemd unit, working around VMware’s lack of Wayland clipboard support.</p>
+            </div>
+            <div class="card">
+                <h3>Networking</h3>
+                <p>Tailscale, VMware NAT with static DHCP, SSH tunnels</p>
             </div>
         </div>
 
-        <div class="warning">
-            <strong>⚠️ Important:</strong> This command must be run in PowerShell with Administrator privileges. 
-            Right-click PowerShell and select "Run as Administrator".<br><br>
-            <strong>💡 Tip:</strong> If you get an execution policy error, use:<br>
-            <code style="background: #2d2d2d; color: #f8f8f2; padding: 5px; display: inline-block; margin-top: 5px; border-radius: 3px;">Set-ExecutionPolicy Bypass -Scope Process -Force; iex (iwr -useb https://smallstepman.github.io/wsl/install.ps1)</code>
+        <!-- ─── macOS ───────────────────────────────────── -->
+        <h2>macOS &mdash; Fresh MacBook Setup</h2>
+        <p>Installs Xcode CLT, Homebrew, Nix, clones this repo, and applies the full nix-darwin config.</p>
+        <div class="cmd-block">
+            <button class="copy-btn" onclick="copy(this)" data-cmd="curl -sL https://smallstepman.github.io/macbook.sh | tee ~/whatbootstrappedme.sh | sh">Copy</button>
+            <code><span class="prompt">$ </span>curl -sL https://smallstepman.github.io/macbook.sh | tee ~/whatbootstrappedme.sh | sh</code>
+        </div>
+        <p>After install, use <code>niks</code> to rebuild the darwin config (which lives in <code>~/.config/nix</code>).</p>
+        <p>To install NixOS in VM:</p>
+        <div class="cmd-block">
+            <code><span class="prompt">$ </span>vm bootstrap</code>
         </div>
 
-        <div class="steps">
-            <h2>What This Script Does</h2>
-            <div class="step">
-                <strong>Checks if WSL is already installed</strong><br>
-                If WSL is already present, it will show version information and exit.
-            </div>
-            <div class="step">
-                <strong>Enables required Windows features</strong><br>
-                Automatically enables Virtual Machine Platform and Windows Subsystem for Linux.
-            </div>
-            <div class="step">
-                <strong>Installs WSL and default Linux distribution</strong><br>
-                Downloads and installs the WSL kernel and Ubuntu as the default distribution.
-            </div>
-            <div class="step">
-                <strong>Sets WSL 2 as default</strong><br>
-                Configures WSL 2 as the default version for better performance.
-            </div>
+        <!-- ─── NixOS VM ────────────────────────────────── -->
+        <h2>NixOS VM &mdash; VMware Fusion</h2>
+        <p>If you just want the VM, and no nix-darwin, run this:</p>
+        <div class="cmd-block">
+            <button class="copy-btn" onclick="copy(this)" data-cmd="curl -sL https://smallstepman.github.io/vm.sh | tee ~/whatbootstrappedvm.sh | sh">Copy</button>
+            <code><span class="prompt">$ </span>curl -sL https://smallstepman.github.io/vm.sh | tee ~/whatbootstrappedvm.sh | sh</code>
+        </div>
+        <p>It downloads VMware Fusion if needed, downloads NixOS ISO and creates an aarch64 VM, then finally installs via shared folder.</p>
+        <p>Nix config lives in <code>/nixos-config</code>.</p>
+
+        <div class="section">
+            <h3>vm commands</h3>
+            <table>
+                <tr><th>Command</th><th>Description</th></tr>
+                <tr><td><code>vm bootstrap [--redo]</code></td><td>Full setup from scratch. <code>--redo</code> destroys existing VM first.</td></tr>
+                <tr><td><code>vm switch</code></td><td>Apply config changes (nixos-rebuild switch)</td></tr>
+                <tr><td><code>vm up</code></td><td>Start the VM</td></tr>
+                <tr><td><code>vm down</code></td><td>Graceful shutdown</td></tr>
+                <tr><td><code>vm ssh [cmd]</code></td><td>SSH into the VM, or run a remote command</td></tr>
+                <tr><td><code>vm ip</code></td><td>Print the VM's current IP</td></tr>
+                <tr><td><code>vm refresh-secrets</code></td><td>Regenerate sops age keys and re-encrypt secrets</td></tr>
+            </table>
         </div>
 
-        <div class="features">
-            <div class="feature">
-                <h3>🚀 Fast Installation</h3>
-                <p>One command to install everything you need to run Linux on Windows.</p>
-            </div>
-            <div class="feature">
-                <h3>✅ Safe & Verified</h3>
-                <p>Uses official WSL installation commands from Microsoft.</p>
-            </div>
-            <div class="feature">
-                <h3>🔧 Dry Run Mode</h3>
-                <p>Test what would happen without making changes using the -DryRun flag.</p>
-            </div>
+        <!-- ─── WSL ─────────────────────────────────────── -->
+        <h2>WSL &mdash; Windows</h2>
+        <p>PowerShell (as Administrator):</p>
+        <div class="cmd-block">
+            <button class="copy-btn" onclick="copy(this)" data-cmd="iex (iwr -useb https://smallstepman.github.io/wsl.ps1)">Copy</button>
+            <code><span class="prompt">PS&gt; </span>iex (iwr -useb https://smallstepman.github.io/wsl.ps1)</code>
         </div>
 
-        <h2>Alternative Installation Methods</h2>
-        <p>If you prefer more control over the installation:</p>
-        <div class="install-command">
-            <code># Download and inspect the script first
-Invoke-WebRequest -Uri https://smallstepman.github.io/wsl/install.ps1 -OutFile install.ps1
-Get-Content install.ps1  # Review the script
+        <!-- ─── Aliases ─────────────────────────────────── -->
+        <h2>Shell Aliases</h2>
+        <table>
+            <tr><th>Alias</th><th>Description</th></tr>
+            <tr><td><code>niks</code></td><td>Rebuild &amp; switch the system config (macOS or NixOS-in-VM)</td></tr>
+            <tr><td><code>nikt</code></td><td>Build &amp; test without switching</td></tr>
+            <tr><td><code>vm &lt;cmd&gt;</code></td><td>NixOS VM management (macOS only)</td></tr>
+        </table>
 
-# Run with default options
-.\install.ps1
-
-# Or test with dry run (no changes made)
-.\install.ps1 -DryRun
-
-# Show help
-.\install.ps1 -Help</code>
+        <div class="section">
+            <span class="tag">nix-darwin</span>
+            <span class="tag">NixOS</span>
+            <span class="tag">home-manager</span>
+            <span class="tag">flakes</span>
+            <span class="tag">VMware Fusion</span>
+            <span class="tag">aarch64</span>
+            <span class="tag">sops-nix</span>
+            <span class="tag">WSL</span>
         </div>
-
-        <h2>Requirements</h2>
-        <ul style="margin: 20px 0; padding-left: 40px;">
-            <li>Windows 10 version 2004 or higher (Build 19041 or higher)</li>
-            <li>Windows 11</li>
-            <li>PowerShell (Run as Administrator)</li>
-            <li>Internet connection</li>
-        </ul>
 
         <footer>
-            <p>For more information about WSL, visit <a href="https://aka.ms/wsl" target="_blank">aka.ms/wsl</a></p>
-            <p>View source on <a href="https://github.com/smallstepman/wsl" target="_blank">GitHub</a></p>
+            <a href="https://github.com/smallstepman/smallstepman.github.io">source</a>
         </footer>
     </div>
 
     <script>
-        function copyToClipboard() {
-            const cmd = document.getElementById('install-cmd').textContent;
-            const btn = document.querySelector('.copy-btn');
-            
-            if (!navigator.clipboard) {
-                // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = cmd;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy', 2000);
-                } catch (err) {
-                    btn.textContent = 'Failed';
-                    setTimeout(() => btn.textContent = 'Copy', 2000);
-                }
-                document.body.removeChild(textArea);
-                return;
-            }
-            
+        function copy(btn) {
+            const cmd = btn.dataset.cmd;
             navigator.clipboard.writeText(cmd).then(() => {
-                const originalText = btn.textContent;
                 btn.textContent = 'Copied!';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
+                setTimeout(() => btn.textContent = 'Copy', 1500);
+            }).catch(() => {
                 btn.textContent = 'Failed';
-                setTimeout(() => {
-                    btn.textContent = 'Copy';
-                }, 2000);
+                setTimeout(() => btn.textContent = 'Copy', 1500);
             });
         }
     </script>

@@ -33,7 +33,18 @@
   boot.loader.systemd-boot.consoleMode = "0";
 
   # Define your hostname.
-  networking.hostName = "dev";
+  networking.hostName = "vm-macbook";
+  networking.hosts."127.0.0.1" = [ "vm-macbook" "localhost" ];
+  systemd.services.openwebui-local-proxy = {
+    description = "Expose tunneled Open WebUI on localhost:80";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:127.0.0.1:18080";
+      Restart = "always";
+      RestartSec = 1;
+    };
+  };
 
   # Set your time zone.
   time.timeZone = "Europe/Warsaw";
@@ -45,6 +56,11 @@
 
   # Enable NetworkManager (was previously pulled in by GNOME)
   networking.networkmanager.enable = true;
+  networking.networkmanager.dns = "systemd-resolved";
+  services.resolved = {
+    enable = true;
+    fallbackDns = [ "1.1.1.1" "8.8.8.8" ];
+  };
 
   # Require password for sudo but cache it for 10 minutes.
   # Blocks automated privilege escalation (LLM agents, malicious deps)
@@ -145,6 +161,25 @@
   services.xserver.enable = true;
   services.xserver.xkb.layout = "us";
 
+  # Modifier remap via keyd
+  services.keyd = {
+    enable = true;
+    keyboards.default = {
+      ids = [ "*" ];
+      settings.main = {
+        leftmeta = "leftcontrol";   # A
+        leftcontrol = "leftalt";   # R
+        leftalt = "leftmeta";        # S
+        # leftshift = "leftshift";    # T
+        # - 
+        # rightshift = "rightshift";  # N
+        rightalt = "rightmeta";      # E
+        rightcontrol = "rightalt"; # I
+        rightmeta = "rightcontrol"; # O
+      };
+    };
+  };
+
   # Secrets management (sops-nix + sopsidy)
   # VM pubkey is read from machines/generated/vm-age-pubkey when present.
   sops.defaultSopsFile = ./secrets.yaml;
@@ -155,13 +190,13 @@
   sops.secrets."tailscale/auth-key" = {
     collect.rbw.id = "tailscale-auth-key";
   };
-  sops.secrets."rbw/master-password" = {
-    collect.rbw.id = "bitwarden-master-password";
+  sops.secrets."rbw/email" = {
+    collect.rbw.id = "bitwarden-email";
     owner = "m";
     mode = "0400";
   };
-  sops.secrets."rbw/email" = {
-    collect.rbw.id = "bitwarden-email";
+  sops.secrets."uniclip/password" = {
+    collect.rbw.id = "uniclip-password";
     owner = "m";
     mode = "0400";
   };
@@ -178,12 +213,8 @@
   services.openssh.settings.PermitRootLogin = "no";
   services.openssh.settings.AllowUsers = [ "m" ];
 
-  # Enable flatpak. I don't use any flatpak apps but I do sometimes
-  # test them so I keep this enabled.
+  # escape hatches
   services.flatpak.enable = true;
-
-  # Enable snap. I don't really use snap but I do sometimes test them
-  # and release snaps so we keep this enabled.
   services.snap.enable = true;
 
   # Firewall: trust VMware NAT + Tailscale interfaces.
@@ -201,5 +232,5 @@
   # this value at the release version of the first install of this system.
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-  system.stateVersion = "20.09"; # Did you read the comment?
+  system.stateVersion = "25.11"; # Did you read the comment?
 }

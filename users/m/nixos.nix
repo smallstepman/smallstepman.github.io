@@ -1,4 +1,4 @@
-{ pkgs, inputs, config, lib, ... }:
+{ pkgs, inputs, config, lib, isWSL, ... }:
 
 let
   hostAuthorizedKeysFile = ../../machines/generated/host-authorized-keys;
@@ -26,7 +26,7 @@ in
             --arg base_url "https://api.bitwarden.eu" \
             --arg email "$(cat "$email_file")" \
             --argjson lock_timeout 86400 \
-            --arg pinentry "${pkgs.pinentry-tty}/bin/pinentry-tty" \
+            --arg pinentry "${(if isWSL then pkgs.pinentry-tty else pkgs.wayprompt)}/bin/${if isWSL then "pinentry-tty" else "pinentry-wayprompt"}" \
             '{base_url: $base_url, email: $email, lock_timeout: $lock_timeout, pinentry: $pinentry}' \
             > "$HOME/.config/rbw/config.json"
         '';
@@ -34,49 +34,6 @@ in
     };
   };
 
-  # Auto-unlock rbw (Bitwarden) vault on login using sops-decrypted master password
-  systemd.user.services.rbw-unlock = {
-    description = "Unlock rbw (Bitwarden) vault";
-    after = [ "default.target" "rbw-config.service" ];
-    requires = [ "rbw-config.service" ];
-    wantedBy = [ "default.target" ];
-    path = [ pkgs.rbw ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.bash}/bin/bash -euo pipefail -c 'if rbw unlocked >/dev/null 2>&1; then exit 0; fi; exec rbw unlock < /run/secrets/rbw/master-password'";
-    };
-  };
-
-  systemd.user.timers.rbw-unlock-refresh = {
-    description = "Keep rbw unlocked";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      Unit = "rbw-unlock.service";
-      OnBootSec = "5m";
-      OnUnitActiveSec = "1h";
-      Persistent = true;
-    };
-  };
-
-  systemd.user.services.rbw-health-check = {
-    description = "Check rbw unlock health";
-    path = [ pkgs.rbw pkgs.coreutils ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.bash}/bin/bash -euo pipefail -c 'state=locked; if rbw unlocked >/dev/null 2>&1; then state=unlocked; fi; mkdir -p \"$HOME/.local/state/rbw\"; printf \"%s %s\\n\" \"$(date --iso-8601=seconds)\" \"$state\" > \"$HOME/.local/state/rbw/health\"; test \"$state\" = unlocked'";
-    };
-  };
-
-  systemd.user.timers.rbw-health-check = {
-    description = "Periodic rbw unlock health checks";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      Unit = "rbw-health-check.service";
-      OnBootSec = "10m";
-      OnUnitActiveSec = "30m";
-      Persistent = true;
-    };
-  };
   # https://github.com/nix-community/home-manager/pull/2408
   environment.pathsToLink = [ "/share/zsh" ];
 

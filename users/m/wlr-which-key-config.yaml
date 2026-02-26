@@ -1,17 +1,22 @@
-font: JetBrains Mono 12
-background: "#282828d0"
-color: "#fbf1c7"
-border: "#8ec07c"
-separator: " → "
-border_width: 2
-corner_r: 10
-padding: 15
-anchor: center
+font: JetBrains Mono 15
+background: "#060321"
+color: "#bbbbbb"
+border: "#888888"
+separator: " : "
+border_width: 0
+corner_r: 0
+padding: 5
+rows_per_column: 5
+anchor: bottom
+margin_bottom: 200
 
 menu:
   # Applications
+  - key: " "
+    desc: Spotlight
+    cmd: noctalia-shell ipc call launcher toggle
   - key: a
-    desc: Apps
+    desc: AI
     submenu:
       - key: t
         desc: Terminal
@@ -72,9 +77,10 @@ menu:
         cmd: grim -g "$(slurp -o)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
 
   # Quick actions
-  - key: v
-    desc: Wallpaper
-    cmd: waypaper
+  - key: .
+    desc: Spotlight
+    cmd: noctalia-shell ipc call launcher toggle
+
   - key: c
     desc: Clipboard
     cmd: wl-paste

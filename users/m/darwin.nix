@@ -7,6 +7,16 @@ let
     patches = [ ../../patches/aw-import-screentime.patch ];
   };
   awAutomationScriptsRoot = "/Users/USER/.config/activitywatch/scripts";
+  vmStaticIp = "192.168.130.3";
+  openWebUiStateDir = "/Users/m/.local/state/open-webui";
+  openWebUiPackage =
+    (import inputs.nixpkgs-unstable {
+      system = pkgs.stdenv.hostPlatform.system;
+      config = {
+        allowUnfree = true;
+        allowBroken = true;
+      };
+    }).open-webui;
 in
 {
   imports = [ ./opencode/modules/darwin.nix ];
@@ -26,6 +36,7 @@ in
       "launchcontrol"
       "mullvad-vpn"
       "spotify"
+      "swiftbar"
     ];
 
     brews = [
@@ -109,6 +120,7 @@ in
     };
   };
 
+  services.yabai.enable = true;
   services.skhd = {
     enable = true;
     package = pkgs.skhd;
@@ -123,8 +135,15 @@ in
       ProgramArguments = [
         "/bin/bash" "-c"
         ''
+          set -euo pipefail
           /bin/wait4path /nix/store
-          export UNICLIP_PASSWORD=$(${pkgs.rbw}/bin/rbw get uniclip-password)
+          export PATH=${pkgs.rbw}/bin:$PATH
+          UNICLIP_PASSWORD="$(${pkgs.rbw}/bin/rbw get uniclip-password)"
+          if [ -z "$UNICLIP_PASSWORD" ]; then
+            echo "uniclip: empty password from rbw" >&2
+            exit 1
+          fi
+          export UNICLIP_PASSWORD
           exec ${pkgs.uniclip}/bin/uniclip --secure --bind 127.0.0.1 -p 53701
         ''
       ];
@@ -135,6 +154,55 @@ in
     };
   };
 
+  launchd.user.agents.openwebui = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/bin/bash" "-c"
+        ''
+          /bin/wait4path /nix/store
+          mkdir -p "${openWebUiStateDir}"/{static,data,hf_home,transformers_home}
+          export STATIC_DIR="${openWebUiStateDir}/static"
+          export DATA_DIR="${openWebUiStateDir}/data"
+          export HF_HOME="${openWebUiStateDir}/hf_home"
+          export SENTENCE_TRANSFORMERS_HOME="${openWebUiStateDir}/transformers_home"
+          export WEBUI_URL="http://localhost:8080"
+          export SCARF_NO_ANALYTICS=True
+          export DO_NOT_TRACK=True
+          export ANONYMIZED_TELEMETRY=False
+          cd "${openWebUiStateDir}"
+          exec ${openWebUiPackage}/bin/open-webui serve --host 127.0.0.1 --port 8080
+        ''
+      ];
+      RunAtLoad = true;
+      KeepAlive = true;
+      StandardOutPath = "/tmp/openwebui.log";
+      StandardErrorPath = "/tmp/openwebui.log";
+    };
+  };
+
+  # Expose Open WebUI inside the VM on localhost:80.
+  launchd.user.agents.openwebui-tunnel = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/bin/bash" "-c"
+        ''
+          while true; do
+            /usr/bin/ssh-keygen -R "${vmStaticIp}" >/dev/null 2>&1 || true
+            /usr/bin/ssh -N \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+              -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
+              -R 18080:127.0.0.1:8080 m@${vmStaticIp}
+            sleep 5
+          done
+        ''
+      ];
+      RunAtLoad = true;
+      KeepAlive = true;
+      StandardOutPath = "/tmp/openwebui-tunnel.log";
+      StandardErrorPath = "/tmp/openwebui-tunnel.log";
+    };
+  };
+
   # SSH reverse tunnel: forwards the uniclip port into the VM so the VM client
   # can reach the macOS server at 127.0.0.1:53701 on either end.
   launchd.user.agents.uniclip-tunnel = {
@@ -142,16 +210,12 @@ in
       ProgramArguments = [
         "/bin/bash" "-c"
         ''
-          VMRUN="/Applications/VMware Fusion.app/Contents/Library/vmrun"
-          VMX="/Users/m/Virtual Machines.localized/NixOS 25.11 aarch64.vmwarevm/NixOS 25.11 aarch64.vmx"
           while true; do
-            VM_IP=$("$VMRUN" -T fusion getGuestIPAddress "$VMX" 2>/dev/null)
-            if [ -n "$VM_IP" ] && [ "$VM_IP" != "unknown" ]; then
-              /usr/bin/ssh -N \
-                -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-                -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
-                -R 53701:127.0.0.1:53701 m@"$VM_IP"
-            fi
+            /usr/bin/ssh-keygen -R "${vmStaticIp}" >/dev/null 2>&1 || true
+            /usr/bin/ssh -N \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+              -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
+              -R 53701:127.0.0.1:53701 m@${vmStaticIp}
             sleep 5
           done
         ''

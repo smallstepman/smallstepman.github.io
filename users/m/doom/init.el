@@ -75,6 +75,7 @@
        ;; grammar           ; tasing grammar mistake every you make
 
        :tools
+       llm
        ;; (debugger +lsp)     ; FIXME stepping through code, to help you add bugs
        ;; ein                 ; tame Jupyter notebooks with emacs
        (eval +overlay)     ; run code, run (also, repls)
@@ -86,7 +87,7 @@
        make                ; run make tasks from Emacs
        ;;   pdf                 ; pdf enhancements
        ;; rgb                 ; creating color strings
-       ;; tmux                ; an API for interacting with tmux
+       tmux                ; an API for interacting with tmux
        tree-sitter
        ;;   biblio
        ;;ansible
