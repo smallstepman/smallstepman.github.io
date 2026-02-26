@@ -1,5 +1,5 @@
 { ... }:
 
 {
-  imports = [ ./headless.nix ];
+  # Placeholder profile for future GPU-specific modules.
 }

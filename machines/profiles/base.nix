@@ -13,6 +13,7 @@
   };
 
   nixpkgs.config.permittedInsecurePackages = [
+    # Needed for k2pdfopt 2.53.
     "mupdf-1.17.0"
   ];
 

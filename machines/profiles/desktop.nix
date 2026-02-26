@@ -61,7 +61,6 @@
         leftcontrol = "leftalt";   # R
         leftalt = "leftmeta";        # S
         # leftshift = "leftshift";    # T
-        #
         # rightshift = "rightshift";  # N
         rightalt = "rightmeta";      # E
         rightcontrol = "rightalt"; # I
