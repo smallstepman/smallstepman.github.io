@@ -8,6 +8,8 @@ Study install scripts in `docs/` dir.
 
 For detailed walktrough, visit upstream repo.
 
+For repository layout and scaling notes (rpi/vps/GPU servers), see `/docs/project-structure-review.md`.
+
 ## Acknoledgment
 
 I forked it from here: https://github.com/mitchellh/nixos-config
@@ -52,4 +54,3 @@ Below table shows time it took to discharge 25% of the battery:
 I enjoy using macOS for the graphical applications (browser, calendars, mail app, 
 iMessage, Music etc.), LMStudio (MLX acceleratation available via native bindings), 
 and running Docker (virtualizing it is wasteful when I can do passtrough instead).
-
