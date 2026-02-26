@@ -138,12 +138,12 @@
           version = "0-unstable";
           src = inputs.uniclip-src;
           vendorHash = "sha256-ugrWrB0YVs/oWAR3TC3bEpt1VXQC1c3oLrvFJxlR8pw=";
-          patches = [ ./patches/uniclip-bind-and-env-password.patch ];
+          patches = [ ./patches/integrations/uniclip-bind-and-env-password.patch ];
           meta.description = "Universal clipboard - copy on one device, paste on another";
         };
 
         wayprompt = prev.wayprompt.overrideAttrs (old: {
-          patches = (old.patches or []) ++ [ ./patches/wayprompt-wayland-clipboard-paste.patch ];
+          patches = (old.patches or []) ++ [ ./patches/platform/wayprompt-wayland-clipboard-paste.patch ];
           nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.makeWrapper ];
           postFixup = (old.postFixup or "") + ''
             wrapProgram $out/bin/wayprompt --prefix PATH : ${final.wl-clipboard}/bin

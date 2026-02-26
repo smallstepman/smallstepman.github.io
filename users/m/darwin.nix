@@ -4,7 +4,7 @@ let
   awImportScreentimeSrc = pkgs.applyPatches {
     name = "aw-import-screentime-src";
     src = inputs.aw-import-screentime-src;
-    patches = [ ../../patches/aw-import-screentime.patch ];
+    patches = [ ../../patches/apps/aw-import-screentime.patch ];
   };
   awAutomationScriptsRoot = "/Users/USER/.config/activitywatch/scripts";
   vmStaticIp = "192.168.130.3";

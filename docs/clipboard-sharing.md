@@ -29,7 +29,7 @@ macOS (host)                              NixOS VM (guest)
 
 ## Uniclip patch
 
-Uniclip upstream (`patches/uniclip-bind-and-env-password.patch`) was patched to add:
+Uniclip upstream (`patches/integrations/uniclip-bind-and-env-password.patch`) was patched to add:
 
 - `--bind/-b` flag: server binds to `bindAddr:port` instead of always `0.0.0.0:port`
 - `UNICLIP_PASSWORD` env var: read password from environment before falling back to
@@ -86,7 +86,7 @@ systemctl --user restart uniclip
 
 | File | Role |
 |------|------|
-| `patches/uniclip-bind-and-env-password.patch` | Go patch adding `--bind` and `UNICLIP_PASSWORD` |
+| `patches/integrations/uniclip-bind-and-env-password.patch` | Go patch adding `--bind` and `UNICLIP_PASSWORD` |
 | `flake.nix` | `uniclip-src` non-flake input + `uniclip` buildGoModule overlay |
 | `users/m/darwin.nix` | launchd agents: `uniclip` (server) and `uniclip-tunnel` (SSH tunnel) |
 | `users/m/home-manager.nix` | `pkgs.uniclip` package + `systemd.user.services.uniclip` (VM client) |

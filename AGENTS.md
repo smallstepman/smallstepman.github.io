@@ -107,7 +107,7 @@ macOS (host)                              VM (guest)
 ```
 
 **Key details:**
-- Uniclip is built from source with a custom patch (`patches/uniclip-bind-and-env-password.patch`) that adds `--bind` flag and `UNICLIP_PASSWORD` env var support
+- Uniclip is built from source with a custom patch (`patches/integrations/uniclip-bind-and-env-password.patch`) that adds `--bind` flag and `UNICLIP_PASSWORD` env var support
 - Password stored in rbw (Bitwarden) as `uniclip-password`
 - macOS side: two launchd agents in `users/m/darwin.nix` — `uniclip` (server) and `uniclip-tunnel` (SSH reverse tunnel using `vmrun` to find VM IP)
 - VM side: systemd user service in `users/m/home-manager.nix` — `uniclip` (client connecting to `127.0.0.1:53701`)
@@ -185,7 +185,7 @@ export PATH := /Applications/VMware Fusion.app/Contents/Library:$(PATH)
 | `machines/vm-aarch64.nix` | ARM64 VM configuration (VMware Fusion) |
 | `machines/macbook-pro-m1.nix` | macOS configuration via nix-darwin (Touch ID sudo, shells, linux-builder) |
 | `machines/wsl.nix` | WSL-specific configuration |
-| `patches/uniclip-bind-and-env-password.patch` | Go patch for uniclip `--bind` flag and `UNICLIP_PASSWORD` env var |
+| `patches/integrations/uniclip-bind-and-env-password.patch` | Go patch for uniclip `--bind` flag and `UNICLIP_PASSWORD` env var |
 
 ## External Dependencies (Flake Inputs)
 
