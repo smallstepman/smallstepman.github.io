@@ -60,6 +60,7 @@
         leftmeta = "leftcontrol";   # A
         leftcontrol = "leftalt";   # R
         leftalt = "leftmeta";        # S
+        # Keep shift keys unchanged for typing comfort.
         # leftshift = "leftshift";    # T
         # rightshift = "rightshift";  # N
         rightalt = "rightmeta";      # E
