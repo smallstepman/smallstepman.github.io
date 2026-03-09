@@ -123,6 +123,18 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # rustledger - plain text accounting
+    rustledger = {
+      url = "github:rustledger/rustledger";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # rustfava - web UI for rustledger
+    rustfava = {
+      url = "github:rustledger/rustfava";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
   outputs = { self, nixpkgs, home-manager, lazyvim, darwin, ... }@inputs: let
@@ -299,6 +311,11 @@ PYEOF
       user   = "m";
     };
 
+    nixosConfigurations.rpi4-server = mkSystem "rpi4-server" {
+      system = "aarch64-linux";
+      user   = "m";
+    };
+
     nixosConfigurations.wsl = mkSystem "wsl" {
       system = "x86_64-linux";
       user   = "m";
@@ -317,25 +334,25 @@ PYEOF
     packages.aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
       pkgs = import nixpkgs { system = "aarch64-darwin"; };
       hosts = {
-        inherit (self.nixosConfigurations) vm-aarch64;
+        inherit (self.nixosConfigurations) vm-aarch64 rpi4-server;
       };
     };
     packages.x86_64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
       pkgs = import nixpkgs { system = "x86_64-darwin"; };
       hosts = {
-        inherit (self.nixosConfigurations) vm-aarch64;
+        inherit (self.nixosConfigurations) vm-aarch64 rpi4-server;
       };
     };
     packages.aarch64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
       pkgs = import nixpkgs { system = "aarch64-linux"; };
       hosts = {
-        inherit (self.nixosConfigurations) vm-aarch64;
+        inherit (self.nixosConfigurations) vm-aarch64 rpi4-server;
       };
     };
     packages.x86_64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
       pkgs = import nixpkgs { system = "x86_64-linux"; };
       hosts = {
-        inherit (self.nixosConfigurations) vm-aarch64;
+        inherit (self.nixosConfigurations) vm-aarch64 rpi4-server;
       };
     };
   };
