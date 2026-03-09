@@ -245,13 +245,171 @@ cmd_ssh() {
     fi
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEW: Helper commands for quality-of-life features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+cmd_ollama() {
+    local addr="${NIXADDR:-}"
+    [ -z "$addr" ] && die "Set NIXADDR environment variable"
+    
+    echo "Connecting to Ollama LLM server on $addr..."
+    echo ""
+    echo "Available commands:"
+    echo "  x1e ollama run llama3.2      # Run a model"
+    echo "  x1e ollama list              # List installed models"
+    echo "  x1e ollama pull mistral      # Download a model"
+    echo ""
+    
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "ollama $*"
+}
+
+cmd_dashboard() {
+    local addr="${NIXADDR:-}"
+    [ -z "$addr" ] && die "Set NIXADDR environment variable"
+    
+    echo "Setting up port forwards for dashboards..."
+    echo ""
+    echo "Grafana:     http://localhost:3000"
+    echo "Prometheus:  http://localhost:9090"
+    echo "Ollama API:  http://localhost:11434"
+    echo "k3s API:     https://localhost:6443"
+    echo ""
+    echo "Press Ctrl+C to stop"
+    echo ""
+    
+    ssh $SSH_OPTIONS -N -L 3000:localhost:3000 -L 9090:localhost:9090 \
+        -L 11434:localhost:11434 -L 6443:localhost:6443 \
+        -p"$NIXPORT" "${NIXUSER}@${addr}"
+}
+
+cmd_logs() {
+    local addr="${NIXADDR:-}"
+    [ -z "$addr" ] && die "Set NIXADDR environment variable"
+    
+    echo "Viewing k3s logs (press Ctrl+C to exit)..."
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "sudo journalctl -u k3s -f"
+}
+
+cmd_gpu() {
+    local addr="${NIXADDR:-}"
+    [ -z "$addr" ] && die "Set NIXADDR environment variable"
+    
+    echo "GPU Status on $addr:"
+    echo ""
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "nvidia-smi"
+}
+
+cmd_k9s() {
+    local addr="${NIXADDR:-}"
+    [ -z "$addr" ] && die "Set NIXADDR environment variable"
+    
+    # Run k9s directly on the machine
+    ssh -t $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "k9s"
+}
+
+cmd_flux_bootstrap() {
+    local addr="${NIXADDR:-}"
+    local owner="${1:-}"
+    local repo="${2:-}"
+    
+    [ -z "$addr" ] && die "Set NIXADDR environment variable"
+    [ -z "$owner" ] && die "Usage: x1e flux-bootstrap <github-owner> <repo-name>"
+    [ -z "$repo" ] && die "Usage: x1e flux-bootstrap <github-owner> <repo-name>"
+    
+    echo "Bootstrapping Flux CD for GitOps..."
+    echo "Owner: $owner"
+    echo "Repo: $repo"
+    echo ""
+    
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
+        # Ensure k3s is ready
+        while ! kubectl get nodes 2>/dev/null; do
+            echo 'Waiting for k3s...'
+            sleep 5
+        done
+        
+        # Bootstrap Flux
+        flux bootstrap github \\
+            --owner=$owner \\
+            --repository=$repo \\
+            --path=clusters/x1-homelab \\
+            --personal \\
+            --private=false \\
+            --interval=1m
+    "
+    
+    echo ""
+    echo "Flux bootstrap complete!"
+    echo "Add your Kubernetes manifests to the 'clusters/x1-homelab' path in your repo"
+}
+
+# Update help text
+cmd_help() {
+    cat <<'EOF'
+x1e - NixOS installation for ThinkPad X1 Extreme Gen1 k3s homelab
+
+Usage: x1e <command>
+
+Core Commands:
+  help              Show this help
+  prepare           Generate SSH keys and prepare secrets
+  install <ip>      Install NixOS on the ThinkPad (run from another machine)
+  switch            Apply configuration changes to installed system
+  setup-k3s         Post-install k3s setup (NVIDIA runtime, etc.)
+  ssh [cmd]         SSH into the machine, or run a command
+
+LLM / AI Commands:
+  ollama [args]     Run ollama commands (e.g., 'x1e ollama run llama3.2')
+                    Requires Ollama to be enabled in configuration
+
+Monitoring Commands:
+  dashboard         Open port forwards for Grafana (3000), Prometheus (9090),
+                    Ollama (11434), and k3s API (6443)
+  gpu               Show NVIDIA GPU status (nvidia-smi)
+  logs              Follow k3s logs in real-time
+
+Kubernetes Commands:
+  k9s               Launch k9s terminal UI for k8s management
+  flux-bootstrap <owner> <repo>   Bootstrap Flux CD for GitOps
+                                  Requires: GitHub token in GITHUB_TOKEN env var
+
+Environment Variables:
+  NIXADDR          Target IP/hostname (for switch, setup-k3s, ssh, etc.)
+  NIXPORT          SSH port (default: 22)
+  NIXUSER          Username (default: m)
+  NIX_CONFIG_DIR   Path to nix config (default: ~/.config/nix)
+
+Installation Steps:
+  1. Create NixOS installer USB and boot the ThinkPad
+  2. On ThinkPad: set root password with 'passwd'
+  3. From another machine: x1e prepare
+  4. From another machine: x1e install <thinkpad-ip>
+  5. After reboot: export NIXADDR=<thinkpad-ip>
+  6. Run: x1e setup-k3s
+  7. Optional: x1e flux-bootstrap <your-github> <homelab-gitops>
+
+Post-Install Verification:
+  x1e ssh nvidia-smi           # Check GPU
+  x1e ssh kubectl get nodes    # Check k3s
+  x1e dashboard                # Open dashboards
+  x1e ollama list              # Check LLMs
+EOF
+}
+
 # Main
 case "${1:-help}" in
-    help)        cmd_help ;;
-    prepare)     cmd_prepare ;;
-    install)     shift; cmd_install "$@" ;;
-    switch)      cmd_switch ;;
-    setup-k3s)   cmd_setup_k3s ;;
-    ssh)         shift; cmd_ssh "$@" ;;
-    *)           echo "Unknown command: $1"; cmd_help; exit 1 ;;
+    help)          cmd_help ;;
+    prepare)       cmd_prepare ;;
+    install)       shift; cmd_install "$@" ;;
+    switch)        cmd_switch ;;
+    setup-k3s)     cmd_setup_k3s ;;
+    ssh)           shift; cmd_ssh "$@" ;;
+    ollama)        shift; cmd_ollama "$@" ;;
+    dashboard)     cmd_dashboard ;;
+    gpu)           cmd_gpu ;;
+    logs)          cmd_logs ;;
+    k9s)           cmd_k9s ;;
+    flux-bootstrap) shift; cmd_flux_bootstrap "$@" ;;
+    *)             echo "Unknown command: $1"; cmd_help; exit 1 ;;
 esac

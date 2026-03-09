@@ -140,6 +140,99 @@ nvidia-offload python train.py
 nvidia-offload ollama run llama2
 ```
 
+### LLM Inference with Ollama
+
+Run large language models locally on your NVIDIA GPU:
+
+```bash
+# List available models
+./docs/x1e.sh ollama list
+
+# Pull a model
+./docs/x1e.sh ollama pull llama3.2
+
+# Run a model (interactive chat)
+./docs/x1e.sh ollama run llama3.2
+
+# Run with custom prompt
+./docs/x1e.sh ollama run llama3.2 "What is Kubernetes?"
+```
+
+**Popular Models:**
+- `llama3.2` - Meta's latest (3B params, fast)
+- `mistral` - High quality (7B params)
+- `codellama` - Code generation
+- `mixtral` - MoE architecture (47B params, needs more VRAM)
+
+**API Access:**
+```bash
+# Ollama API is available via Tailscale
+curl http://x1-homelab:11434/api/generate -d '{
+  "model": "llama3.2",
+  "prompt": "Explain quantum computing"
+}'
+```
+
+**To Disable:** Comment out `services.ollama` in the configuration.
+
+### Monitoring & Dashboards
+
+The system includes Prometheus + Grafana for monitoring:
+
+```bash
+# Open all dashboards locally
+./docs/x1e.sh dashboard
+
+# Then access:
+#   Grafana:     http://localhost:3000 (login: admin/admin)
+#   Prometheus:  http://localhost:9090
+#   Ollama API:  http://localhost:11434
+#   k3s API:     https://localhost:6443
+```
+
+**Grafana Dashboards:**
+- Node Exporter - CPU, memory, disk metrics
+- NVIDIA DCGM - GPU utilization, temperature, memory
+- Custom dashboards can be added via UI
+
+**To Disable:** Comment out `services.prometheus` and `services.grafana` sections.
+
+### GitOps with Flux CD
+
+Deploy Kubernetes apps declaratively from Git:
+
+```bash
+# Bootstrap Flux with your GitHub repo
+./docs/x1e.sh flux-bootstrap <your-github-username> <homelab-gitops>
+
+# Example:
+# ./docs/x1e.sh flux-bootstrap johndoe homelab-k8s
+```
+
+**Workflow:**
+1. Bootstrap Flux (one-time setup)
+2. Add Kubernetes manifests to your repo under `clusters/x1-homelab/`
+3. Push to Git
+4. Flux automatically applies changes to the cluster
+
+**Example Directory Structure:**
+```
+homelab-gitops/
+├── clusters/
+│   └── x1-homelab/
+│       ├── namespace.yaml
+│       ├── deployment.yaml
+│       └── kustomization.yaml
+```
+
+**Benefits:**
+- Git as single source of truth
+- Drift detection (alerts if cluster diverges)
+- Automatic sync on push
+- Disaster recovery (rebuild from Git)
+
+**To Disable:** Comment out `services.fluxcd` in the configuration.
+
 ### Tailscale Access
 
 The k3s API is accessible via Tailscale:
@@ -151,7 +244,34 @@ Services exposed via Kubernetes Ingress are available on your tailnet.
 
 ## Maintenance
 
+### Helper Commands
+
+The `x1e.sh` script provides convenient commands:
+
+```bash
+# Core commands
+./docs/x1e.sh install <ip>    # Install NixOS on fresh machine
+./docs/x1e.sh switch          # Apply config changes
+./docs/x1e.sh setup-k3s       # Setup k3s + NVIDIA support
+./docs/x1e.sh ssh             # SSH into machine
+
+# GPU & Monitoring
+./docs/x1e.sh gpu             # Show GPU status (nvidia-smi)
+./docs/x1e.sh dashboard       # Port forward dashboards to localhost
+./docs/x1e.sh logs            # Follow k3s logs in real-time
+./docs/x1e.sh k9s             # Launch k9s terminal UI
+
+# LLM
+./docs/x1e.sh ollama list     # List LLM models
+./docs/x1e.sh ollama run <model>  # Run a model
+
+# GitOps
+./docs/x1e.sh flux-bootstrap <owner> <repo>  # Setup Flux CD
+```
+
 ### System Updates
+
+Automatic updates are enabled by default (runs daily at 4 AM). To update manually:
 
 ```bash
 # Update flake inputs
@@ -161,10 +281,15 @@ nix flake update
 ./docs/x1e.sh switch
 ```
 
+**To Disable Auto-Updates:** Comment out `system.autoUpgrade` in the configuration.
+
 ### Check GPU Health
 
 ```bash
-./docs/x1e.sh ssh nvidia-smi
+# Quick GPU status
+./docs/x1e.sh gpu
+
+# Interactive GPU monitor (like htop)
 ./docs/x1e.sh ssh nvtop
 ```
 
