@@ -305,6 +305,11 @@ PYEOF
       wsl    = true;
     };
 
+    nixosConfigurations.thinkpad-x1-extreme-gen1 = mkSystem "thinkpad-x1-extreme-gen1" {
+      system = "x86_64-linux";
+      user   = "m";
+    };
+
     darwinConfigurations.macbook-pro-m1 = mkSystem "macbook-pro-m1" {
       system = "aarch64-darwin";
       user   = "m";
@@ -314,6 +319,8 @@ PYEOF
     # Sopsidy secret collector script (rbw/bitwarden backend)
     # Built for common host systems since collect-secrets runs locally,
     # not on the target VM.
+    # Note: thinkpad-x1-extreme-gen1 is not included here yet - add after
+    # initial installation generates its age key.
     packages.aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
       pkgs = import nixpkgs { system = "aarch64-darwin"; };
       hosts = {
