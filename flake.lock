@@ -229,21 +229,6 @@
         "type": "github"
       }
     },
-    "flake-aspects": {
-      "locked": {
-        "lastModified": 1773339018,
-        "narHash": "sha256-sPPriYJpLmukixc6/KBzeOhw83OSodco5YbeayHzAgo=",
-        "owner": "vic",
-        "repo": "flake-aspects",
-        "rev": "b51a00bc0140e7708e421a64f20170a2e8ccae93",
-        "type": "github"
-      },
-      "original": {
-        "owner": "vic",
-        "repo": "flake-aspects",
-        "type": "github"
-      }
-    },
     "flake-compat": {
       "locked": {
         "lastModified": 1733328505,
@@ -1082,7 +1067,6 @@
         "darwin": "darwin",
         "den": "den",
         "disko": "disko",
-        "flake-aspects": "flake-aspects",
         "gastown": "gastown",
         "git-repo-manager": "git-repo-manager",
         "home-manager": "home-manager",
