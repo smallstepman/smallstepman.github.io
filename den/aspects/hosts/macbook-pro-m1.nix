@@ -1,4 +1,9 @@
-{ ... }: {
-  # Placeholder host aspect for macbook-pro-m1.
-  # Identity is provided through den.aspects.m (user aspect).
+{ den, ... }: {
+  den.aspects.macbook-pro-m1 = {
+    includes = [
+      den.aspects.darwin-core
+      den.aspects.homebrew
+      den.aspects.launchd
+    ];
+  };
 }

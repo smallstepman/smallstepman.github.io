@@ -2,13 +2,29 @@
   imports = [ inputs.den.flakeModule ];
 
   # -------------------------------------------------------------------------
-  # Linux/NixOS module imports for the den host context.
+  # Host/system den wiring.
   #
-  # These are the special-flake modules (sops-nix, nix-snapd, niri, etc.) that
-  # lib/mksystem.nix used to inject directly.  Now that den assembles the
-  # nixosConfigurations, they must be wired here as host-level includes.
+  # lib/mksystem.nix used to inject overlays globally before evaluating either
+  # NixOS or nix-darwin modules. den-built hosts need the same host-level
+  # overlay wiring so system modules can reference custom packages like uniclip.
+  #
+  # The Linux-specific special-flake modules (sops-nix, nix-snapd, niri, etc.)
+  # also used to be injected directly by lib/mksystem.nix. Now that den
+  # assembles the nixosConfigurations, they must be wired here as host-level
+  # includes too.
   # -------------------------------------------------------------------------
   den.ctx.host.includes = [
+    ({ host, ... }:
+      let
+        systemModule = { ... }: {
+          nixpkgs.overlays = overlays;
+        };
+      in
+      (lib.optionalAttrs (host.class == "nixos") {
+        nixos = systemModule;
+      }) // (lib.optionalAttrs (host.class == "darwin") {
+        darwin = systemModule;
+      }))
     ({ host, ... }:
       let isLinux = host.class == "nixos"; isWSL = host.wsl.enable or false;
       in lib.optionalAttrs isLinux {
