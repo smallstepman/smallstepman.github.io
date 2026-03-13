@@ -26,24 +26,82 @@ test -f den/aspects/hosts/wsl.nix
 
 # --- Live nix eval checks ---
 
-actual=$(nix eval --raw .#nixosConfigurations.vm-aarch64.config.networking.hostName 2>/dev/null)
+# Helper: run nix eval, surface the real error output on failure instead of
+# silently swallowing it with 2>/dev/null.  stderr is routed to a temp file so
+# that it never contaminates the captured stdout; on failure it is forwarded to
+# stderr so the caller sees the actual error.
+nix_eval_raw() {
+  local attr="$1" out err_file
+  err_file=$(mktemp)
+  if ! out=$(nix eval --raw "$attr" 2>"$err_file"); then
+    echo "FAIL: nix eval '$attr' failed with:" >&2
+    cat "$err_file" >&2
+    rm -f "$err_file"
+    exit 1
+  fi
+  cat "$err_file" >&2   # pass warnings through without polluting stdout
+  rm -f "$err_file"
+  printf '%s' "$out"
+}
+
+nix_eval_json() {
+  local attr="$1" out err_file
+  err_file=$(mktemp)
+  if ! out=$(nix eval --json "$attr" 2>"$err_file"); then
+    echo "FAIL: nix eval '$attr' failed with:" >&2
+    cat "$err_file" >&2
+    rm -f "$err_file"
+    exit 1
+  fi
+  cat "$err_file" >&2
+  rm -f "$err_file"
+  printf '%s' "$out"
+}
+
+actual=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64.config.networking.hostName")
 expected="vm-macbook"
 if [ "$actual" != "$expected" ]; then
   echo "FAIL: vm-aarch64 hostName: expected '$expected', got '$actual'" >&2
   exit 1
 fi
 
-actual=$(nix eval --raw .#darwinConfigurations.macbook-pro-m1.config.system.primaryUser 2>/dev/null)
+actual=$(nix_eval_raw ".#darwinConfigurations.macbook-pro-m1.config.system.primaryUser")
 expected="m"
 if [ "$actual" != "$expected" ]; then
   echo "FAIL: macbook-pro-m1 primaryUser: expected '$expected', got '$actual'" >&2
   exit 1
 fi
 
-actual=$(nix eval --raw .#nixosConfigurations.wsl.config.wsl.defaultUser 2>/dev/null)
+actual=$(nix_eval_raw ".#nixosConfigurations.wsl.config.wsl.defaultUser")
 expected="m"
 if [ "$actual" != "$expected" ]; then
   echo "FAIL: wsl defaultUser: expected '$expected', got '$actual'" >&2
+  exit 1
+fi
+
+# --- Provenance checks: confirm den modules are the source, not legacy files ---
+# These assert that definitionsWithLocations points into den's aspect modules,
+# encoding the controller's verification that the identity slice is active
+# through den rather than through any legacy flat machine files.
+
+defs=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.options.networking.hostName.definitionsWithLocations")
+if ! printf '%s' "$defs" | grep -q 'hostname.nix'; then
+  echo "FAIL: vm-aarch64 hostName not defined by modules/aspects/provides/hostname.nix" >&2
+  echo "definitionsWithLocations: $defs" >&2
+  exit 1
+fi
+
+defs=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.options.system.primaryUser.definitionsWithLocations")
+if ! printf '%s' "$defs" | grep -q 'primary-user.nix'; then
+  echo "FAIL: macbook-pro-m1 primaryUser not defined by modules/aspects/provides/primary-user.nix" >&2
+  echo "definitionsWithLocations: $defs" >&2
+  exit 1
+fi
+
+defs=$(nix_eval_json ".#nixosConfigurations.wsl.options.wsl.defaultUser.definitionsWithLocations")
+if ! printf '%s' "$defs" | grep -q 'wsl.nix'; then
+  echo "FAIL: wsl defaultUser not defined by modules/aspects/provides/wsl.nix" >&2
+  echo "definitionsWithLocations: $defs" >&2
   exit 1
 fi
 
