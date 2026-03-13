@@ -11,7 +11,8 @@ grep -Fq 'options.profile' den/default.nix
 grep -Fq 'options.vmware.enable' den/default.nix
 grep -Fq 'options.graphical.enable' den/default.nix
 grep -A4 'options\.profile' den/default.nix | grep -Fq 'description'
-# wsl.enable is provided by den upstream; our schema must NOT redeclare it
+# wsl.enable is provided by den upstream in modules/aspects/provides/wsl.nix;
+# our schema must NOT redeclare it
 if grep -Fq 'options.wsl.enable' den/default.nix; then
   echo "ERROR: options.wsl.enable must not be declared in den/default.nix (conflicts with den upstream)" >&2
   exit 1
