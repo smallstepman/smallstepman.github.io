@@ -30,10 +30,10 @@ test -f den/aspects/hosts/wsl.nix
 # silently swallowing it with 2>/dev/null.  stderr is routed to a temp file so
 # that it never contaminates the captured stdout; on failure it is forwarded to
 # stderr so the caller sees the actual error.
-nix_eval_raw() {
-  local attr="$1" out err_file
+_nix_eval() {
+  local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --raw "$attr" 2>"$err_file"); then
+  if ! out=$(nix eval "$fmt" "$attr" 2>"$err_file"); then
     echo "FAIL: nix eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
@@ -44,19 +44,8 @@ nix_eval_raw() {
   printf '%s' "$out"
 }
 
-nix_eval_json() {
-  local attr="$1" out err_file
-  err_file=$(mktemp)
-  if ! out=$(nix eval --json "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
-    cat "$err_file" >&2
-    rm -f "$err_file"
-    exit 1
-  fi
-  cat "$err_file" >&2
-  rm -f "$err_file"
-  printf '%s' "$out"
-}
+nix_eval_raw()  { _nix_eval --raw  "$1"; }
+nix_eval_json() { _nix_eval --json "$1"; }
 
 actual=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64.config.networking.hostName")
 expected="vm-macbook"
@@ -99,7 +88,7 @@ if ! printf '%s' "$defs" | grep -q 'primary-user.nix'; then
 fi
 
 defs=$(nix_eval_json ".#nixosConfigurations.wsl.options.wsl.defaultUser.definitionsWithLocations")
-if ! printf '%s' "$defs" | grep -q 'wsl.nix'; then
+if ! printf '%s' "$defs" | grep -q 'provides/wsl.nix'; then
   echo "FAIL: wsl defaultUser not defined by modules/aspects/provides/wsl.nix" >&2
   echo "definitionsWithLocations: $defs" >&2
   exit 1
