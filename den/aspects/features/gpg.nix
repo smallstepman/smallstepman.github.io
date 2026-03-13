@@ -10,7 +10,6 @@
 # Host-aware guards use den host context rather than the legacy system-name string:
 #   isDarwin  — host.class == "darwin"
 #   isLinux   — host.class == "nixos"
-#   isWSL     — host.wsl.enable or false
 #   isVM      — host.vmware.enable or false  (only vm-aarch64 sets this)
 { den, lib, ... }: {
 
@@ -20,7 +19,6 @@
         let
           isDarwin = host.class == "darwin";
           isLinux  = host.class == "nixos";
-          isWSL    = host.wsl.enable or false;
           isVM     = host.vmware.enable or false;
 
           legacyGitSigningKey = "247AE5FC6A838272";
