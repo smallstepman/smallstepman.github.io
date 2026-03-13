@@ -126,9 +126,6 @@
     # import-tree - import Nix modules by directory tree (required by den)
     import-tree.url = "github:vic/import-tree";
 
-    # flake-aspects - aspect-oriented flake module extensions (required by den)
-    flake-aspects.url = "github:vic/flake-aspects";
-
   };
 
   # Den - aspect-oriented context-driven Nix configurations (top-level dotted path
@@ -299,10 +296,6 @@ PYEOF
 
       })
     ];
-
-    mkSystem = import ./lib/mksystem.nix {
-      inherit overlays nixpkgs inputs;
-    };
 
     den = (nixpkgs.lib.evalModules {
       modules = [ (inputs.import-tree ./den) ];
