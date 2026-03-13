@@ -6,42 +6,7 @@ let
   sources = import ../../nix/sources.nix;
   isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;
-  legacyGitSigningKey = "247AE5FC6A838272";
-  macosGitSigningKey = "9317B542250D33B34C41F62831D3B9C9754C0F5B";
-  vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";
-  gitSigningKey =
-    if isDarwin then macosGitSigningKey
-    else if currentSystemName == "vm-aarch64" then vmGitSigningKey
-    else legacyGitSigningKey;
-  darwinPinentryProgram = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid";
   opencodeAwesome = import ./opencode/awesome.nix { inherit pkgs lib; };
-  gpgPresetPassphraseLogin = pkgs.writeShellScriptBin "gpg-preset-passphrase-login" ''
-    set -euo pipefail
-
-    if ! passphrase="$(${pkgs.rbw}/bin/rbw get gpg-password-nixos-macbook-vm)"; then
-      echo "gpg-preset-passphrase-login: failed to read gpg-password-nixos-macbook-vm from rbw" >&2
-      exit 1
-    fi
-
-    if [ -z "$passphrase" ]; then
-      echo "gpg-preset-passphrase-login: empty passphrase from rbw" >&2
-      exit 1
-    fi
-
-    mapfile -t keygrips < <(
-      ${pkgs.gnupg}/bin/gpg --batch --with-colons --with-keygrip --list-secret-keys ${vmGitSigningKey} \
-        | ${pkgs.gawk}/bin/awk -F: '$1 == "grp" && $10 != "" { print $10 }'
-    )
-    if [ "''${#keygrips[@]}" -eq 0 ]; then
-      echo "gpg-preset-passphrase-login: failed to resolve keygrip for ${vmGitSigningKey}" >&2
-      exit 1
-    fi
-
-    ${pkgs.gnupg}/bin/gpg-connect-agent /bye >/dev/null
-    for keygrip in "''${keygrips[@]}"; do
-      printf '%s' "$passphrase" | ${pkgs.gnupg}/bin/gpg-preset-passphrase --preset "$keygrip"
-    done
-  '';
 
   # Migration bridge: the canonical mountpoint is /Users/m/Projects, but during
   # the first nixos-rebuild switch that migrates the VM mountpoint, the new path
@@ -291,8 +256,6 @@ in {
 
       echo "==> Bootstrap complete!"
     '')
-  ]) ++ (lib.optionals (currentSystemName == "vm-aarch64") [
-    gpgPresetPassphraseLogin
   ]);
 
   #---------------------------------------------------------------------
@@ -380,8 +343,6 @@ in {
     enable = true;
     defaultEditor = false; # we set EDITOR to nvim elsewhere
   };
-
-  programs.gpg.enable = true;
 
   programs.tmux = {
     enable = true;
@@ -660,20 +621,6 @@ in {
     settings = builtins.fromTOML (builtins.readFile ./starship.toml);
   };
 
-  services.gpg-agent = {
-    enable = isLinux || isDarwin;
-    pinentry.package = lib.mkIf isLinux pkgs.pinentry-tty;
-    extraConfig = lib.concatStringsSep "\n" (lib.filter (line: line != "") [
-      (lib.optionalString isDarwin "pinentry-program ${darwinPinentryProgram}")
-      (lib.optionalString (currentSystemName == "vm-aarch64") "allow-preset-passphrase")
-    ]);
-
-    # Keep Darwin's internal agent cache effectively off so Touch ID can gate
-    # each signing operation without pinentry-touchid being bypassed.
-    defaultCacheTtl = if isDarwin then 1 else 31536000;
-    maxCacheTtl = if isDarwin then 1 else 31536000;
-  };
-
   # rbw (Bitwarden) configuration.
   # macOS: brew-managed, manual setup (`brew install rbw && rbw register`).
   # Linux/VM: Nix-managed package. Config file is written by the rbw-config
@@ -687,14 +634,6 @@ in {
       pinentry = if isWSL then pkgs.pinentry-tty else pkgs.wayprompt;
     };
   };
-  programs.git = {
-    signing = {
-      key = gitSigningKey;
-      signByDefault = true;
-    };
-    settings.gpg.program = if isDarwin then "/opt/homebrew/bin/gpg" else "${pkgs.gnupg}/bin/gpg";
-  };
-  
   programs.opencode = {
     enable = true;
     package = pkgs.llm-agents.opencode;
@@ -977,21 +916,6 @@ in {
       RestartSec = 5;
     };
     Install.WantedBy = [ "graphical-session.target" ];
-  };
-
-  systemd.user.services.gpg-preset-passphrase-login = lib.mkIf (currentSystemName == "vm-aarch64") {
-    Unit = {
-      Description = "Preset GPG signing passphrase on login";
-      After = [ "default.target" "rbw-config.service" ];
-      Wants = [ "rbw-config.service" ];
-    };
-    Service = {
-      Type = "oneshot";
-      ExecStart = "${gpgPresetPassphraseLogin}/bin/gpg-preset-passphrase-login";
-      Restart = "on-failure";
-      RestartSec = 30;
-    };
-    Install.WantedBy = [ "default.target" ];
   };
 
   systemd.user.services.pywalfox-boot = lib.mkIf (isLinux && !isWSL) {
