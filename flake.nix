@@ -132,6 +132,10 @@
   # so that `inputs.den.url = "github:vic/den";` is unambiguous in this file)
   inputs.den.url = "github:vic/den";
 
+  # flake-aspects must be a direct input here because den's lib.nix accesses
+  # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
+  inputs.flake-aspects.url = "github:vic/flake-aspects";
+
   outputs = { self, nixpkgs, home-manager, lazyvim, darwin, ... }@inputs: let
     # Overlays is the list of overlays we want to apply from flake inputs.
     overlays = [
