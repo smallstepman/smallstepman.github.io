@@ -94,57 +94,6 @@ let
   } else null;
   niriDeepZellijBreakPlugin = if isLinux then "${niriDeepZellijBreak}/yeet-and-yoink-zellij-break.wasm" else "";
 
-  shellAliases = {
-    g  = "git";
-    gs = "git status";
-    ga = "git add";
-    gc = "git commit";
-    gl = "git prettylog";
-    gp = "git push";
-    gco = "git checkout";
-    gcp = "git cherry-pick";
-    gdiff = "git diff";
-
-    l = "ls";
-    lah = "eza -alh --color=auto --group-directories-first --icons";
-    la = "eza -la";
-    ll = "eza -lh --color=auto --group-directories-first --icons"; 
-    magit = "emacsclient -a \"\" -nw -e -q '(progn (magit-status))'";
-    "nix-gc" = "nix-collect-garbage -d";
-    "nix-update-flakes" = "nix flake update";
-
-    # cc = "claude";
-    oc = "opencode";
-    ocd = "opencode-dev";
-    openspec-in-progress = "openspec list --json | jq -r '.changes[] | select(.status == \"in-progress\").name'";
-
-    rs = "cargo";
-    kubectl = "kubecolor";
-
-    nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
-
-  } // (if isLinux then {
-    pbcopy = "wl-copy --type text/plain";
-    pbpaste = "wl-paste --type text/plain";
-    open = "xdg-open";
-    noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
-    nix-config = "nvim /nix-config";
-    niks = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --impure --flake 'path:/nixos-config#vm-aarch64'";
-    nikt = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --impure --flake 'path:/nixos-config#vm-aarch64'";
-  } else (if isDarwin then {
-    nix-config = "nvim ~/.config/nix-config";
-    niks = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --impure --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --impure --flake '.#macbook-pro-m1'";
-    nikt = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --impure --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --impure --flake '.#macbook-pro-m1'";
-    pinentry = "pinentry-mac";
-  } else {}));
-
-  # For our MANPAGER env var
-  # https://github.com/sharkdp/bat/issues/1145
-  manpager = (pkgs.writeShellScriptBin "manpager" (if isDarwin then ''
-    sh -c 'col -bx | bat -l man -p'
-    '' else ''
-     cat "$1" | col -bx | bat --language man --style plain
-   ''));
 in {
   imports = [
     (import ./opencode/modules/home-manager.nix { inherit isWSL; })
@@ -179,19 +128,10 @@ in {
     # CLI tools
     pkgs.websocat
     pkgs.bats
-    pkgs.bat
-    pkgs.eza
-    pkgs.fd
     pkgs.bws
-    pkgs.fzf
-    pkgs.jq
     pkgs.yq
     pkgs.fluxcd
-    pkgs.kubecolor
-    pkgs.kubectl
     pkgs.kubernetes-helm
-    pkgs.rbw
-    pkgs.ripgrep
     pkgs.tree
     pkgs.terragrunt
     pkgs.watch
@@ -200,9 +140,7 @@ in {
     pkgs.gnumake       # make
     pkgs.just          # command runner
     pkgs.tmux          # terminal multiplexer
-    pkgs.tig           # git TUI
     pkgs.dust          # disk usage analyzer (du alternative)
-    pkgs.zoxide
 
     # dev tools
     pkgs.go
@@ -219,9 +157,8 @@ in {
     (lib.hiPrio pkgs.python314)
     pkgs.uv
 
-    # Node.js with npx (included) + fnm for version management
+    # Node.js with npx (included)
     pkgs.nodejs_22
-    pkgs.fnm
 
     # ai tools - coding agents
     pkgs.agent-of-empires  # terminal session manager for AI agents
@@ -311,24 +248,6 @@ in {
     pkgs.rsync         # newer rsync than macOS ships
     pkgs.sshpass       # non-interactive ssh password auth
   ]) ++ (lib.optionals (isLinux && !isWSL) [
-    # Custom git credential helper - wraps rbw to use 'github-token' entry for github.com
-    # (rbw's built-in git-credential-rbw expects entry named by hostname)
-    (pkgs.writeShellScriptBin "git-credential-github" ''
-      case "$1" in
-        get)
-          while IFS='=' read -r key value; do
-            [ -z "$key" ] && break
-            case "$key" in host) host="$value" ;; esac
-          done
-          case "$host" in
-            github.com|gist.github.com)
-              token=$(${pkgs.rbw}/bin/rbw get github-token 2>/dev/null)
-              [ -n "$token" ] && printf 'protocol=https\nhost=%s\nusername=smallstepman\npassword=%s\n' "$host" "$token"
-              ;;
-          esac
-          ;;
-      esac
-    '')
     # Called by Noctalia hooks/user-templates on wallpaper/dark-mode changes
     (pkgs.writeShellScriptBin "noctalia-theme-reload" ''
       # Reload Noctalia theme in running Emacs daemon
@@ -380,30 +299,14 @@ in {
   # Env vars and dotfiles
   #---------------------------------------------------------------------
 
-  home.sessionPath = lib.optionals isDarwin [
-    "/Applications/VMware Fusion.app/Contents/Library"
-    "/Users/m/.cargo/bin"
-  ];
-
   home.sessionVariables = {
-    LANG = "en_US.UTF-8";
-    LC_CTYPE = "en_US.UTF-8";
-    LC_ALL = "en_US.UTF-8";
-    EDITOR = "nvim";
-    PAGER = "less -FirSwX";
-    MANPAGER = "${manpager}/bin/manpager";
     NIRI_DEEP_ZELLIJ_BREAK_PLUGIN = niriDeepZellijBreakPlugin;
-
-  } // (if isDarwin then {
-    # See: https://github.com/NixOS/nixpkgs/issues/390751
-    DISPLAY = "nixpkgs-390751";
-  } else {}) // (if (isLinux && !isWSL) then {
+  } // (if (isLinux && !isWSL) then {
     DOCKER_CONTEXT = "host-mac";
   } else {});
 
   home.file = {
     ".gdbinit".source = ./gdbinit;
-    ".inputrc".source = ./inputrc;
   } // (if isDarwin then {
     # not gonna manage plists, but keep them here to remember
     # "Library/Preferences/com.MrKai77.Loop.plist".source = ./com.MrKai77.Loop.plist;
@@ -752,109 +655,9 @@ in {
     settings = ./noctalia.json;
   };
 
-  programs.zsh = {
-    enable = true;
-    autosuggestion.enable = true;
-    syntaxHighlighting.enable = true;
-    shellAliases = shellAliases;
-    initContent = ''
-      # vscode shell integration (if running inside vscode, which is true for vscode terminal and false for external terminal; this allows us to use the same shell config in both without bloating the external terminal with vscode-specific stuff)
-      [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
-
-      # fnm (Node version manager)
-      eval "$(fnm env --use-on-cd)"
-      bindkey -v
-      source ${./zsh-manydot.sh}
-
-      # Doom-like leader key in zsh vi normal mode when running inside tmux.
-      tmux-leader-menu() {
-        if [[ -n "$TMUX" ]]; then
-          tmux run-shell ~/.config/tmux/menus/doomux.sh
-        else
-          zle vi-forward-char
-        fi
-      }
-      zle -N tmux-leader-menu
-      bindkey -M vicmd " " tmux-leader-menu
-    '' + (if isDarwin then ''
-
-      # Homebrew
-      eval "$(/opt/homebrew/bin/brew shellenv)"
-
-      # NixOS VM management
-      vm() { ~/.config/nix/docs/vm.sh "$@"; }
-    '' else "") + (if isLinux then ''
-
-      # gh: inject GITHUB_TOKEN per-invocation from rbw (no global env var)
-      gh() { GITHUB_TOKEN=$(rbw get github-token) command gh "$@"; }
-
-      # Ad-hoc API key injection (usage: with-openai some-command --flag)
-      with-openai() { OPENAI_API_KEY=$(rbw get openai-api-key) "$@"; }
-      with-amp() { AMP_API_KEY=$(rbw get amp-api-key) "$@"; }
-      copilot() { COPILOT_GITHUB_TOKEN=$(rbw get github-token) command copilot "$@"; }
-      claude() { CLAUDE_CODE_OAUTH_TOKEN=$(rbw get claude-oauth-token) command claude "$@"; }
-      codex() { OPENAI_API_KEY=$(rbw get openai-api-key) command codex "$@"; }
-
-      # Auto-fix fileMode for git repos on VMware shared folders
-      # (macOS reports all files as 755; git sees mode changes vs index)
-      # Only runs once per repo per shell session (caches in associative array)
-      typeset -gA _git_filemode_fixed
-      _fix_git_filemode() {
-        if [[ "$PWD" == /Users/m/Projects/* ]] && [[ -d .git ]]; then
-          local root=$(git rev-parse --show-toplevel 2>/dev/null)
-          [[ -z "$root" ]] && return
-          [[ -n "''${_git_filemode_fixed[$root]}" ]] && return
-          git config core.fileMode false 2>/dev/null
-          git submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null
-          _git_filemode_fixed[$root]=1
-        fi
-      }
-      add-zsh-hook chpwd _fix_git_filemode
-      _fix_git_filemode  # run once on shell init
-    '' else "");
-  };
-
-  programs.bash = {
-    enable = true;
-    shellOptions = [];
-    historyControl = [ "ignoredups" "ignorespace" ];
-    initExtra = builtins.readFile ./bashrc;
-    shellAliases = shellAliases;
-  };
-
-  programs.direnv= {
-    enable = true;
-
-    config = {
-      whitelist = {
-        prefix= [
-          "$HOME/code/go/src/github.com/hashicorp"
-          "$HOME/code/go/src/github.com/smallstepman"
-        ];
-
-        exact = ["$HOME/.envrc"];
-      };
-    };
-  };
-
-  programs.zoxide = {
-    enable = true;
-    enableBashIntegration = true;
-    enableZshIntegration = true;
-  };
-
   programs.starship = {
     enable = false;
     settings = builtins.fromTOML (builtins.readFile ./starship.toml);
-  };
-
-  programs.atuin = {
-    enable = true;
-  };
-
-  programs.oh-my-posh = {
-    enable = true;
-    settings = builtins.fromJSON (builtins.readFile ./oh-my-posh.json);
   };
 
   services.gpg-agent = {
@@ -871,12 +674,6 @@ in {
     maxCacheTtl = if isDarwin then 1 else 31536000;
   };
 
-  # gh CLI - credential helper disabled on Linux (uses custom rbw-based helper below)
-  programs.gh = {
-    enable = true;
-    gitCredentialHelper.enable = isDarwin; # Darwin uses gh native auth; Linux uses rbw
-  };
-
   # rbw (Bitwarden) configuration.
   # macOS: brew-managed, manual setup (`brew install rbw && rbw register`).
   # Linux/VM: Nix-managed package. Config file is written by the rbw-config
@@ -891,36 +688,11 @@ in {
     };
   };
   programs.git = {
-    enable = true;
     signing = {
       key = gitSigningKey;
       signByDefault = true;
     };
-    settings = {
-      user.name = "Marcin Nowak Liebiediew";
-      user.email = "m.liebiediew@gmail.com";
-      gpg.program = if isDarwin then "/opt/homebrew/bin/gpg" else "${pkgs.gnupg}/bin/gpg";
-      branch.autosetuprebase = "always";
-      color.ui = true;
-      core.askPass = ""; # needs to be empty to use terminal for ask pass
-      # Ignore file mode changes on Linux - VMware shared folders force different permissions
-      core.fileMode = !isLinux;
-      # Speed up git by caching untracked files
-      core.untrackedCache = true;
-      github.user = "smallstepman";
-      push.default = "tracking";
-      init.defaultBranch = "main";
-      aliases = {
-        cleanup = "!git branch --merged | grep  -v '\\*\\|master\\|develop' | xargs -n 1 -r git branch -d";
-        prettylog = "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(r) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative";
-        root = "rev-parse --show-toplevel";
-        ce = "git commit --amend --no-edit";
-      };
-    } // (if isLinux then {
-      # Linux: use custom credential helper that reads GitHub token from rbw
-      "credential \"https://github.com\"".helper = "github";
-      "credential \"https://gist.github.com\"".helper = "github";
-    } else {});
+    settings.gpg.program = if isDarwin then "/opt/homebrew/bin/gpg" else "${pkgs.gnupg}/bin/gpg";
   };
   
   programs.opencode = {

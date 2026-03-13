@@ -2,6 +2,7 @@
   den.aspects.m = {
     includes = [
       den.aspects.identity
+      den.aspects.shell-git
     ];
   };
 }
