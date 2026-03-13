@@ -12,7 +12,6 @@
       example = "vm";
     };
     options.vmware.enable = lib.mkEnableOption "VMware-specific host behavior";
-    options.wsl.enable = lib.mkEnableOption "WSL behavior";
     options.graphical.enable = lib.mkEnableOption "Graphical desktop behavior";
   };
 }
