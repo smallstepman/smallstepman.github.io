@@ -179,8 +179,9 @@ actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.home-manager.use
 [ "$actual" = "true" ] || { echo "FAIL: vm-aarch64 programs.opencode.enable: expected true, got $actual" >&2; exit 1; }
 
 # Note: vm-aarch64 home.packages cannot be evaluated from Darwin because
-# programs.doom-emacs uses IFD (import-from-derivation) that requires an
-# aarch64-linux builder. Package presence is verified via darwin config below.
+# Task 6 moved nix-doom-emacs-unstraightened into the den evaluation path.
+# That module uses IFD (import-from-derivation) and needs an aarch64-linux
+# builder, so package presence is verified via the darwin config below.
 
 # ---------------------------------------------------------------------------
 # Live eval: macbook-pro-m1 (Darwin)
@@ -216,7 +217,8 @@ actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.users.m.se
 actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.users.m.programs.opencode.enable")
 [ "$actual" = "true" ] || { echo "FAIL: wsl programs.opencode.enable: expected true, got $actual" >&2; exit 1; }
 
-# wsl home.packages cannot be fully evaluated from Darwin due to doom-emacs IFD.
-# Package presence is verified through the darwin config above.
+# wsl home.packages cannot be fully evaluated from Darwin for the same reason:
+# Task 6 moved nix-doom-emacs-unstraightened into the den path, and its IFD
+# needs a Linux builder. Package presence is verified through darwin above.
 
 echo "All devtools checks passed."

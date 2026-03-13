@@ -9,7 +9,7 @@
 #
 # WSL is threaded from the den host context (host.wsl.enable or false) rather
 # than the legacy top-level isWSL arg.
-{ den, lib, inputs, overlays, ... }: {
+{ den, lib, inputs, ... }: {
 
   den.aspects.ai-tools = {
     includes = [
@@ -24,10 +24,6 @@
               imports = [
                 (import ../../../users/m/opencode/modules/home-manager.nix { inherit isWSL; })
               ];
-
-              # Apply overlays so pkgs.llm-agents.* and other overlay packages are available.
-              nixpkgs.overlays = overlays;
-              nixpkgs.config.allowUnfree = true;
 
               # ---------------------------------------------------------------
               # Packages — AI tools

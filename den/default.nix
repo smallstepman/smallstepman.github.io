@@ -1,5 +1,14 @@
-{ inputs, lib, ... }: {
+{ inputs, lib, overlays, ... }: {
   imports = [ inputs.den.flakeModule ];
+
+  den.ctx.user.includes = [
+    ({ ... }: {
+      homeManager = { ... }: {
+        nixpkgs.overlays = overlays;
+        nixpkgs.config.allowUnfree = true;
+      };
+    })
+  ];
 
   den.schema.user = { ... }: {
     config.classes = lib.mkDefault [ "homeManager" ];

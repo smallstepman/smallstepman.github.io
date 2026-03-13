@@ -15,7 +15,7 @@
 #   - Linux/Darwin xdg.configFile entries except tmux menus
 #   - systemd services except services.emacs
 #   - projectsRoot / niriDeep* related logic
-{ den, lib, inputs, overlays, ... }: {
+{ den, lib, inputs, ... }: {
 
   den.aspects.editors-devtools = {
     includes = [
@@ -32,10 +32,6 @@
               inputs.nix-doom-emacs-unstraightened.homeModule
               inputs.lazyvim.homeManagerModules.default
             ];
-
-            # Apply overlays so pkgs.rust-bin.* and other overlay packages are available.
-            nixpkgs.overlays = overlays;
-            nixpkgs.config.allowUnfree = true;
 
             # -----------------------------------------------------------------
             # Packages
