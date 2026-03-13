@@ -1,4 +1,5 @@
 {
+  den.hosts.aarch64-linux.vm-aarch64.hostName = "vm-macbook";
   den.hosts.aarch64-linux.vm-aarch64.profile = "vm";
   den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true;
   den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true;
