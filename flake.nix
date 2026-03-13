@@ -303,7 +303,7 @@ PYEOF
 
     den = (nixpkgs.lib.evalModules {
       modules = [ (inputs.import-tree ./den) ];
-      specialArgs = { inherit inputs; };
+      specialArgs = { inherit inputs overlays; };
     }).config;
   in {
     inherit (den.flake) nixosConfigurations darwinConfigurations;

@@ -6,8 +6,6 @@ let
   sources = import ../../nix/sources.nix;
   isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;
-  opencodeAwesome = import ./opencode/awesome.nix { inherit pkgs lib; };
-
   # Migration bridge: the canonical mountpoint is /Users/m/Projects, but during
   # the first nixos-rebuild switch that migrates the VM mountpoint, the new path
   # does not yet exist.  Fall back to /home/m/Projects so evaluation succeeds on
@@ -60,9 +58,6 @@ let
   niriDeepZellijBreakPlugin = if isLinux then "${niriDeepZellijBreak}/yeet-and-yoink-zellij-break.wasm" else "";
 
 in {
-  imports = [
-    (import ./opencode/modules/home-manager.nix { inherit isWSL; })
-  ];
 
   # Home-manager 22.11 requires this be set. We never set it so we have
   # to use the old state version.
@@ -77,132 +72,8 @@ in {
   # Packages
   #---------------------------------------------------------------------
 
-  # Packages I always want installed. Most packages I install using
-  # per-project flakes sourced with direnv and nix-shell, so this is
-  # not a huge list.
-  home.packages = [
-    pkgs.zellij
-    pkgs.kitty
-    pkgs.alacritty
-    pkgs.uniclip  # Clipboard sharing (macOS <-> VM via SSH tunnel)
-    pkgs.nerd-fonts.symbols-only  # icon font for Doom Emacs (+icons) and terminal apps
-    pkgs.emacs-all-the-icons-fonts  # all-the-icons font family for Emacs
-
-    pkgs.devenv
-
-    # CLI tools
-    pkgs.websocat
-    pkgs.bats
-    pkgs.bws
-    pkgs.yq
-    pkgs.fluxcd
-    pkgs.kubernetes-helm
-    pkgs.tree
-    pkgs.terragrunt
-    pkgs.watch
-    pkgs.yazi          # terminal file manager
-    pkgs.btop          # system monitor
-    pkgs.gnumake       # make
-    pkgs.just          # command runner
-    pkgs.tmux          # terminal multiplexer
-    pkgs.dust          # disk usage analyzer (du alternative)
-
-    # dev tools
-    pkgs.go
-    pkgs.gopls
-
-    # Rust toolchain (via rust-overlay)
-    (pkgs.rust-bin.stable.latest.default.override {
-      extensions = [ "rust-src" "rust-analyzer" ];
-      targets = [ "wasm32-wasip1" ];
-
-    })
-
-    # Python + uv (hiPrio so it wins over python3 bundled in pkgs.apm)
-    (lib.hiPrio pkgs.python314)
-    pkgs.uv
-
-    # Node.js with npx (included)
-    pkgs.nodejs_22
-
-    # ai tools - coding agents
-    pkgs.agent-of-empires  # terminal session manager for AI agents
-    pkgs.gastown  # gt - Gas Town multi-agent orchestration system
-    pkgs.llm-agents.amp
-    pkgs.llm-agents.ccusage-amp
-    pkgs.llm-agents.eca
-    pkgs.llm-agents.claude-code
-    pkgs.llm-agents.ccusage
-    pkgs.llm-agents.copilot-cli
-    pkgs.llm-agents.pi
-    pkgs.llm-agents.ccusage-pi
-    pkgs.llm-agents.qwen-code
-    pkgs.llm-agents.ccusage-opencode
-    # pkgs.llm-agents.crush
-    # pkgs.llm-agents.cursor-agent
-    # pkgs.llm-agents.ccusage-codex
-    # pkgs.llm-agents.forge
-    # pkgs.llm-agents.qoder-cli
-    # pkgs.llm-agents.code
-    # pkgs.llm-agents.droid
-    # pkgs.llm-agents.gemini-cli
-    # pkgs.llm-agents.goose-cli
-    # pkgs.llm-agents.jules
-    # pkgs.llm-agents.kilocode-cli
-    # pkgs.llm-agents.letta-code
-    # pkgs.llm-agents.mistral-vibe
-    # pkgs.llm-agents.nanocoder
-
-    # ai tools - Claude Code ecosystem
-    # pkgs.llm-agents.auto-claude
-    # pkgs.llm-agents.catnip
-    # pkgs.llm-agents.ccstatusline
-    # pkgs.llm-agents.claude-code-router
-    # pkgs.llm-agents.claude-plugins
-    # pkgs.llm-agents.claudebox
-    # pkgs.llm-agents.sandbox-runtime
-    # pkgs.llm-agents.skills-installer
-
-    # ai tools — ACP ecosystem
-    # pkgs.llm-agents.claude-code-acp
-    # pkgs.llm-agents.codex-acp
-
-    # ai tools — usage analytics
-
-    # ai tools — workflow & project management
-    pkgs.llm-agents.beads  # bd — Beads CLI
-    pkgs.llm-agents.beads-rust  # br - Beads CLI but faster (Rust), bv dependency  
-    pkgs.llm-agents.beads-viewer  # bv — graph-aware TUI for Beads issue tracker
-    pkgs.llm-agents.openspec
-    pkgs.llm-agents.workmux
-    # pkgs.llm-agents.agent-deck
-    # pkgs.llm-agents.backlog-md
-    # pkgs.llm-agents.cc-sdd
-    # pkgs.llm-agents.chainlink
-    # pkgs.llm-agents.spec-kit
-    # pkgs.llm-agents.vibe-kanban
-
-    # ai tools — code review
-    # pkgs.llm-agents.coderabbit-cli
-    # pkgs.llm-agents.tuicr
-
-    # ai tools - .agents & AGENTS.md management
-    pkgs.dotagents
-    pkgs.apm
-
-    # llm-agents.nix — utilities
-    pkgs.llm-agents.copilot-language-server
-    pkgs.llm-agents.openskills
-    # pkgs.llm-agents.handy
-    # pkgs.llm-agents.agent-browser
-    # pkgs.llm-agents.coding-agent-search
-    # pkgs.llm-agents.ck
-    # pkgs.llm-agents.localgpt
-    # pkgs.llm-agents.mcporter
-    # pkgs.llm-agents.openclaw
-    # pkgs.llm-agents.qmd
-
-  ] ++ (lib.optionals isDarwin [
+  # Per-project flakes sourced with direnv and nix-shell handle most packages.
+  home.packages = [] ++ (lib.optionals isDarwin [
     # This is automatically setup on Linux
     pkgs.ghostty-bin
 
@@ -268,9 +139,8 @@ in {
     DOCKER_CONTEXT = "host-mac";
   } else {});
 
-  home.file = {
-    ".gdbinit".source = ./gdbinit;
-  } // (if isDarwin then {
+  home.file =
+    (if isDarwin then {
     # not gonna manage plists, but keep them here to remember
     # "Library/Preferences/com.MrKai77.Loop.plist".source = ./com.MrKai77.Loop.plist;
     # "Library/Preferences/com.brnbw.Leader-Key.plist".source = ./com.brnbw.Leader-Key.plist;
@@ -286,15 +156,6 @@ in {
 
   xdg.configFile = {
     "grm/repos.yaml".source = ./grm-repos.yaml;
-    "opencode/plugins/superpowers.js".source = opencodeAwesome.superpowersPlugin;
-    "opencode/skills/superpowers" = {
-      source = opencodeAwesome.superpowersSkillsDir;
-      recursive = true;
-    };
-    "tmux/menus/doomux.sh" = {
-      source = ./tmux/doomux.sh;
-      executable = true;
-    };
   } // (if isDarwin then {
     "wezterm/wezterm.lua".text = builtins.readFile ./wezterm.darwin.lua;
     "activitywatch/scripts" = {
@@ -329,49 +190,11 @@ in {
   # Programs
   #---------------------------------------------------------------------
 
-  # Doom Emacs (via nix-doom-emacs-unstraightened)
-  programs.doom-emacs = {
-    enable = true;
-    doomDir = ./doom;
-    emacs = pkgs.emacs-pgtk;
-    # :config literate has no effect in unstraightened; tangle config.org at build time
-    # tangleArgs = "--all config.org";
-  };
-
-  # Emacs daemon as a systemd user service (Linux only; macOS has no systemd)
-  services.emacs = lib.mkIf isLinux {
-    enable = true;
-    defaultEditor = false; # we set EDITOR to nvim elsewhere
-  };
-
-  programs.tmux = {
-    enable = true;
-    keyMode = "vi";
-    mouse = true;
-    extraConfig = ''
-      set -g @menus_location_x 'C'
-      set -g @menus_trigger 'Space'
-      set -g @menus_main_menu '${config.home.homeDirectory}/.config/tmux/menus/doomux.sh'
-      set -g @menus_display_commands 'No'
-      run-shell ~/.local/share/tmux/plugins/tmux-menus/menus.tmux
-      set -g status-keys vi
-      setw -g mode-keys vi
-      set -g base-index 1
-      setw -g pane-base-index 1
-      set -g renumber-windows on
-      set -g set-clipboard on
-    '';
-  };
-
-  programs.zellij = {
-    enable = true;
-    settings = {
-      on_force_close = "quit";
-    };
-    settings.load_plugins = [
-      "file:${niriDeepZellijBreakPlugin}"
-    ];
-  };
+  # zellij: enable + force-close owned by editors-devtools; load_plugins stays
+  # here because it references niriDeepZellijBreakPlugin (Task 8 cleanup).
+  programs.zellij.settings.load_plugins = [
+    "file:${niriDeepZellijBreakPlugin}"
+  ];
 
   programs.kitty = lib.mkIf (isLinux && !isWSL) {
     enable = true; # required for the default Hyprland config
@@ -616,11 +439,6 @@ in {
     settings = ./noctalia.json;
   };
 
-  programs.starship = {
-    enable = false;
-    settings = builtins.fromTOML (builtins.readFile ./starship.toml);
-  };
-
   # rbw (Bitwarden) configuration.
   # macOS: brew-managed, manual setup (`brew install rbw && rbw register`).
   # Linux/VM: Nix-managed package. Config file is written by the rbw-config
@@ -634,86 +452,6 @@ in {
       pinentry = if isWSL then pkgs.pinentry-tty else pkgs.wayprompt;
     };
   };
-  programs.opencode = {
-    enable = true;
-    package = pkgs.llm-agents.opencode;
-    settings = builtins.fromJSON (builtins.readFile ./opencode/settings.json);
-    agents = opencodeAwesome.agents;
-    commands = opencodeAwesome.commands;
-    themes = opencodeAwesome.themes;
-    rules = ''
-      You are an intelligent and observant agent.
-      
-      You are on NixOS. Prefer `nix run nixpkgs#<tool>` over installing tools globally.
-      If instructed to commit, do not use gpg signing.
-
-      ## Agents
-      Delegate tasks to subagents frequently.
-
-      ## Think deeply about everything.
-      Break problems down, abstract them out, understand the fundamentals.
-    '';
-  };
-
-  programs.vscode = {
-    enable = true;
-    profiles = {
-      default = {
-        extensions = import ./vscode/extensions.nix { inherit pkgs; };
-        keybindings = builtins.fromJSON (builtins.readFile ./vscode/keybindings.json);
-        userSettings = builtins.fromJSON (builtins.readFile ./vscode/settings.json);
-      };
-    };
-  };
-
-  programs.go = {
-    enable = true;
-    env = { 
-      GOPATH = "Documents/go";
-      GOPRIVATE = [ "github.com/smallstepman" ];
-    };
-  };
-
-  programs.lazyvim = {
-    enable = true;
-    configFiles = ./lazyvim;
-
-    extras = {
-      lang.nix.enable = true;
-      lang.python = {
-        enable = true;
-        installDependencies = true;        # Install ruff
-        installRuntimeDependencies = true; # Install python3
-      };
-      lang.go = {
-        enable = true;
-        installDependencies = true;        # Install gopls, gofumpt, etc.
-        installRuntimeDependencies = true; # Install go compiler
-      };
-      lang.typescript = {
-        enable = true;
-        installDependencies = false;        # Skip typescript tools
-        installRuntimeDependencies = true;  # But install nodejs
-      };
-      lang.rust.enable = true;
-      ai.copilot.enable = true;
-
-    };
-
-    # Additional packages (optional)
-    extraPackages = with pkgs; [
-      nixd        # Nix LSP
-      alejandra   # Nix formatter
-      pyright     # Python LSP
-    ];
-
-    # Only needed for languages not covered by LazyVim extras
-    treesitterParsers = with pkgs.vimPlugins.nvim-treesitter-parsers; [
-      templ     # Go templ files
-    ];
-
-  };
-
   programs.librewolf = {
     enable = false;
     package = pkgs.librewolf;
@@ -813,27 +551,6 @@ in {
     package = pkgs.vanilla-dmz;
     size = 128;
   };
-
-  # Keep package.json writable so opencode can update/install plugin deps at runtime.
-  home.activation.ensureOpencodePackageJsonWritable = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    run mkdir -p "$HOME/.config/opencode"
-    packageJson="$HOME/.config/opencode/package.json"
-    if [ -L "$packageJson" ]; then
-      run rm -f "$packageJson"
-    fi
-    run cp ${./opencode/package.json} "$packageJson"
-    run chmod u+w "$packageJson"
-  '';
-
-  # tmux-menus needs a writable plugin directory for cache files.
-  home.activation.installWritableTmuxMenus = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    src=${pkgs.tmuxPlugins."tmux-menus"}/share/tmux-plugins/tmux-menus
-    dst="$HOME/.local/share/tmux/plugins/tmux-menus"
-    run mkdir -p "$HOME/.local/share/tmux/plugins"
-    run rm -rf "$dst"
-    run cp -R "$src" "$dst"
-    run chmod -R u+w "$dst"
-  '';
 
   # Ensure writable output directories for Noctalia user templates
   home.activation.createNoctaliaThemeDirs = lib.mkIf (isLinux && !isWSL) (lib.hm.dag.entryAfter [ "writeBoundary" ] ''
