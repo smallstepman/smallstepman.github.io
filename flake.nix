@@ -123,7 +123,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # import-tree - import Nix modules by directory tree (required by den)
+    import-tree.url = "github:vic/import-tree";
+
+    # flake-aspects - aspect-oriented flake module extensions (required by den)
+    flake-aspects.url = "github:vic/flake-aspects";
+
   };
+
+  # Den - aspect-oriented context-driven Nix configurations (top-level dotted path
+  # so that `inputs.den.url = "github:vic/den";` is unambiguous in this file)
+  inputs.den.url = "github:vic/den";
 
   outputs = { self, nixpkgs, home-manager, lazyvim, darwin, ... }@inputs: let
     # Overlays is the list of overlays we want to apply from flake inputs.
@@ -293,23 +303,13 @@ PYEOF
     mkSystem = import ./lib/mksystem.nix {
       inherit overlays nixpkgs inputs;
     };
+
+    den = (nixpkgs.lib.evalModules {
+      modules = [ (inputs.import-tree ./den) ];
+      specialArgs = { inherit inputs; };
+    }).config;
   in {
-    nixosConfigurations.vm-aarch64 = mkSystem "vm-aarch64" {
-      system = "aarch64-linux";
-      user   = "m";
-    };
-
-    nixosConfigurations.wsl = mkSystem "wsl" {
-      system = "x86_64-linux";
-      user   = "m";
-      wsl    = true;
-    };
-
-    darwinConfigurations.macbook-pro-m1 = mkSystem "macbook-pro-m1" {
-      system = "aarch64-darwin";
-      user   = "m";
-      darwin = true;
-    };
+    inherit (den.flake) nixosConfigurations darwinConfigurations;
 
     # Sopsidy secret collector script (rbw/bitwarden backend)
     # Built for common host systems since collect-secrets runs locally,
