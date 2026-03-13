@@ -6,6 +6,8 @@
 # host-specific remnants that do not belong in any reusable feature aspect:
 #   - Hostname provisioning
 #   - Host age pubkey for sops secret collection
+#   - aarch64-specific x86_64 binfmt emulation
+#   - DHCP pinning for the VMware NAT NIC (enp2s0)
 #   - 127.0.0.1 hosts entry for vm-macbook
 #   - openwebui-local-proxy systemd service
 #   - users.users.m host-specific settings (extraGroups, authorizedKeys)
@@ -18,12 +20,25 @@
       # Secret-backed system settings (sops, Tailscale, user password, rbw).
       den.aspects.secrets
 
+      # Linux graphical desktop stack (niri, greetd, keyd, kitty, etc.).
+      den.aspects.linux-desktop
+
+      # VMware guest integration (vmware tools, HGFS mounts, niri bindings).
+      den.aspects.vmware
+
       # Hostname battery: sets networking.hostName from den.hosts config.
       den.provides.hostname
 
       # Host-specific NixOS configuration that does not belong in a shared aspect.
       ({ host, ... }: {
         nixos = { config, pkgs, lib, ... }: {
+
+          # Setup qemu so this aarch64 VM can run x86_64 binaries.
+          boot.binfmt.emulatedSystems = [ "x86_64-linux" ];
+
+          # Let NetworkManager use DHCP on VMware NAT; VMware's DHCP reservation
+          # keeps this guest pinned to 192.168.130.3.
+          networking.interfaces.enp2s0.useDHCP = true;
 
           # Host-specific sops age public key used by secret collection.
           sops.hostPubKey = lib.removeSuffix "\n"
