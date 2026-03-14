@@ -109,9 +109,17 @@ require_generated_dir() {
     [ -d "$GENERATED_DIR" ] || die "Generated dataset not found: $GENERATED_DIR"
 }
 
-generated_flake_ref() {
-    require_generated_dir
-    printf 'path:%s' "$GENERATED_DIR"
+source_external_input_flake() {
+    local helper="$NIX_CONFIG_DIR/scripts/external-input-flake.sh"
+    [ -f "$helper" ] || die "Wrapper helper not found: $helper"
+    # shellcheck source=../scripts/external-input-flake.sh
+    . "$helper"
+}
+
+local_wrapper_flake() {
+    source_external_input_flake
+    _nix_wrapper_dir=""
+    GENERATED_INPUT_DIR="$GENERATED_DIR" NIX_CONFIG_DIR="$NIX_CONFIG_DIR" mk_wrapper_flake
 }
 
 vm_ensure_shared_folder() {
@@ -135,10 +143,6 @@ vm_ensure_required_shared_folders() {
     vm_ensure_shared_folder "$vmx" "Projects" "$HOST_PROJECTS_DIR"
     vm_ensure_shared_folder "$vmx" "nixos-generated" "$GENERATED_DIR"
     vmrun -T fusion enableSharedFolders "$vmx" runtime >/dev/null 2>&1 || true
-}
-
-vm_yeet_and_yoink_flake_ref() {
-    printf 'git+file://%s/yeet-and-yoink?dir=plugins/zellij-break' "$VM_SHARED_PROJECTS_GUEST_DIR"
 }
 
 # Find the .vmx file for our NixOS VM
@@ -487,7 +491,10 @@ vm_prepare_sops_age_key() {
 vm_collect_secrets() {
     ensure_generated_dir
     [ -f "$GENERATED_DIR/secrets.yaml" ] || : > "$GENERATED_DIR/secrets.yaml"
-    (cd "$NIX_CONFIG_DIR" && nix --extra-experimental-features 'nix-command flakes' run --override-input generated "$(generated_flake_ref)" "$NIX_CONFIG_DIR#collect-secrets")
+    local wrapper
+    wrapper=$(local_wrapper_flake)
+    (cd "$NIX_CONFIG_DIR" && nix --extra-experimental-features 'nix-command flakes' run \
+        "path:$wrapper#collect-secrets" --no-write-lock-file)
 }
 
 # ─── VM Install ─────────────────────────────────────────────────────────────
@@ -511,12 +518,12 @@ vm_install() {
         rm -rf "$NIXCFG_CLEAN" &&
         mkdir -p "$NIXCFG_CLEAN" &&
         tar -C '"$VM_SHARED_NIX_CONFIG_DIR"' --exclude="*.sock" -cf - . | tar -C "$NIXCFG_CLEAN" -xf - &&
+        WRAPPER=$(NIX_CONFIG_DIR="$NIXCFG_CLEAN" GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' YEET_AND_YOINK_INPUT_DIR='"$VM_SHARED_PROJECTS_GUEST_DIR"'/yeet-and-yoink bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
         DISKO_SCRIPT=$(sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nix build \
             --extra-experimental-features "nix-command flakes" \
-            --override-input generated "path:'"$VM_SHARED_GENERATED_DIR"'" \
-            --override-input yeetAndYoink "$(vm_yeet_and_yoink_flake_ref)" \
+            --no-write-lock-file \
             --no-link --print-out-paths \
-            "path:$NIXCFG_CLEAN#nixosConfigurations.'"$NIXNAME"'.config.system.build.diskoScript") &&
+            "path:$WRAPPER#nixosConfigurations.'"$NIXNAME"'.config.system.build.diskoScript") &&
         if [ -d "$DISKO_SCRIPT" ] && [ -x "$DISKO_SCRIPT/bin/disko" ]; then
             sudo "$DISKO_SCRIPT/bin/disko"
         else
@@ -528,10 +535,9 @@ vm_install() {
         sudo chmod 600 /mnt/var/lib/sops-nix/key.txt &&
         SYSTEM_TOPLEVEL=$(sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nix build \
             --extra-experimental-features "nix-command flakes" \
-            --override-input generated "path:'"$VM_SHARED_GENERATED_DIR"'" \
-            --override-input yeetAndYoink "$(vm_yeet_and_yoink_flake_ref)" \
+            --no-write-lock-file \
             --no-link --print-out-paths \
-            "path:$NIXCFG_CLEAN#nixosConfigurations.'"$NIXNAME"'.config.system.build.toplevel") &&
+            "path:$WRAPPER#nixosConfigurations.'"$NIXNAME"'.config.system.build.toplevel") &&
         sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-install \
             --system "$SYSTEM_TOPLEVEL" \
             --no-root-passwd &&
@@ -649,7 +655,8 @@ cmd_switch() {
     echo "Switching NixOS config on VM at $addr..."
 
     ssh -t $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "$REMOTE_MOUNT_SHARED"' &&
-        sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake "path:'"$VM_SHARED_NIX_CONFIG_DIR"'#'"$NIXNAME"'" --override-input generated "path:'"$VM_SHARED_GENERATED_DIR"'" --override-input yeetAndYoink "'"$(vm_yeet_and_yoink_flake_ref)"'"
+        WRAPPER=$(NIX_CONFIG_DIR='"$VM_SHARED_NIX_CONFIG_DIR"' GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' YEET_AND_YOINK_INPUT_DIR='"$VM_SHARED_PROJECTS_GUEST_DIR"'/yeet-and-yoink bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
+        sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake "path:$WRAPPER#'"$NIXNAME"'" --no-write-lock-file
     '
 }
 

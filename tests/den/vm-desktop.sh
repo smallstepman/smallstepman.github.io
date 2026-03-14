@@ -60,11 +60,11 @@ grep -Fq 'load_plugins'                       den/aspects/features/vmware.nix
 grep -Fq 'uniclip'                            den/aspects/features/vmware.nix
 grep -Fq 'ensureHostDockerContext'            den/aspects/features/vmware.nix
 grep -Fq 'mac-host-docker'                   den/aspects/features/vmware.nix
-grep -Fq -- '--override-input yeetAndYoink' docs/vm.sh
-grep -Fq -- '--override-input yeetAndYoink' den/aspects/features/shell-git.nix
-grep -Fq 'git+file://%s/yeet-and-yoink?dir=plugins/zellij-break' docs/vm.sh
+grep -Fq 'external-input-flake.sh'           docs/vm.sh
+grep -Fq 'external-input-flake.sh'           den/aspects/features/shell-git.nix
+grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh
 grep -Fq 'git+file://%s?dir=plugins/zellij-break' tests/lib/generated-input.sh
-grep -Fq 'git+file://$yeet_and_yoink_dir?dir=plugins/zellij-break' den/aspects/features/shell-git.nix
+grep -Fq 'YEET_AND_YOINK_INPUT_DIR'          den/aspects/features/shell-git.nix
 
 # ---------------------------------------------------------------------------
 # vm-aarch64 host aspect wires both new feature aspects

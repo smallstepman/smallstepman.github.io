@@ -20,18 +20,36 @@ fi
 for sentinel in \
   .generated-input-sentinel/.keep \
   .yeet-and-yoink-input-sentinel/.keep; do
-  git ls-files --error-unmatch "$sentinel" >/dev/null 2>&1 \
-    || fail "sentinel placeholder is not tracked: $sentinel"
+  if git ls-files --error-unmatch "$sentinel" >/dev/null 2>&1; then
+    if git diff --name-only --diff-filter=D -- "$sentinel" | grep -q . \
+      || git diff --cached --name-only --diff-filter=D -- "$sentinel" | grep -q .; then
+      :
+    else
+      fail "sentinel placeholder is still tracked: $sentinel"
+    fi
+  fi
 done
 
 if rg -n 'nix_generated_eval[[:space:]]+\-\-impure|nix[[:space:]].*\-\-impure' tests/den tests/gpg-preset-passphrase.sh >/dev/null; then
   fail 'tests still rely on --impure instead of explicit generated/yeet inputs'
 fi
 
-grep -Fq 'inputs.generated = {' flake.nix \
-  || fail 'flake.nix must declare an external generated input'
-grep -Fq 'flake = false;' flake.nix \
-  || fail 'flake.nix must declare generated as a raw non-flake input'
+if grep -Fq 'inputs.generated = {' flake.nix; then
+  fail 'flake.nix must not contain a sentinel generated input declaration'
+fi
+if grep -Fq 'inputs.yeetAndYoink = {' flake.nix; then
+  fail 'flake.nix must not contain a sentinel yeetAndYoink input declaration'
+fi
+
+test -f scripts/external-input-flake.sh \
+  || fail 'scripts/external-input-flake.sh must exist'
+test -f den/mk-config-outputs.nix \
+  || fail 'den/mk-config-outputs.nix must exist'
+
+grep -Fq 'lib.mkOutputs' flake.nix \
+  || fail 'flake.nix must export lib.mkOutputs for wrapper flakes'
+grep -Fq 'mk_wrapper_flake' tests/lib/generated-input.sh \
+  || fail 'tests/lib/generated-input.sh must use mk_wrapper_flake'
 
 if rg -n '../../../generated/' \
   den/aspects/features/secrets.nix \
@@ -40,29 +58,21 @@ if rg -n '../../../generated/' \
   fail 'den aspects still read repo-relative generated/ paths'
 fi
 
-grep -Fq -- '--override-input generated' docs/macbook.sh \
-  || fail 'docs/macbook.sh must pass the external generated input'
-grep -Fq -- '--override-input generated' docs/vm.sh \
-  || fail 'docs/vm.sh must pass the external generated input'
-grep -Fq -- '--override-input generated' den/aspects/features/shell-git.nix \
-  || fail 'shell-git aliases must pass the external generated input'
+grep -Fq 'external-input-flake.sh' docs/macbook.sh \
+  || fail 'docs/macbook.sh must use the wrapper flake flow'
+grep -Fq 'external-input-flake.sh' docs/vm.sh \
+  || fail 'docs/vm.sh must use the wrapper flake flow'
+grep -Fq 'external-input-flake.sh' den/aspects/features/shell-git.nix \
+  || fail 'shell-git aliases must use the wrapper flake approach'
 if rg -n -- '--impure' AGENTS.md >/dev/null; then
   fail 'AGENTS.md must not document --impure for flake-aware commands'
 fi
-grep -Fq 'nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" --override-input yeetAndYoink "git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break" .#nixosConfigurations.vm-aarch64.config.system.build.toplevel' AGENTS.md \
-  || fail 'AGENTS.md must show both external inputs for VM build commands'
-grep -Fq 'GENERATED_REF="path:$HOME/.local/share/nix-config-generated"' AGENTS.md \
-  || fail 'AGENTS.md must define a generated input reference for direct VM commands'
-grep -Fq 'YEET_AND_YOINK_REF="git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break"' AGENTS.md \
-  || fail 'AGENTS.md must define a yeet-and-yoink input reference for direct VM commands'
-grep -Fq 'nixos-rebuild dry-run --flake .#vm-aarch64 --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"' AGENTS.md \
-  || fail 'AGENTS.md must show both external inputs for VM dry-run commands'
-grep -Fq 'nixos-rebuild build --flake .#vm-aarch64 --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"' AGENTS.md \
-  || fail 'AGENTS.md must show both external inputs for VM rebuild commands'
-grep -Fq 'sudo ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --override-input generated "path:$HOME/.local/share/nix-config-generated"' AGENTS.md \
-  || fail 'AGENTS.md must show the pure generated input for Darwin rebuild commands'
-grep -Fq 'sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus --override-input generated "path:$HOME/.local/share/nix-config-generated" --override-input yeetAndYoink "git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break"' AGENTS.md \
-  || fail 'AGENTS.md must show both external inputs for VM specialisation commands'
+grep -Fq 'external-input-flake.sh' AGENTS.md \
+  || fail 'AGENTS.md must document the wrapper flake approach'
+grep -Fq 'scripts/external-input-flake.sh' AGENTS.md \
+  || fail 'AGENTS.md must show the wrapper script path'
+grep -Fq 'path:$WRAPPER' AGENTS.md \
+  || fail 'AGENTS.md must show wrapper-based flake references'
 grep -Fq 'default_nix_config_dir()' docs/macbook.sh \
   || fail 'docs/macbook.sh must default NIX_CONFIG_DIR from the script checkout when available'
 grep -Fq 'default_nix_config_dir()' docs/vm.sh \
@@ -93,4 +103,4 @@ actual=$(nix_generated_eval \
 printf '%s' "$actual" | grep -q 'secrets.yaml' \
   || fail "sops.defaultSopsFile did not resolve through the external generated input"
 
-printf 'PASS: pure external generated input wiring looks correct\n'
+printf 'PASS: no-sentinel wrapper flake design looks correct\n'

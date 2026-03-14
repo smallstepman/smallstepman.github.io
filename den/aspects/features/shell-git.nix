@@ -38,7 +38,6 @@
             if [ -z "$yeet_and_yoink_dir" ]; then
               yeet_and_yoink_dir="/Users/m/Projects/yeet-and-yoink"
             fi
-            yeet_and_yoink_flake_ref="git+file://$yeet_and_yoink_dir?dir=plugins/zellij-break"
           '';
         in {
           homeManager = { pkgs, lib, ... }:
@@ -80,12 +79,12 @@
                 open    = "xdg-open";
                 noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
                 nix-config = "nvim /nix-config";
-                niks = "${generatedDirSetup}; ${yeetAndYoinkDirSetup}; sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake 'path:/nixos-config#vm-aarch64' --override-input generated \"path:$generated_dir\" --override-input yeetAndYoink \"$yeet_and_yoink_flake_ref\"";
-                nikt = "${generatedDirSetup}; ${yeetAndYoinkDirSetup}; sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake 'path:/nixos-config#vm-aarch64' --override-input generated \"path:$generated_dir\" --override-input yeetAndYoink \"$yeet_and_yoink_flake_ref\"";
+                niks = "${generatedDirSetup}; ${yeetAndYoinkDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" YEET_AND_YOINK_INPUT_DIR=\"$yeet_and_yoink_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
+                nikt = "${generatedDirSetup}; ${yeetAndYoinkDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" YEET_AND_YOINK_INPUT_DIR=\"$yeet_and_yoink_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
               }) // (lib.optionalAttrs isDarwin {
                 nix-config = "nvim ~/.config/nix-config";
-                niks = "cd ~/.config/nix && ${generatedDirSetup} && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --override-input generated \"path:$generated_dir\" --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake '.#macbook-pro-m1' --override-input generated \"path:$generated_dir\"";
-                nikt = "cd ~/.config/nix && ${generatedDirSetup} && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --override-input generated \"path:$generated_dir\" && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake '.#macbook-pro-m1' --override-input generated \"path:$generated_dir\"";
+                niks = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
+                nikt = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
                 pinentry = "pinentry-mac";
               });
 

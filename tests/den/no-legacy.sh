@@ -51,14 +51,8 @@ tracked_generated=$(git ls-files 'generated/*')
 [ -z "$tracked_generated" ] \
   || fail 'generated/ artifacts are still tracked in git'
 
-grep -Fq 'inputs.generated = {' flake.nix \
-  || fail 'flake.nix must declare the external generated input'
-grep -Fq 'url = "path:./.generated-input-sentinel";' flake.nix \
-  || fail 'flake.nix must keep a sentinel generated input path'
-grep -Fq 'inputs.yeetAndYoink = {' flake.nix \
-  || fail 'flake.nix must declare the external yeetAndYoink input'
-grep -Fq 'specialArgs = { inherit generated inputs overlays yeetAndYoink; };' flake.nix \
-  || fail 'flake.nix must pass generated and yeetAndYoink into den specialArgs'
+grep -Fq 'lib.mkOutputs' flake.nix \
+  || fail 'flake.nix must export lib.mkOutputs'
 
 grep -Fq 'generated.requireFile "secrets.yaml"' den/aspects/features/secrets.nix \
   || fail 'den/aspects/features/secrets.nix must source secrets.yaml from generated input'
@@ -73,8 +67,8 @@ grep -Fxq 'generated/' .gitignore \
 
 grep -Fq 'inputs.den.flakeModule' den/default.nix \
   || fail 'den/default.nix no longer imports inputs.den.flakeModule'
-grep -Fq 'inherit (den.flake) nixosConfigurations darwinConfigurations;' flake.nix \
-  || fail 'flake.nix no longer exports den.flake host outputs'
+grep -Fq 'inherit (den.flake) nixosConfigurations darwinConfigurations;' den/mk-config-outputs.nix \
+  || fail 'den/mk-config-outputs.nix must build system outputs'
 grep -Fq 'nixpkgs.overlays = overlays;' den/default.nix \
   || fail 'den/default.nix must own global nixpkgs overlays'
 grep -Fq 'nixpkgs.config.allowUnfree = true;' den/default.nix \

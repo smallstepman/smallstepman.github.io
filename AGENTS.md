@@ -19,19 +19,31 @@ This is a **NixOS/nix-darwin system configuration repository** that manages comp
 
 The repository is now built around **den**.
 
+- `flake.nix` exports `lib.mkOutputs`, a wrapper-friendly entrypoint that
+  accepts external `generated` / `yeetAndYoink` inputs without committing fake
+  sentinel paths.
+- `scripts/external-input-flake.sh` materialises a temporary wrapper flake in
+  `$TMPDIR` and points it at this checkout plus the live external inputs.
+- `den/mk-config-outputs.nix` contains the real output builder and returns
+  `inherit (den.flake) nixosConfigurations darwinConfigurations;`.
 - `den/default.nix` imports `inputs.den.flakeModule` and wires shared host/user
   context.
 - `den/hosts.nix` declares the concrete hosts (`vm-aarch64`, `macbook-pro-m1`,
   `wsl`) and their metadata.
-- `den/aspects/hosts/*.nix` compose host-specific feature aspects.
-- `den/aspects/users/m.nix` composes user-level feature aspects for the primary
-  user.
 
 ```
 flake.nix
   │
-  ├── imports ./den/default.nix
-  ├── imports ./den/hosts.nix
+  └── exports lib.mkOutputs
+
+scripts/external-input-flake.sh
+  │
+  └── creates a temp wrapper flake with generated / yeetAndYoink inputs
+
+den/mk-config-outputs.nix
+  ├── imports ./default.nix
+  ├── imports ./hosts.nix
+  ├── imports ./aspects/
   └── inherit (den.flake) nixosConfigurations darwinConfigurations
 
 den/hosts.nix
@@ -133,7 +145,7 @@ macOS (host)                              VM (guest)
 | Directory | Purpose |
 |-----------|---------|
 | `/den/` | den framework wiring: hosts, shared context, and reusable aspects |
-| `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS: `secrets.yaml`, SSH pubkeys, and the VM age pubkey; passed to the flake via `--override-input generated ...` |
+| `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS: `secrets.yaml`, SSH pubkeys, and the VM age pubkey; wired into temporary wrapper flakes via `scripts/external-input-flake.sh` |
 | `/modules/` | Reusable NixOS modules |
 | `/modules/specialization/` | System specializations (alternative desktop environments, e.g., GNOME+ibus) |
 | `/dotfiles/common/` | Shared user-owned assets consumed by den aspects (shell config, editors, OpenCode, repo-manager config) |
@@ -167,10 +179,11 @@ scripts in `docs/` plus direct Nix commands:
 | `bash docs/vm.sh switch` | Apply the current VM configuration over SSH/shared folders |
 | `bash docs/vm.sh refresh-secrets` | Refresh the VM age public key, generated SSH pubkeys, and the external `secrets.yaml` dataset |
 | `bash docs/vm.sh ssh` | SSH into the VM (or run a command) |
-| `nix run --override-input generated "path:$HOME/.local/share/nix-config-generated" .#collect-secrets` | Regenerate the external `secrets.yaml` dataset locally via sopsidy |
-| `nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" .#darwinConfigurations.macbook-pro-m1.system` | Build the Darwin system closure |
-| `sudo ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --override-input generated "path:$HOME/.local/share/nix-config-generated"` | Apply the built Darwin system |
-| `nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" --override-input yeetAndYoink "git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break" .#nixosConfigurations.vm-aarch64.config.system.build.toplevel` | Build the VM system closure |
+| `bash scripts/external-input-flake.sh` | Create a temporary wrapper flake for this checkout and print its path |
+| `WRAPPER=$(bash scripts/external-input-flake.sh) && nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file` | Regenerate the external `secrets.yaml` dataset locally via sopsidy |
+| `WRAPPER=$(bash scripts/external-input-flake.sh) && nix build "path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system" --no-write-lock-file` | Build the Darwin system closure |
+| `WRAPPER=$(bash scripts/external-input-flake.sh) && sudo ./result/sw/bin/darwin-rebuild switch --flake "path:$WRAPPER#macbook-pro-m1" --no-write-lock-file` | Apply the built Darwin system |
+| `WRAPPER=$(bash scripts/external-input-flake.sh) && nix build "path:$WRAPPER#nixosConfigurations.vm-aarch64.config.system.build.toplevel" --no-write-lock-file` | Build the VM system closure |
 
 **Environment Variables for VM Operations:**
 - `NIXADDR` - Preferred VM IP address (default: `192.168.130.3`; `docs/vm.sh` also falls back through `vm_detect_ip`)
@@ -187,10 +200,12 @@ scripts in `docs/` plus direct Nix commands:
 
 | File | Purpose |
 |------|---------|
-| `flake.nix` | Main entry point - defines all system configurations and inputs |
+| `flake.nix` | Base flake entry point - defines shared inputs and exports `lib.mkOutputs` |
 | `flake.lock` | Locked versions of all flake inputs (dependencies) |
+| `den/mk-config-outputs.nix` | Reusable output builder used by temporary wrapper flakes |
 | `docs/macbook.sh` | Bootstrap/apply script for macOS |
 | `docs/vm.sh` | VM creation, switching, secret refresh, and SSH helper |
+| `scripts/external-input-flake.sh` | Sourceable/executable helper that creates a wrapper flake with live external inputs |
 | `den/default.nix` | den bootstrap: flake module import, host/user context wiring, overlays, host-level modules |
 | `den/hosts.nix` | Host declarations for VM, macOS, and WSL |
 | `den/aspects/hosts/vm-aarch64.nix` | VM host composition and VM-specific remnants |
@@ -317,29 +332,28 @@ object rather than legacy `config._module.args` values like
 ### Useful Commands
 
 ```bash
-GENERATED_REF="path:$HOME/.local/share/nix-config-generated"
-YEET_AND_YOINK_REF="git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break"
+WRAPPER=$(bash scripts/external-input-flake.sh)
 
 # Evaluate a specific configuration without building
-nix eval --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF" .#nixosConfigurations.vm-aarch64.config.networking.hostName
+nix eval "path:$WRAPPER#nixosConfigurations.vm-aarch64.config.networking.hostName"
 
 # Open a REPL with the flake loaded
-nix repl --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF" .#nixosConfigurations.vm-aarch64
+nix repl "path:$WRAPPER#nixosConfigurations.vm-aarch64"
 
 # Check flake for errors
-nix flake check --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
+nix flake check "path:$WRAPPER"
 
 # Show what would be built/changed
-nixos-rebuild dry-run --flake .#vm-aarch64 --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
+nixos-rebuild dry-run --flake "path:$WRAPPER#vm-aarch64" --no-write-lock-file
 
 # Build without switching (outputs to ./result)
-nixos-rebuild build --flake .#vm-aarch64 --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
+nixos-rebuild build --flake "path:$WRAPPER#vm-aarch64" --no-write-lock-file
 
 # Show derivation details
-nix derivation show --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF" .#nixosConfigurations.vm-aarch64.config.system.build.toplevel
+nix derivation show "path:$WRAPPER#nixosConfigurations.vm-aarch64.config.system.build.toplevel"
 
 # List available outputs
-nix flake show --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
+nix flake show "path:$WRAPPER"
 ```
 
 ### Common Errors and Solutions
@@ -372,8 +386,9 @@ vmrun getGuestIPAddress "/path/to/NixOS 25.11 aarch64.vmx" -wait
 launchctl list | grep nix
 
 # Build and apply directly
-nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" .#darwinConfigurations.macbook-pro-m1.system
-sudo ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --override-input generated "path:$HOME/.local/share/nix-config-generated"
+WRAPPER=$(bash scripts/external-input-flake.sh)
+nix build "path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system" --no-write-lock-file
+sudo ./result/sw/bin/darwin-rebuild switch --flake "path:$WRAPPER#macbook-pro-m1" --no-write-lock-file
 ```
 
 **Helper script PATH issues:**
@@ -414,7 +429,7 @@ sudo ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --override-i
 1. Add a host declaration in `den/hosts.nix`
 2. Create or extend `den/aspects/hosts/<name>.nix`
 3. Reuse or add feature aspects under `den/aspects/features/`
-4. If needed, keep host-only hardware/disk details in the host aspect itself and use flake-backed tooling (for example `disko --flake .#<host>`) instead of reviving a separate `machines/` tree
+4. If needed, keep host-only hardware/disk details in the host aspect itself and use wrapper-backed tooling (for example `WRAPPER=$(bash scripts/external-input-flake.sh) && disko --flake "path:$WRAPPER#<host>"`) instead of reviving a separate `machines/` tree
 5. Follow the existing host declaration pattern:
    ```nix
    den.hosts.x86_64-linux.example.profile = "vm";
@@ -438,7 +453,8 @@ Specializations provide alternative boot configurations (e.g., GNOME instead of 
 ```bash
 # At boot, greetd shows available sessions
 # Or switch to a specialization:
-sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus --override-input generated "path:$HOME/.local/share/nix-config-generated" --override-input yeetAndYoink "git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break"
+WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=/nixos-generated bash /nixos-config/scripts/external-input-flake.sh)
+sudo nixos-rebuild switch --flake "path:$WRAPPER#vm-aarch64" --specialisation gnome-ibus --no-write-lock-file
 ```
 
 ### Secrets Management
@@ -446,7 +462,7 @@ sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus --ove
 - **rbw (Bitwarden):** Used for runtime secrets on Linux (API keys, tokens, passwords)
 - **sops-nix + sopsidy:** Used for declarative secrets in NixOS configurations
 - API keys are injected per-process via shell functions and wrapper scripts, NOT as global env vars
-- `nix run --override-input generated "path:$GENERATED_DIR" .#collect-secrets` collects sopsidy secrets into the external dataset; `bash docs/vm.sh refresh-secrets` refreshes VM age/pubkey material
+- `WRAPPER=$(bash scripts/external-input-flake.sh) && nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file` collects sopsidy secrets into the external dataset; `bash docs/vm.sh refresh-secrets` refreshes VM age/pubkey material
 
 ## Desktop Environment (Linux VM)
 

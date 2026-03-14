@@ -7,7 +7,7 @@ cd "$repo_root"
 grep -Fq 'inputs.den.url = "github:vic/den";' flake.nix
 grep -Fq 'inputs.den.flakeModule' den/default.nix
 test ! -e den/legacy.nix
-grep -Fq 'inherit (den.flake) nixosConfigurations darwinConfigurations;' flake.nix
+grep -Fq 'inherit (den.flake) nixosConfigurations darwinConfigurations;' den/mk-config-outputs.nix
 
 # flake-aspects must be a direct input in flake.nix (den's lib.nix requires
 # inputs.flake-aspects.lib, so every consumer flake must declare it explicitly).

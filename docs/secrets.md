@@ -14,7 +14,8 @@ rather than legacy machine/user entrypoints.
 macOS host
   Bitwarden vault
     └── rbw
-          └── nix run --override-input generated path:$HOME/.local/share/nix-config-generated .#collect-secrets
+          └── WRAPPER=$(bash scripts/external-input-flake.sh)
+                nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
                 └── ~/.local/share/nix-config-generated/secrets.yaml (age-encrypted, outside the repo)
                       └── bash docs/vm.sh switch
 
@@ -60,7 +61,9 @@ through sops; otherwise it is fetched live from Bitwarden.
 
 | File | Role |
 |------|------|
-| `flake.nix` | Declares the raw `generated` input plus the collector package |
+| `flake.nix` | Declares shared inputs and exports `lib.mkOutputs` for wrapper flakes |
+| `den/mk-config-outputs.nix` | Builds system outputs plus the `collect-secrets` package once external inputs are provided |
+| `scripts/external-input-flake.sh` | Creates a temporary wrapper flake with the live generated / yeet-and-yoink inputs |
 | `den/aspects/features/secrets.nix` | Owns secret declarations, Tailscale auth, hashed password wiring, `rbw-config`, and `generated.requireFile "secrets.yaml"` |
 | `den/aspects/features/home-base.nix` | Owns Linux `programs.rbw` settings |
 | `den/aspects/features/shell-git.nix` | Owns runtime rbw-backed shell helpers (`gh`, `claude`, `codex`, `with-openai`, `with-amp`) |
@@ -68,7 +71,7 @@ through sops; otherwise it is fetched live from Bitwarden.
 | `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS (`secrets.yaml`, SSH pubkeys, age pubkey) |
 | `docs/vm.sh` | VM provisioning/switch helper, including `refresh-secrets` |
 | `/nixos-generated` | VMware shared-folder mount exposing the same dataset inside the VM |
-| `nix run --override-input generated "path:$HOME/.local/share/nix-config-generated" .#collect-secrets` | Regenerates the external `secrets.yaml` dataset locally |
+| `WRAPPER=$(bash scripts/external-input-flake.sh) && nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file` | Regenerates the external `secrets.yaml` dataset locally |
 
 ## Bitwarden entries
 
@@ -96,8 +99,8 @@ bash docs/vm.sh refresh-secrets
 # 2. Populate Bitwarden with the entries listed above
 
 # 3. Collect and encrypt boot-time secrets into the external dataset
-GENERATED_DIR="${GENERATED_DIR:-$HOME/.local/share/nix-config-generated}"
-nix run --override-input generated "path:$GENERATED_DIR" .#collect-secrets
+WRAPPER=$(bash scripts/external-input-flake.sh)
+nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
 
 # 4. Deploy to the VM
 bash docs/vm.sh switch
@@ -114,8 +117,8 @@ rbw login
 rbw remove tailscale-auth-key
 echo "new-value" | rbw add tailscale-auth-key
 
-GENERATED_DIR="${GENERATED_DIR:-$HOME/.local/share/nix-config-generated}"
-nix run --override-input generated "path:$GENERATED_DIR" .#collect-secrets
+WRAPPER=$(bash scripts/external-input-flake.sh)
+nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
 bash docs/vm.sh switch
 ```
 
@@ -142,8 +145,8 @@ sops.secrets."myapp/token" = {
 Then run:
 
 ```bash
-GENERATED_DIR="${GENERATED_DIR:-$HOME/.local/share/nix-config-generated}"
-nix run --override-input generated "path:$GENERATED_DIR" .#collect-secrets
+WRAPPER=$(bash scripts/external-input-flake.sh)
+nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
 bash docs/vm.sh switch
 ```
 

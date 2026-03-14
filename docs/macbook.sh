@@ -9,9 +9,11 @@ default_nix_config_dir() {
     script_dir=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd || pwd)
     candidate=$(cd "$script_dir/.." >/dev/null 2>&1 && pwd || true)
     if [ -n "$candidate" ] && [ -f "$candidate/flake.nix" ]; then
-        printf '%s\n' "$candidate"
+        printf '%s
+' "$candidate"
     else
-        printf '%s\n' "$HOME/.config/nix"
+        printf '%s
+' "$HOME/.config/nix"
     fi
 }
 
@@ -77,15 +79,13 @@ prepare_generated_dataset
 echo "==> Building and applying nix-darwin configuration..."
 cd "$NIX_CONFIG_DIR"
 
-NIXPKGS_ALLOW_UNFREE=1 nix build \
-    --extra-experimental-features "nix-command flakes" \
-    --override-input generated "path:$GENERATED_DIR" \
-    ".#darwinConfigurations.macbook-pro-m1.system" \
-    --max-jobs 8 --cores 0
+# shellcheck source=../scripts/external-input-flake.sh
+. "$NIX_CONFIG_DIR/scripts/external-input-flake.sh"
+WRAPPER=$(GENERATED_INPUT_DIR="$GENERATED_DIR" NIX_CONFIG_DIR="$NIX_CONFIG_DIR" mk_wrapper_flake)
 
-sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch \
-    --flake ".#macbook-pro-m1" \
-    --override-input generated "path:$GENERATED_DIR"
+NIXPKGS_ALLOW_UNFREE=1 nix build     --extra-experimental-features "nix-command flakes"     "path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system"     --no-write-lock-file     --max-jobs 8 --cores 0
+
+sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch     --flake "path:$WRAPPER#macbook-pro-m1"     --no-write-lock-file
 
 echo ""
 echo "Done! Open a new terminal to pick up all changes."
