@@ -4,7 +4,7 @@
 
 **Goal:** Simplify the den rewrite so it follows den's own structure more closely, removes migration-era scaffolding, and handles WSL/VM behavior through den-native composition instead of repo-local special casing.
 
-**Architecture:** Keep `den/default.nix` limited to true global policy, schema, and integration hooks; let host aspects select features and own one-off behavior; keep WSL expressed the way den already supports it via `host.wsl.enable`; and push WSL/VM-specific deltas out of broad reusable features and into host-owned config. The refactor should preserve current behavior for `vm-aarch64`, `macbook-pro-m1`, and `wsl` while making the graph easier to read and less stateful.
+**Architecture:** Keep `den/default.nix` limited to true global policy, schema, and integration hooks; let host aspects select features and own one-off behavior; use den's built-in WSL battery for WSL activation; and push WSL/VM-specific deltas out of broad reusable features and into host-owned config. The refactor should preserve current behavior for `vm-aarch64`, `macbook-pro-m1`, and `wsl` while making the graph easier to read and less stateful.
 
 **Tech Stack:** Nix flakes, den, nixos-wsl, home-manager, nix-darwin, sops-nix, sopsidy, shell-based regression tests
 
@@ -13,58 +13,59 @@
 ## Execution Notes
 
 - Work inside the current repo checkout unless a separate worktree is created before implementation.
-- Do not add a new test framework; extend the existing shell-based regression coverage in `tests.bats` and `tests/gpg-preset-passphrase.sh`.
+- Do not add a new test framework; extend the existing shell tests under `tests/den/` and `tests/gpg-preset-passphrase.sh`.
 - Keep behavior stable while removing structural overengineering.
 - Prefer deleting dead indirection over replacing it with new schema flags.
 
 ### Task 1: Make den defaults and host declarations den-native
 
 **Files:**
-- Modify: `tests.bats`
+- Modify: `tests/den/host-schema.sh`
 - Modify: `den/default.nix`
 - Modify: `den/hosts.nix`
-- Modify: `docs/plans/2026-03-14-den-native-redesign.md`
 
 **Step 1: Write the failing test**
 
-Update the `host-schema` section in `tests.bats` so it enforces the corrected scope:
+Update `tests/den/host-schema.sh` so it enforces the new architecture:
 
 ```bash
-if grep -Fq 'den._.wsl' den/default.nix; then
-  echo "ERROR: den/default.nix must not include den._.wsl" >&2
-  exit 1
-fi
-grep -Fq 'den.ctx.hm-host.includes' den/default.nix
+grep -Fq 'den._.wsl' den/default.nix
 
 if grep -Fq 'options.profile' den/default.nix; then
   echo "ERROR: profile should be removed from den/default.nix" >&2
   exit 1
 fi
-grep -Fq 'options.vmware.enable' den/default.nix
-grep -Fq 'options.graphical.enable' den/default.nix
+if grep -Fq 'options.vmware.enable' den/default.nix; then
+  echo "ERROR: vmware.enable should be removed from den/default.nix" >&2
+  exit 1
+fi
+if grep -Fq 'options.graphical.enable' den/default.nix; then
+  echo "ERROR: graphical.enable should be removed from den/default.nix" >&2
+  exit 1
+fi
 
 grep -Fq 'den.hosts.x86_64-linux.wsl.wsl.enable = true' den/hosts.nix
-grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true' den/hosts.nix
-grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true' den/hosts.nix
-if rg -n 'profile = ' den/hosts.nix >/dev/null; then
-  echo "ERROR: den/hosts.nix should drop only profile host assignments in Task 1" >&2
+if rg -n 'profile = |vmware\.enable = |graphical\.enable = ' den/hosts.nix >/dev/null; then
+  echo "ERROR: den/hosts.nix still carries migration-era host flags" >&2
   exit 1
 fi
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bats --filter-tags host-schema tests.bats`
+Run: `bash tests/den/host-schema.sh`
 
-Expected: FAIL because Task 1 must keep `vmware.enable` and `graphical.enable` in both schema and host assignments until Tasks 3-6 migrate their remaining consumers.
+Expected: FAIL because `den/default.nix` still defines `profile`, `vmware.enable`, and `graphical.enable`, and `den/hosts.nix` still sets those fields.
 
 **Step 3: Write minimal implementation**
 
-Refactor `den/default.nix` and `den/hosts.nix` only as far as this task needs:
+Refactor `den/default.nix` and `den/hosts.nix`:
 
 ```nix
 # den/default.nix
 den.default = {
+  includes = [ den._.wsl ];
+
   nixos = {
     nixpkgs.overlays = overlays;
     nixpkgs.config.allowUnfree = true;
@@ -75,19 +76,12 @@ den.default = {
     nixpkgs.config.allowUnfree = true;
   };
 };
-
-den.schema.host = { lib, ... }: {
-  options.vmware.enable = lib.mkEnableOption "VMware-specific host behavior";
-  options.graphical.enable = lib.mkEnableOption "Graphical desktop behavior";
-};
 ```
 
 ```nix
 # den/hosts.nix
 {
   den.hosts.aarch64-linux.vm-aarch64.hostName = "vm-macbook";
-  den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true;
-  den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true;
   den.hosts.aarch64-linux.vm-aarch64.users.m = { };
 
   den.hosts.aarch64-darwin.macbook-pro-m1.users.m = { };
@@ -97,92 +91,112 @@ den.schema.host = { lib, ... }: {
 }
 ```
 
-Remove only the `profile` schema and host assignments in Task 1. Keep `den.ctx.hm-host.includes` intact. Do not remove `vmware.enable` or `graphical.enable` until Tasks 3-6 have migrated `vmware.nix`, `linux-desktop.nix`, `gpg.nix`, and `shell-git.nix` away from those fields.
-
-**Step 4: Run tests to verify it passes**
-
-Run: `bats --filter-tags host-schema tests.bats && bats --filter-tags vm-desktop tests.bats`
-
-Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add tests.bats den/default.nix den/hosts.nix docs/plans/2026-03-14-den-native-redesign.md
-git -c commit.gpgsign=false commit -m "fix: restore den host flags for pending migrations" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
-```
-
-### Task 2: Keep WSL activation on den's existing host wiring and the WSL host aspect
-
-**Files:**
-- Modify: `tests.bats`
-- Modify: `docs/plans/2026-03-14-den-native-redesign.md`
-
-**Step 1: Write the failing test**
-
-Update `tests.bats` so it enforces the corrected ownership split:
-
-```bash
-grep -Fq 'wsl.enable = true;' den/aspects/hosts/wsl.nix
-grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
-grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
-grep -Fq 'nix.package = pkgs.nixVersions.latest;' den/aspects/hosts/wsl.nix
-grep -Fq 'keep-outputs = true' den/aspects/hosts/wsl.nix
-grep -Fq 'keep-derivations = true' den/aspects/hosts/wsl.nix
-grep -Fq 'nix.settings.experimental-features = [ "nix-command" "flakes" ];' den/aspects/hosts/wsl.nix
-grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
-```
-
-Keep source-level ownership checks for `wsl.enable`, `wsl.wslConf.automount.root`, `wsl.startMenuLaunchers`, `nix.package`, `nix.settings.experimental-features`, `nix.extraOptions`, and `system.stateVersion` in `den/aspects/hosts/wsl.nix`.
-
-Keep the eval/provenance checks that are actually exposed and meaningful:
-
-- `wsl.defaultUser` comes from `provides/wsl.nix`
-- `wsl.startMenuLaunchers` comes from `den/aspects/hosts/wsl.nix`
-- `nix.package` comes from `den/aspects/hosts/wsl.nix`
-- `nix.extraOptions` comes from `den/aspects/hosts/wsl.nix`
-- `system.stateVersion` comes from `den/aspects/hosts/wsl.nix`
-
-Do **not** require `definitionsWithLocations` for `wsl.enable` or `wsl.wslConf.automount.root`; in this eval shape those paths are misleading or unavailable, so ownership there must stay source-level.
-
-Keep the checks that `den/aspects/hosts/wsl.nix` does **not** own the upstream module import or `wsl.defaultUser`.
-
-**Step 2: Run test to verify it fails**
-
-Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 tests.bats'`
-
-Expected: FAIL because `tests.bats` still omits the available host-aspect provenance checks for forwarded WSL settings and the plan text still describes the older shell-test layout.
-
-**Step 3: Write minimal implementation**
-
-Keep upstream ownership of the NixOS-WSL module import and `wsl.defaultUser`, but keep the forwarded repo-specific WSL settings in the host aspect:
-
-Update `tests.bats` and this plan text only. Keep the existing production-code split intact: the host aspect must continue to contain the forwarded WSL settings shown above, while upstream still owns module wiring and `wsl.defaultUser`.
+Delete the custom `den.schema.host` entries for `profile`, `vmware.enable`, and `graphical.enable` from `den/default.nix`.
 
 **Step 4: Run test to verify it passes**
 
-Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 tests.bats'`
+Run: `bash tests/den/host-schema.sh`
 
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add tests.bats docs/plans/2026-03-14-den-native-redesign.md
-git -c commit.gpgsign=false commit -m "test: encode WSL ownership evidence" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git add tests/den/host-schema.sh den/default.nix den/hosts.nix
+git -c commit.gpgsign=false commit -m "refactor: simplify den defaults and hosts" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+```
+
+### Task 2: Move WSL activation to den's WSL battery and the WSL host aspect
+
+**Files:**
+- Modify: `tests/den/wsl.sh`
+- Modify: `tests/den/no-legacy.sh`
+- Modify: `den/aspects/hosts/wsl.nix`
+- Delete: `den/aspects/features/wsl.nix`
+
+**Step 1: Write the failing test**
+
+Update `tests/den/wsl.sh` so it stops expecting repo-local NixOS-WSL wiring and instead enforces den-native ownership:
+
+```bash
+grep -Fq 'den._.wsl' den/default.nix
+test -f den/aspects/hosts/wsl.nix
+if [ -e den/aspects/features/wsl.nix ]; then
+  echo "FAIL: den/aspects/features/wsl.nix should be removed" >&2
+  exit 1
+fi
+
+grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
+grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
+grep -Fq 'nix.package = pkgs.nixVersions.latest;' den/aspects/hosts/wsl.nix
+grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
+```
+
+Change the provenance checks so:
+
+- `wsl.enable` comes from `provides/wsl.nix`
+- `wsl.defaultUser` comes from `provides/wsl.nix`
+- `wsl.wslConf.automount.root` comes from `den/aspects/hosts/wsl.nix`
+
+Also update `tests/den/no-legacy.sh` to fail if `inputs.nixos-wsl.nixosModules.wsl` still appears under `den/aspects/features/`.
+
+**Step 2: Run test to verify it fails**
+
+Run: `bash tests/den/wsl.sh && bash tests/den/no-legacy.sh`
+
+Expected: FAIL because WSL activation still lives in `den/aspects/features/wsl.nix`.
+
+**Step 3: Write minimal implementation**
+
+Delete the repo-local WSL activation aspect and move only repo-specific WSL settings into the host aspect:
+
+```nix
+# den/aspects/hosts/wsl.nix
+{ den, ... }: {
+  den.aspects.wsl = {
+    nixos = { pkgs, ... }: {
+      wsl.wslConf.automount.root = "/mnt";
+      wsl.startMenuLaunchers = true;
+
+      nix.package = pkgs.nixVersions.latest;
+      nix.extraOptions = ''
+        keep-outputs = true
+        keep-derivations = true
+      '';
+      nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+      system.stateVersion = "23.05";
+    };
+  };
+}
+```
+
+Do not reintroduce `wsl.enable = true` or `imports = [ inputs.nixos-wsl.nixosModules.wsl ]` here; the den WSL battery should own that.
+
+**Step 4: Run test to verify it passes**
+
+Run: `bash tests/den/wsl.sh && bash tests/den/no-legacy.sh`
+
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add tests/den/wsl.sh tests/den/no-legacy.sh den/aspects/hosts/wsl.nix
+git rm den/aspects/features/wsl.nix
+git -c commit.gpgsign=false commit -m "refactor: route wsl through den battery" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ### Task 3: Move vm-aarch64-only VM behavior out of the generic VMware feature
 
 **Files:**
-- Modify: `tests.bats`
+- Modify: `tests/den/vm-desktop.sh`
 - Modify: `den/aspects/features/vmware.nix`
 - Modify: `den/aspects/hosts/vm-aarch64.nix`
-- Modify: `docs/plans/2026-03-14-den-native-redesign.md`
 
 **Step 1: Write the failing test**
 
-Update the `vm-desktop` section in `tests.bats` so it enforces the new ownership split:
+Update `tests/den/vm-desktop.sh` so it enforces the new ownership split:
 
 ```bash
 grep -Fq 'virtualisation.vmware.guest.enable' den/aspects/features/vmware.nix
@@ -205,7 +219,7 @@ Also make the test fail if `den/aspects/features/vmware.nix` still checks `host.
 
 **Step 2: Run test to verify it fails**
 
-Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 --filter-tags vm-desktop tests.bats'`
+Run: `bash tests/den/vm-desktop.sh`
 
 Expected: FAIL because `den/aspects/features/vmware.nix` still owns HGFS mounts, Niri config, Docker context, SSH, and other vm-aarch64-only details.
 
@@ -243,14 +257,14 @@ Keep `den.aspects.vmware` in the host aspect include chain, but let the host asp
 
 **Step 4: Run test to verify it passes**
 
-Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 --filter-tags vm-desktop tests.bats'`
+Run: `bash tests/den/vm-desktop.sh`
 
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-  git add tests.bats den/aspects/features/vmware.nix den/aspects/hosts/vm-aarch64.nix docs/plans/2026-03-14-den-native-redesign.md
+git add tests/den/vm-desktop.sh den/aspects/features/vmware.nix den/aspects/hosts/vm-aarch64.nix
 git -c commit.gpgsign=false commit -m "refactor: move vm host logic out of vmware feature" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
@@ -565,7 +579,7 @@ Run:
 ```bash
 bash tests/den/no-legacy.sh && \
 bash tests/den/flake-smoke.sh && \
-bats --filter-tags host-schema tests.bats && \
+bash tests/den/host-schema.sh && \
 bash tests/den/identity.sh && \
 bash tests/den/home-manager-core.sh && \
 bash tests/den/devtools.sh && \
