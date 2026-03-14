@@ -1,9 +1,3 @@
-# den/aspects/features/editors-devtools.nix
-#
-# Editors, developer tools, and terminal environment aspect for user m.
-# Covers: developer package set, Doom Emacs, tmux, zellij, VSCode, Go,
-#         LazyVim, Starship, gdbinit, tmux menus, and the
-#         installWritableTmuxMenus activation hook.
 { den, lib, inputs, ... }: {
 
   den.aspects.editors-devtools = {

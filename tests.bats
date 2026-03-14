@@ -1055,10 +1055,10 @@ PYEOF
   grep -Fq '.host:/Projects' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '.host:/nixos-config' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'inputs.yeet-and-yoink.homeManagerModules.default' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'pkgs.yeet-and-yoink' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'inputs.yeet-and-yoink.homeManagerModules.default' den/aspects/features/linux-desktop.nix
+  grep -Fq 'pkgs.yeet-and-yoink' den/aspects/features/linux-desktop.nix
   grep -Fq 'programs.ssh' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'programs.niri.settings' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'programs.niri.settings' den/aspects/features/linux-desktop.nix
   grep -Fq 'DOCKER_CONTEXT' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'ensureHostDockerContext' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'mac-host-docker' den/aspects/hosts/vm-aarch64.nix

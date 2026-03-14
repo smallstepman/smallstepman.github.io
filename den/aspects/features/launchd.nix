@@ -1,10 +1,3 @@
-# den/aspects/features/launchd.nix
-#
-# Darwin launchd slice for macbook-pro-m1.
-#
-# Migrated from the legacy Darwin entrypoint (Task 9 of den migration).
-# Covers the custom launchd user agents for host/guest services, local
-# automation, and the opencode darwin launchd module.
 { den, inputs, ... }: {
   den.aspects.launchd = {
     includes = [

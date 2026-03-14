@@ -1,12 +1,3 @@
-# den/aspects/features/darwin-desktop.nix
-#
-# Darwin desktop/window-management slice for macbook-pro-m1.
-#
-# Migrated from the legacy Darwin entrypoint during Task 11 of the den migration.
-# Covers:
-#   - macOS CustomUserPreferences
-#   - yabai enablement
-#   - skhd service + config
 { den, lib, ... }: {
   den.aspects.darwin-desktop = {
     includes = [

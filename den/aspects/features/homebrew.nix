@@ -1,8 +1,3 @@
-# den/aspects/features/homebrew.nix
-#
-# Homebrew slice for macbook-pro-m1.
-#
-# Migrated from the legacy Darwin entrypoint (Task 9 of den migration).
 { den, ... }: {
   den.aspects.homebrew = {
     includes = [

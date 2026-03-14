@@ -153,10 +153,6 @@
 
             opencode = import ../../../dotfiles/common/opencode/modules/common.nix;
           in {
-            imports = [
-              inputs.yeet-and-yoink.homeManagerModules.default
-            ];
-
             home.packages = [
               pkgs.docker-client
               gpgPresetPassphraseLogin
@@ -173,8 +169,6 @@
 
             services.gpg-agent.pinentry.package = pkgs.pinentry-tty;
             services.gpg-agent.extraConfig = "allow-preset-passphrase";
-
-            programs.yeet-and-yoink.enable = true;
 
             programs.zsh.initContent = lib.mkAfter ''
 
@@ -207,137 +201,6 @@
                 controlPath = "~/.ssh/control-%h-%p-%r";
                 serverAliveInterval = 30;
               };
-            };
-
-            programs.niri.settings = {
-              hotkey-overlay = {
-                skip-at-startup = true;
-              };
-              prefer-no-csd = true;
-              input = {
-                mod-key = "Alt";
-                keyboard.xkb.layout = "us";
-                keyboard.repeat-delay = 150;
-                keyboard.repeat-rate = 50;
-                touchpad = {
-                  tap = true;
-                  natural-scroll = true;
-                };
-              };
-
-              window-rules = [
-                {
-                  geometry-corner-radius = {
-                    top-left = 12.0;
-                    top-right = 12.0;
-                    bottom-right = 12.0;
-                    bottom-left = 12.0;
-                  };
-                }
-                {
-                  clip-to-geometry = true;
-                }
-              ];
-
-              outputs."Virtual-1".scale = 2.0;
-
-              layout = {
-                always-center-single-column = true;
-                gaps = 16;
-                center-focused-column = "never";
-                preset-column-widths = [
-                  { proportion = 1.0 / 3.0; }
-                  { proportion = 1.0 / 2.0; }
-                  { proportion = 2.0 / 3.0; }
-                ];
-                default-column-width.proportion = 0.5;
-                focus-ring = {
-                  width = 2;
-                  active.color = "#7fc8ff";
-                  inactive.color = "#505050";
-                };
-              };
-
-              spawn-at-startup = [
-                { command = [ "mako" ]; }
-              ];
-
-              workspaces = {
-                "stash" = { };
-              };
-
-              environment = {
-                NIXOS_OZONE_WL = "1";
-              };
-
-              binds =
-                let
-                  yny = "${pkgs.yeet-and-yoink}/bin/yeet-and-yoink";
-                in {
-                  "Mod+T".action.spawn = [
-                    yny "focus-or-cycle"
-                    "--app-id" "org.wezfurlong.wezterm"
-                    "--spawn" "wezterm"
-                  ];
-                  "Mod+Shift+T".action.spawn = "wezterm";
-
-                  "Mod+S".action.spawn = [
-                    yny "focus-or-cycle"
-                    "--app-id" "librewolf"
-                    "--spawn" "librewolf"
-                  ];
-                  "Mod+Shift+S".action.spawn = "librewolf";
-
-                  "Mod+P".action.spawn = [
-                    yny "focus-or-cycle"
-                    "--app-id" "spotify"
-                    "--spawn" "spotify"
-                    "--summon"
-                  ];
-
-                  "Mod+Space".action.spawn = "wlr-which-key";
-                  "Mod+Q".action.close-window = {};
-
-                  "Mod+R".action.switch-preset-column-width = {};
-                  "Mod+F".action.maximize-column = {};
-                  "Mod+Shift+F".action.fullscreen-window = {};
-                  "Mod+Minus".action.set-column-width = "-10%";
-                  "Mod+Equal".action.set-column-width = "+10%";
-                  "Mod+W".action.toggle-column-tabbed-display = {};
-                  "Mod+Slash".action.toggle-overview = {};
-
-                  "Mod+N".action.spawn = [ yny "focus" "west" ];
-                  "Mod+E".action.spawn = [ yny "focus" "south" ];
-                  "Mod+I".action.spawn = [ yny "focus" "north" ];
-                  "Mod+O".action.spawn = [ yny "focus" "east" ];
-
-                  "Mod+H".action.consume-or-expel-window-left = {};
-                  "Mod+L".action.spawn = [ yny "move" "west" ];
-                  "Mod+U".action.spawn = [ yny "move" "south" ];
-                  "Mod+Y".action.spawn = [ yny "move" "north" ];
-                  "Mod+Semicolon".action.spawn = [ yny "move" "east" ];
-                  "Mod+Return".action.consume-or-expel-window-right = {};
-
-                  "Mod+f1".action.focus-workspace = 1;
-                  "Mod+f2".action.focus-workspace = 2;
-                  "Mod+f3".action.focus-workspace = 3;
-                  "Mod+f4".action.focus-workspace = 4;
-                  "Mod+f5".action.focus-workspace = 5;
-                  "Mod+f6".action.focus-workspace = 6;
-                  "Mod+f7".action.focus-workspace = 7;
-                  "Mod+f8".action.focus-workspace = 8;
-                  "Mod+f9".action.focus-workspace = 9;
-
-                  "Shift+f1".action.move-column-to-workspace = 1;
-                  "Shift+f2".action.move-column-to-workspace = 2;
-                  "Shift+f3".action.move-column-to-workspace = 3;
-                  "Shift+f4".action.move-column-to-workspace = 4;
-                  "Shift+f5".action.move-column-to-workspace = 5;
-                  "Shift+f6".action.move-column-to-workspace = 6;
-                  "Shift+f7".action.move-column-to-workspace = 7;
-                  "Shift+f8".action.move-column-to-workspace = 8;
-                  "Shift+f9".action.move-column-to-workspace = 9;
-                };
             };
 
             home.activation.ensureHostDockerContext =

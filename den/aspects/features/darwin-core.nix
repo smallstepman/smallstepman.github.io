@@ -1,11 +1,3 @@
-# den/aspects/features/darwin-core.nix
-#
-# Darwin system-core slice for macbook-pro-m1.
-#
-# Migrated from machines/macbook-pro-m1.nix (Task 9 of den migration).
-# Covers: Determinate Nix integration, nix-daemon shell init, system package
-# baseline, SSH daemon, Touch ID sudo, and the remaining Darwin user record
-# fields that are not provided by den.provides.primary-user.
 { den, generated, ... }: {
   den.aspects.darwin-core = {
     includes = [
