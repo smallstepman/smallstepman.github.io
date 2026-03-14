@@ -58,6 +58,31 @@ grep -Fq 'inputs.den.flakeModule' den/default.nix \
   || fail 'den/default.nix no longer imports inputs.den.flakeModule'
 grep -Fq 'inherit (den.flake) nixosConfigurations darwinConfigurations;' flake.nix \
   || fail 'flake.nix no longer exports den.flake host outputs'
+grep -Fq 'nixpkgs.overlays = overlays;' den/default.nix \
+  || fail 'den/default.nix must own global nixpkgs overlays'
+grep -Fq 'nixpkgs.config.allowUnfree = true;' den/default.nix \
+  || fail 'den/default.nix must own global allowUnfree policy'
+if rg -n \
+  'inputs\.(sops-nix|sopsidy|nix-snapd|niri|disko|mangowc|noctalia|nixos-wsl)\.nixosModules' \
+  den/default.nix >/dev/null; then
+  fail 'den/default.nix still centralizes Linux-only flake-module imports'
+fi
+grep -Fq 'inputs.sops-nix.nixosModules.sops' den/aspects/features/secrets.nix \
+  || fail 'secrets aspect must own sops-nix module import'
+grep -Fq 'inputs.sopsidy.nixosModules.default' den/aspects/features/secrets.nix \
+  || fail 'secrets aspect must own sopsidy module import'
+grep -Fq 'inputs.nix-snapd.nixosModules.default' den/aspects/features/linux-core.nix \
+  || fail 'linux-core aspect must own nix-snapd module import'
+grep -Fq 'inputs.niri.nixosModules.niri' den/aspects/features/linux-desktop.nix \
+  || fail 'linux-desktop aspect must own niri module import'
+grep -Fq 'inputs.mangowc.nixosModules.mango' den/aspects/features/linux-desktop.nix \
+  || fail 'linux-desktop aspect must own mangowc module import'
+grep -Fq 'inputs.noctalia.nixosModules.default' den/aspects/features/linux-desktop.nix \
+  || fail 'linux-desktop aspect must own noctalia module import'
+grep -Fq 'inputs.nixos-wsl.nixosModules.wsl' den/aspects/features/wsl.nix \
+  || fail 'wsl aspect must own nixos-wsl module import'
+grep -Fq 'inputs.disko.nixosModules.disko' den/aspects/hosts/vm-aarch64.nix \
+  || fail 'vm-aarch64 host aspect must own disko module import'
 if grep -R -Fq --exclude 'no-legacy.sh' 'den/legacy.nix' \
   flake.nix \
   den \

@@ -11,7 +11,7 @@
 # the legacy top-level isWSL arg for pinentry selection. Even though this aspect
 # is only attached to vm-aarch64 in Task 7, the host-aware pattern keeps the
 # logic den-native and reusable later.
-{ den, lib, ... }: {
+{ den, lib, inputs, ... }: {
 
   den.aspects.secrets = {
     includes = [
@@ -20,6 +20,10 @@
           isWSL = host.wsl.enable or false;
         in {
           nixos = { config, pkgs, lib, ... }: {
+            imports = [
+              inputs.sops-nix.nixosModules.sops
+              inputs.sopsidy.nixosModules.default
+            ];
 
             # sops-nix: default secrets file
             # ---------------------------------------------------------------

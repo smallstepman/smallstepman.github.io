@@ -10,6 +10,13 @@ cd "$repo_root"
 test -f den/aspects/features/shell-git.nix
 test -f den/aspects/features/home-base.nix
 
+# den docs polish: HM host-level wiring should live on hm-host, not host.
+grep -Fq 'den.ctx.hm-host.includes' den/default.nix
+if grep -Fq 'den.ctx.host.includes' den/default.nix; then
+  echo "FAIL: den/default.nix still centralizes host wiring under den.ctx.host.includes" >&2
+  exit 1
+fi
+
 # shell-git must set essential HM programs
 grep -Fq 'programs.git = {' den/aspects/features/shell-git.nix
 grep -Fq 'programs.zsh = {' den/aspects/features/shell-git.nix

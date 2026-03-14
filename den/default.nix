@@ -1,25 +1,24 @@
 { inputs, lib, overlays, ... }: {
   imports = [ inputs.den.flakeModule ];
 
-  # -------------------------------------------------------------------------
-  # Host/system den wiring.
-  #
-  # lib/mksystem.nix used to inject overlays and the core home-manager wiring
-  # before evaluating either NixOS or nix-darwin modules. den-built hosts need
-  # the same host-level wiring so system modules can reference custom packages
-  # like uniclip and home-manager continues to reuse the host package set.
-  #
-  # The Linux-specific special-flake modules (sops-nix, nix-snapd, niri, etc.)
-  # also used to be injected directly by lib/mksystem.nix. Now that den
-  # assembles the nixosConfigurations, they must be wired here as host-level
-  # includes too.
-  # -------------------------------------------------------------------------
-  den.ctx.host.includes = [
+  den.default = {
+    nixos = {
+      nixpkgs.overlays = overlays;
+      nixpkgs.config.allowUnfree = true;
+    };
+
+    darwin = {
+      nixpkgs.overlays = overlays;
+      nixpkgs.config.allowUnfree = true;
+    };
+  };
+
+  # Home Manager host-level options belong on hm-host so the documented HM
+  # integration context owns the OS-side wiring.
+  den.ctx.hm-host.includes = [
     ({ host, ... }:
       let
         systemModule = { ... }: {
-          nixpkgs.overlays = overlays;
-          nixpkgs.config.allowUnfree = true;
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.backupFileExtension = "backup";
@@ -30,21 +29,6 @@
       }) // (lib.optionalAttrs (host.class == "darwin") {
         darwin = systemModule;
       }))
-    ({ host, ... }:
-      let isLinux = host.class == "nixos"; isWSL = host.wsl.enable or false;
-      in lib.optionalAttrs isLinux {
-        nixos.imports = [
-          inputs.sops-nix.nixosModules.sops
-          inputs.sopsidy.nixosModules.default
-          inputs.nix-snapd.nixosModules.default
-          inputs.niri.nixosModules.niri
-          inputs.disko.nixosModules.disko
-          inputs.mangowc.nixosModules.mango
-          inputs.noctalia.nixosModules.default
-        ] ++ lib.optionals isWSL [
-          inputs.nixos-wsl.nixosModules.wsl
-        ];
-      })
   ];
 
   den.schema.user = { ... }: {

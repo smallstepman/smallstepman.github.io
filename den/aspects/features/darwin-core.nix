@@ -16,9 +16,6 @@
           # This makes it work with the Determinate Nix installer.
           ids.gids.nixbld = 30000;
 
-          # We use proprietary software on this machine.
-          nixpkgs.config.allowUnfree = true;
-
           # We use the determinate-nix installer which manages Nix for us,
           # so we don't want nix-darwin to do it.
           nix.enable = false;

@@ -9,16 +9,19 @@
 # Explicitly OUT of scope (remain in legacy for Task 8+):
 #   Desktop/Wayland/Niri/Mango/Noctalia, greetd, xserver, keyd, hardware.bluetooth,
 #   power-profiles-daemon, upower, i18n.inputMethod, wezterm, gtkmm3.
-{ den, lib, ... }: {
+{ den, lib, inputs, ... }: {
 
   den.aspects.linux-core = {
-    includes = [
-      ({ host, ... }: {
-        nixos = { config, pkgs, lib, ... }: {
+      includes = [
+        ({ host, ... }: {
+          nixos = { config, pkgs, lib, ... }: {
+            imports = [
+              inputs.nix-snapd.nixosModules.default
+            ];
 
-          # ---------------------------------------------------------------
-          # Boot / kernel
-          # ---------------------------------------------------------------
+            # ---------------------------------------------------------------
+            # Boot / kernel
+            # ---------------------------------------------------------------
 
           # Be careful updating this.
           boot.kernelPackages = pkgs.linuxPackages_latest;

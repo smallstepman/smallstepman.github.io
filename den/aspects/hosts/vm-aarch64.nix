@@ -11,7 +11,7 @@
 #   - 127.0.0.1 hosts entry for vm-macbook
 #   - openwebui-local-proxy systemd service
 #   - users.users.m host-specific settings (extraGroups, authorizedKeys)
-{ den, ... }: {
+{ den, inputs, ... }: {
   den.aspects.vm-aarch64 = {
     includes = [
       # Core Linux system behavior (non-desktop, non-WSL-specific).
@@ -32,6 +32,10 @@
       # Host-specific NixOS configuration that does not belong in a shared aspect.
         ({ host, ... }: {
           nixos = { config, pkgs, lib, ... }: {
+            imports = [
+              inputs.disko.nixosModules.disko
+            ];
+
             # Copied from the old nixos-generate-config output so the VM keeps the
             # same initrd driver set after the legacy hardware file removal.
             boot.initrd.availableKernelModules = [ "uhci_hcd" "ahci" "xhci_pci" "nvme" "usbhid" "sr_mod" ];

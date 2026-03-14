@@ -25,11 +25,17 @@
 
   den.aspects.linux-desktop = {
     includes = [
-      ({ host, ... }:
+        ({ host, ... }:
         let
           isGraphical = host.graphical.enable or false;
         in {
-          nixos = { config, pkgs, lib, ... }: lib.mkIf isGraphical {
+          nixos = { config, pkgs, lib, ... }: {
+            imports = lib.optionals isGraphical [
+              inputs.niri.nixosModules.niri
+              inputs.mangowc.nixosModules.mango
+              inputs.noctalia.nixosModules.default
+            ];
+          } // lib.optionalAttrs isGraphical {
 
             # ---------------------------------------------------------------
             # Hardware / power
