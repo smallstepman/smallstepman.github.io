@@ -115,54 +115,53 @@ git -c commit.gpgsign=false commit -m "fix: restore den host flags for pending m
 ### Task 2: Keep WSL activation on den's existing host wiring and the WSL host aspect
 
 **Files:**
-- Modify: `tests/den/wsl.sh`
-- Modify: `tests/den/no-legacy.sh`
-- Modify: `den/aspects/hosts/wsl.nix`
-- Delete: `den/aspects/features/wsl.nix`
+- Modify: `tests.bats`
+- Modify: `docs/plans/2026-03-14-den-native-redesign.md`
 
 **Step 1: Write the failing test**
 
-Update `tests/den/wsl.sh` so it stops expecting repo-local NixOS-WSL wiring and instead enforces den-native ownership:
+Update `tests.bats` so it enforces the corrected ownership split:
 
 ```bash
-if grep -Fq 'den._.wsl' den/default.nix; then
-  echo "FAIL: den/default.nix should not include den._.wsl" >&2
-  exit 1
-fi
-test -f den/aspects/hosts/wsl.nix
-if [ -e den/aspects/features/wsl.nix ]; then
-  echo "FAIL: den/aspects/features/wsl.nix should be removed" >&2
-  exit 1
-fi
-
+grep -Fq 'wsl.enable = true;' den/aspects/hosts/wsl.nix
 grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
 grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
 grep -Fq 'nix.package = pkgs.nixVersions.latest;' den/aspects/hosts/wsl.nix
+grep -Fq 'keep-outputs = true' den/aspects/hosts/wsl.nix
+grep -Fq 'keep-derivations = true' den/aspects/hosts/wsl.nix
+grep -Fq 'nix.settings.experimental-features = [ "nix-command" "flakes" ];' den/aspects/hosts/wsl.nix
 grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
 ```
 
 Change the provenance checks so:
 
-- `wsl.enable` comes from `provides/wsl.nix`
+- `wsl.enable` comes from `den/aspects/hosts/wsl.nix`
 - `wsl.defaultUser` comes from `provides/wsl.nix`
 - `wsl.wslConf.automount.root` comes from `den/aspects/hosts/wsl.nix`
+- `wsl.startMenuLaunchers` comes from `den/aspects/hosts/wsl.nix`
+- `nix.package` comes from `den/aspects/hosts/wsl.nix`
+- `nix.settings.experimental-features` comes from `den/aspects/hosts/wsl.nix`
+- `nix.extraOptions` comes from `den/aspects/hosts/wsl.nix`
+- `system.stateVersion` comes from `den/aspects/hosts/wsl.nix`
 
-Also update `tests/den/no-legacy.sh` to fail if `inputs.nixos-wsl.nixosModules.wsl` still appears under `den/aspects/features/`.
+Keep the checks that `den/aspects/hosts/wsl.nix` does **not** own the upstream module import or `wsl.defaultUser`.
 
 **Step 2: Run test to verify it fails**
 
-Run: `bash tests/den/wsl.sh && bash tests/den/no-legacy.sh`
+Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 tests.bats'`
 
-Expected: FAIL because WSL activation still lives in `den/aspects/features/wsl.nix`.
+Expected: FAIL because `tests.bats` still attributes `wsl.enable` to `provides/wsl.nix` instead of the forwarded host aspect.
 
 **Step 3: Write minimal implementation**
 
-Delete the repo-local WSL activation aspect and move only repo-specific WSL settings into the host aspect:
+Keep upstream ownership of the NixOS-WSL module import and `wsl.defaultUser`, but keep the forwarded repo-specific WSL settings in the host aspect:
 
 ```nix
 # den/aspects/hosts/wsl.nix
 { den, ... }: {
   den.aspects.wsl = {
+    wsl.enable = true;
+
     nixos = { pkgs, ... }: {
       wsl.wslConf.automount.root = "/mnt";
       wsl.startMenuLaunchers = true;
@@ -180,11 +179,11 @@ Delete the repo-local WSL activation aspect and move only repo-specific WSL sett
 }
 ```
 
-Do not reintroduce `options.wsl.enable`, a custom `den.provides.wsl`, or `den._.wsl` here; keep relying on den's built-in host wiring via `den.hosts.x86_64-linux.wsl.wsl.enable = true`.
+Do not reintroduce `options.wsl.enable`, a custom `den.provides.wsl`, or a repo-local NixOS-WSL module import here. The host aspect should provide the forwarded `wsl` class attrset, while upstream still owns module wiring and `wsl.defaultUser`.
 
 **Step 4: Run test to verify it passes**
 
-Run: `bash tests/den/wsl.sh && bash tests/den/no-legacy.sh`
+Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 tests.bats'`
 
 Expected: PASS
 
