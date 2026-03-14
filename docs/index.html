@@ -143,7 +143,7 @@
         .section-dark a:hover { color: var(--accent); }
         .section-dark code:not([class]) { background: rgba(255,255,255,0.08); color: var(--bg); }
 
-        .hero { padding: 8rem 0 6rem; min-height: 90vh; display: flex; align-items: flex-end; }
+        .hero { padding: 0rem 0 6rem; min-height: 90vh; display: flex; align-items: flex-end; }
         @media (min-width: 768px) { .hero { padding: 10rem 0 8rem; } }
         .hero-title { font-size: clamp(3rem, 10vw, 8rem); line-height: 0.9; letter-spacing: -0.02em; margin-bottom: 2rem; }
         .hero-title em { font-style: italic; color: var(--accent); }
@@ -249,7 +249,7 @@
                 <div class="platform-card">
                     <span class="overline">Apple Silicon &amp; Intel</span>
                     <h3>macOS</h3>
-                    <p>Installs Xcode CLT, Homebrew, Determinate Nix, clones the repo, and configures your entire Mac before you finish your coffee. Touch&nbsp;ID sudo because typing passwords is for 2019.</p>
+                    <p>Installs Xcode CLT, Homebrew, Determinate Nix, clones the repo, and configures your entire Mac before you finish your coffee. Touch&nbsp;ID sudo.</p>
                     <div class="platform-cmd" onclick="copyCmd(this)" data-cmd="curl -sL https://smallstepman.github.io/macbook.sh | sh">
                         <span class="prompt">$ </span>curl -sL smallstepman.github.io/macbook.sh | sh
                     </div>
@@ -258,7 +258,7 @@
                 <div class="platform-card">
                     <span class="overline">VMware Fusion / aarch64</span>
                     <h3>NixOS VM</h3>
-                    <p>Spawns a NixOS VM inside VMware Fusion, provisions it over shared folders, and you now have a Linux box that shares your clipboard and argues about nothing. Why? Because containers weren't enough.</p>
+                    <p>Pulls NixOS ISO, installs VMWare Fusion, creates a NixOS VM inside VMware Fusion, provisions it over shared folders.</p>
                     <div class="platform-cmd" onclick="copyCmd(this)" data-cmd="curl -sL https://smallstepman.github.io/vm.sh | sh">
                         <span class="prompt">$ </span>curl -sL smallstepman.github.io/vm.sh | sh
                     </div>
@@ -267,11 +267,11 @@
                 <div class="platform-card">
                     <span class="overline">Windows Subsystem for Linux</span>
                     <h3>WSL</h3>
-                    <p>For when you're trapped on Windows and need to feel something. Enables WSL, installs a NixOS distribution, applies the flake config. All from an elevated PowerShell prompt.</p>
+                    <p>Enables WSL, installs a NixOS distribution, applies the flake config. All from an elevated PowerShell prompt.</p>
                     <div class="platform-cmd" onclick="copyCmd(this)" data-cmd="iex (iwr -useb https://smallstepman.github.io/wsl.ps1)">
                         <span class="prompt">PS&gt; </span>iex (iwr -useb smallstepman.github.io/wsl.ps1)
                     </div>
-                    <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--muted-fg);">Headless NixOS with flakes. No GUI &mdash; we're not animals.</p>
+                    <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--muted-fg);">Headless NixOS with flakes. No GUI.</p>
                 </div>
             </div>
         </div>
@@ -392,11 +392,11 @@
                     <div class="arch-diagram" style="background: rgba(255,255,255,0.04);">flake.nix
   &#9474;
   &#9500;&#9472;&#9472; <span class="keyword">imports</span> ./den/default.nix    <span class="comment"># den bootstrap, overlays, host modules</span>
-  &#9500;&#9472;&#9472; <span class="keyword">imports</span> ./den/hosts.nix       <span class="comment"># host declarations + metadata</span>
+  &#9500;&#9472;&#9472; <span class="keyword">imports</span> ./den/hosts.nix      <span class="comment"># host declarations + metadata</span>
   &#9492;&#9472;&#9472; <span class="keyword">inherit</span> (den.flake)          <span class="comment"># nixosConfigurations, darwinConfigurations</span>
 
 den/hosts.nix
-  &#9500;&#9472;&#9472; den.hosts.aarch64-linux.<span class="fn">vm-aarch64</span>        <span class="comment"># NixOS VM</span>
+  &#9500;&#9472;&#9472; den.hosts.aarch64-linux.<span class="fn">vm-aarch64</span>       <span class="comment"># NixOS VM</span>
   &#9500;&#9472;&#9472; den.hosts.aarch64-darwin.<span class="fn">macbook-pro-m1</span>  <span class="comment"># macOS</span>
   &#9492;&#9472;&#9472; den.hosts.x86_64-linux.<span class="fn">wsl</span>               <span class="comment"># Windows WSL</span>
 
@@ -440,33 +440,32 @@ den/aspects/
                 Secret <em>values</em> never touch version control &mdash;
                 the repo keeps only declarative wiring, while boot-time secrets live in an
                 external generated dataset outside git and the VM keeps the matching age
-                private key. Runtime tokens stay in a self-hosted, EU-based Bitwarden vault
-                and are injected only into the process that needs them. Paranoid? Maybe. But
-                I've seen what happens when <code>GITHUB_TOKEN</code> ends up in shell history.
+                private key. Runtime tokens stay in a EU-based Bitwarden vault
+                and are injected only into the process that needs them. 
             </div>
 
             <div class="reveal" style="margin-bottom: 3rem;">
                 <div class="arch-diagram">
-<span class="comment">&#9484;&#9472; Build Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;</span>
+<span class="comment">&#9484;&#9472; Build Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;</span>
 &#9474;                                                                           &#9474;
 &#9474;  <span class="fn">nix run</span> .#collect-secrets       <span class="comment"># macOS, with --override-input generated</span> &#9474;
 &#9474;    &#9474;                                                                      &#9474;
-&#9474;    &#9500;&#9472;&#9472; reads VM age pubkey       <span class="comment"># ~/.local/share/nix-config-generated</span> &#9474;
-&#9474;    &#9500;&#9472;&#9472; fetches boot secrets      <span class="comment"># rbw / EU-hosted Bitwarden</span>           &#9474;
-&#9474;    &#9492;&#9472;&#9472; writes <span class="fn">secrets.yaml</span>     <span class="comment"># external dataset, outside git</span>       &#9474;
+&#9474;    &#9500;&#9472;&#9472; reads VM age pubkey       <span class="comment"># ~/.local/share/nix-config-generated</span>    &#9474;
+&#9474;    &#9500;&#9472;&#9472; fetches boot secrets      <span class="comment"># rbw / EU-hosted Bitwarden</span>              &#9474;
+&#9474;    &#9492;&#9472;&#9472; writes <span class="fn">secrets.yaml</span>     <span class="comment">  # external dataset, outside git</span>          &#9474;
 &#9474;                                                                           &#9474;
-<span class="comment">&#9500;&#9472; Deploy Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;</span>
+<span class="comment">&#9500;&#9472; Deploy Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;</span>
 &#9474;                                                                           &#9474;
-&#9474;  <span class="fn">sops-nix</span> on the VM               <span class="comment"># decrypts generated input at activation</span> &#9474;
-&#9474;    &#9500;&#9472;&#9472; Tailscale auth key          <span class="comment"># /run/secrets/tailscale/auth-key</span>     &#9474;
-&#9474;    &#9500;&#9472;&#9472; rbw email + Uniclip         <span class="comment"># rbw/email + uniclip/password</span>       &#9474;
-&#9474;    &#9492;&#9472;&#9472; User password hash          <span class="comment"># /run/secrets/user/hashed-password</span>  &#9474;
+&#9474;  <span class="fn">sops-nix</span> on the VM              <span class="comment"># decrypts generated input at activation</span> &#9474;
+&#9474;    &#9500;&#9472;&#9472; Tailscale auth key        <span class="comment"># /run/secrets/tailscale/auth-key</span>        &#9474;
+&#9474;    &#9500;&#9472;&#9472; rbw email + Uniclip       <span class="comment"># rbw/email + uniclip/password</span>           &#9474;
+&#9474;    &#9492;&#9472;&#9472; User password hash        <span class="comment"># /run/secrets/user/hashed-password</span>      &#9474;
 &#9474;                                                                           &#9474;
-<span class="comment">&#9500;&#9472; Runtime &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;</span>
+<span class="comment">&#9500;&#9472; Runtime &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;</span>
 &#9474;                                                                           &#9474;
-&#9474;  API keys injected <span class="keyword">per-process</span>     <span class="comment"># NEVER as global env vars</span>            &#9474;
-&#9474;    &#9500;&#9472;&#9472; <span class="fn">gh()</span> / <span class="fn">claude()</span> / <span class="fn">codex()</span> <span class="comment"># fetch via rbw on demand</span>             &#9474;
-&#9474;    &#9492;&#9472;&#9472; <span class="fn">with-openai</span> / <span class="fn">with-amp</span>  <span class="comment"># one process, one token scope</span>        &#9474;
+&#9474;  API keys injected <span class="keyword">per-process</span>    <span class="comment"># NEVER as global env vars</span>              &#9474;
+&#9474;    &#9500;&#9472;&#9472; <span class="fn">gh()</span> / <span class="fn">claude()</span> / <span class="fn">codex()</span>  <span class="comment"># fetch via rbw on demand</span>               &#9474;
+&#9474;    &#9492;&#9472;&#9472; <span class="fn">with-openai</span> / <span class="fn">with-amp</span>     <span class="comment"># one process, one token scope</span>          &#9474;
 &#9474;                                                                           &#9474;
 <span class="comment">&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</span></div>
             </div>
@@ -478,7 +477,7 @@ den/aspects/
                 </div>
                 <div class="sec-item">
                     <h4>Per-process only</h4>
-                    <p>API keys are fetched from Bitwarden the moment they're needed and scoped to exactly one process. Your <code>OPENAI_API_KEY</code> doesn't need to know about your shell session. They've never met. Let's keep it that way.</p>
+                    <p>API keys are fetched from Bitwarden the moment they're needed and scoped to exactly one process. Your shell session never meets <code>OPENAI_API_KEY</code>.</p>
                 </div>
                 <div class="sec-item">
                     <h4>Machine-locked keys</h4>
@@ -486,7 +485,7 @@ den/aspects/
                 </div>
                 <div class="sec-item">
                     <h4>Biometrics &amp; signed commits</h4>
-                    <p>sudo via Touch ID + Apple Watch because passwords are tedious. Every commit signed with GPG key <code>247AE5FC6A838272</code> because if I'm going to be held responsible for this code, at least make the attacker forge my signature first.</p>
+                    <p>sudo and GPG-commit-sign via Touch ID. Every commit signed with GPG key <code>247AE5FC6A838272</code>.</p>
                 </div>
             </div>
         </div>
@@ -658,13 +657,6 @@ macOS (host)                                    NixOS VM (guest)
                     <a href="clipboard-sharing.html">Clipboard Docs</a>
                     <a href="secrets.html">Secrets Docs</a>
                 </div>
-            </div>
-            <div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid rgba(26,26,26,0.08);">
-                <p class="footer-copy">
-                    Built with Nix and a mass of flake inputs.
-                    Originally forked from <a href="https://github.com/mitchellh/nixos-config" style="color: var(--muted-fg); text-decoration: underline;">mitchellh/nixos-config</a>.
-                    He would not recognize it.
-                </p>
             </div>
         </div>
     </footer>
