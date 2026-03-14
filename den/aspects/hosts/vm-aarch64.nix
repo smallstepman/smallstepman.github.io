@@ -166,6 +166,7 @@
             programs.rbw.settings.pinentry = pkgs.wayprompt;
 
             programs.git.signing.key = vmGitSigningKey;
+            programs.git.settings.gpg.program = "${pkgs.gnupg}/bin/gpg";
 
             services.gpg-agent.pinentry.package = pkgs.pinentry-tty;
             services.gpg-agent.extraConfig = "allow-preset-passphrase";

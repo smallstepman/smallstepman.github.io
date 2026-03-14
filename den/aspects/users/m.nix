@@ -5,7 +5,8 @@
       den.aspects.home-base
       den.aspects.shell-git
       den.aspects.gpg
-      den.aspects.editors-devtools
+      den.aspects.editors
+      den.aspects.devtools
       den.aspects.ai-tools
     ];
   };

@@ -732,26 +732,27 @@ PYEOF
 
 # bats test_tags=devtools
 @test "devtools: editors-devtools.nix and ai-tools.nix exist" {
-  assert_file_exists den/aspects/features/editors-devtools.nix
+  assert_file_exists den/aspects/features/editors.nix
+  assert_file_exists den/aspects/features/devtools.nix
   assert_file_exists den/aspects/features/ai-tools.nix
 }
 
 # bats test_tags=devtools
 @test "devtools: editors-devtools.nix owns required packages and programs" {
-  grep -Fq 'pkgs.go'                  den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.nodejs_22'           den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.doom-emacs'      den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.tmux'            den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.vscode'          den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.lazyvim'         den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.go'              den/aspects/features/editors-devtools.nix
-  grep -Fq 'installWritableTmuxMenus' den/aspects/features/editors-devtools.nix
-  grep -Fq 'services.emacs'           den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.starship'        den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.zellij'          den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.devenv'              den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.dust'                den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.zellij'              den/aspects/features/editors-devtools.nix
+  grep -Fq 'pkgs.go'                  den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.nodejs_22'           den/aspects/features/devtools.nix
+  grep -Fq 'programs.doom-emacs'      den/aspects/features/editors.nix
+  grep -Fq 'programs.tmux'            den/aspects/features/devtools.nix
+  grep -Fq 'programs.vscode'          den/aspects/features/editors.nix
+  grep -Fq 'programs.lazyvim'         den/aspects/features/editors.nix
+  grep -Fq 'programs.go'              den/aspects/features/devtools.nix
+  grep -Fq 'installWritableTmuxMenus' den/aspects/features/devtools.nix
+  grep -Fq 'services.emacs'           den/aspects/features/editors.nix
+  grep -Fq 'programs.starship'        den/aspects/features/devtools.nix
+  grep -Fq 'programs.zellij'          den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.devenv'              den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.dust'                den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.zellij'              den/aspects/features/devtools.nix
 }
 
 # bats test_tags=devtools
@@ -775,13 +776,14 @@ PYEOF
 
 # bats test_tags=devtools
 @test "devtools: user m aspect wires editors-devtools and ai-tools" {
-  grep -Fq 'den.aspects.editors-devtools' den/aspects/users/m.nix
+  grep -Fq 'den.aspects.editors'  den/aspects/users/m.nix
+  grep -Fq 'den.aspects.devtools' den/aspects/users/m.nix
   grep -Fq 'den.aspects.ai-tools'         den/aspects/users/m.nix
 }
 
 # bats test_tags=devtools
 @test "devtools: Task 6 aspects do not contain out-of-scope items" {
-  for aspect in den/aspects/features/editors-devtools.nix den/aspects/features/ai-tools.nix; do
+  for aspect in den/aspects/features/editors.nix den/aspects/features/devtools.nix den/aspects/features/ai-tools.nix; do
     local non_comment
     non_comment=$(grep -Ev '^[[:space:]]*#' "$aspect")
     if printf '%s\n' "$non_comment" | grep -Eq 'projectsRoot|niriDeep'; then
@@ -1643,8 +1645,8 @@ PYEOF
 @test "bats-package: pkgs.bats is not in editors-devtools home.packages" {
   # bats must be a system-level package (with wired BATS_LIB_PATH), not a
   # bare user-level entry in editors-devtools.
-  if grep -Eq '^[[:space:]]*pkgs\.bats\b' den/aspects/features/editors-devtools.nix; then
-    fail 'pkgs.bats still in editors-devtools home.packages — must be system-level with bats.withLibraries'
+  if grep -Eq '^[[:space:]]*pkgs\.bats\b' den/aspects/features/editors.nix den/aspects/features/devtools.nix; then
+    fail 'pkgs.bats still in editors/devtools home.packages — must be system-level with bats.withLibraries'
   fi
 }
 
