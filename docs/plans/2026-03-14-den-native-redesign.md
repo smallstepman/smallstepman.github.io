@@ -13,7 +13,7 @@
 ## Execution Notes
 
 - Work inside the current repo checkout unless a separate worktree is created before implementation.
-- Do not add a new test framework; extend the existing shell tests under `tests/den/` and `tests/gpg-preset-passphrase.sh`.
+- Do not add a new test framework; extend the existing shell-based regression coverage in `tests.bats` and `tests/gpg-preset-passphrase.sh`.
 - Keep behavior stable while removing structural overengineering.
 - Prefer deleting dead indirection over replacing it with new schema flags.
 
@@ -133,16 +133,17 @@ grep -Fq 'nix.settings.experimental-features = [ "nix-command" "flakes" ];' den/
 grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
 ```
 
-Change the provenance checks so:
+Keep source-level ownership checks for `wsl.enable`, `wsl.wslConf.automount.root`, `wsl.startMenuLaunchers`, `nix.package`, `nix.settings.experimental-features`, `nix.extraOptions`, and `system.stateVersion` in `den/aspects/hosts/wsl.nix`.
 
-- `wsl.enable` comes from `den/aspects/hosts/wsl.nix`
+Keep the eval/provenance checks that are actually exposed and meaningful:
+
 - `wsl.defaultUser` comes from `provides/wsl.nix`
-- `wsl.wslConf.automount.root` comes from `den/aspects/hosts/wsl.nix`
 - `wsl.startMenuLaunchers` comes from `den/aspects/hosts/wsl.nix`
 - `nix.package` comes from `den/aspects/hosts/wsl.nix`
-- `nix.settings.experimental-features` comes from `den/aspects/hosts/wsl.nix`
 - `nix.extraOptions` comes from `den/aspects/hosts/wsl.nix`
 - `system.stateVersion` comes from `den/aspects/hosts/wsl.nix`
+
+Do **not** require `definitionsWithLocations` for `wsl.enable` or `wsl.wslConf.automount.root`; in this eval shape those paths are misleading or unavailable, so ownership there must stay source-level.
 
 Keep the checks that `den/aspects/hosts/wsl.nix` does **not** own the upstream module import or `wsl.defaultUser`.
 
@@ -150,36 +151,13 @@ Keep the checks that `den/aspects/hosts/wsl.nix` does **not** own the upstream m
 
 Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 tests.bats'`
 
-Expected: FAIL because `tests.bats` still attributes `wsl.enable` to `provides/wsl.nix` instead of the forwarded host aspect.
+Expected: FAIL because `tests.bats` still omits the available host-aspect provenance checks for forwarded WSL settings and the plan text still describes the older shell-test layout.
 
 **Step 3: Write minimal implementation**
 
 Keep upstream ownership of the NixOS-WSL module import and `wsl.defaultUser`, but keep the forwarded repo-specific WSL settings in the host aspect:
 
-```nix
-# den/aspects/hosts/wsl.nix
-{ den, ... }: {
-  den.aspects.wsl = {
-    wsl.enable = true;
-
-    nixos = { pkgs, ... }: {
-      wsl.wslConf.automount.root = "/mnt";
-      wsl.startMenuLaunchers = true;
-
-      nix.package = pkgs.nixVersions.latest;
-      nix.extraOptions = ''
-        keep-outputs = true
-        keep-derivations = true
-      '';
-      nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
-      system.stateVersion = "23.05";
-    };
-  };
-}
-```
-
-Do not reintroduce `options.wsl.enable`, a custom `den.provides.wsl`, or a repo-local NixOS-WSL module import here. The host aspect should provide the forwarded `wsl` class attrset, while upstream still owns module wiring and `wsl.defaultUser`.
+Update `tests.bats` and this plan text only. Keep the existing production-code split intact: the host aspect must continue to contain the forwarded WSL settings shown above, while upstream still owns module wiring and `wsl.defaultUser`.
 
 **Step 4: Run test to verify it passes**
 
@@ -190,9 +168,8 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add tests/den/wsl.sh tests/den/no-legacy.sh den/aspects/hosts/wsl.nix
-git rm den/aspects/features/wsl.nix
-git -c commit.gpgsign=false commit -m "refactor: route wsl through den battery" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git add tests.bats docs/plans/2026-03-14-den-native-redesign.md
+git -c commit.gpgsign=false commit -m "test: encode WSL ownership evidence" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
 ### Task 3: Move vm-aarch64-only VM behavior out of the generic VMware feature

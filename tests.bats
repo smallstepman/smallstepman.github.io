@@ -1214,7 +1214,7 @@ PYEOF
 }
 
 # bats test_tags=wsl
-@test "wsl: den/aspects/hosts/wsl.nix owns repo-specific WSL settings only" {
+@test "wsl: den/aspects/hosts/wsl.nix statically owns repo-specific WSL settings" {
   grep -Fq 'wsl.enable = true;' den/aspects/hosts/wsl.nix
   grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
   grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
@@ -1281,15 +1281,24 @@ PYEOF
 }
 
 # bats test_tags=wsl
-@test "wsl: den/aspects/hosts/wsl.nix defines the forwarded WSL class settings (ownership)" {
-  grep -Fq 'wsl.enable = true;' den/aspects/hosts/wsl.nix
-  grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
-  grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
-  grep -Fq 'nix.package = pkgs.nixVersions.latest;' den/aspects/hosts/wsl.nix
-  grep -Fq 'nix.settings.experimental-features = [ "nix-command" "flakes" ];' den/aspects/hosts/wsl.nix
-  grep -Fq 'keep-outputs = true' den/aspects/hosts/wsl.nix
-  grep -Fq 'keep-derivations = true' den/aspects/hosts/wsl.nix
-  grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
+@test "wsl: available option provenance points at den/aspects/hosts/wsl.nix" {
+  local defs
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.startMenuLaunchers.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "wsl.startMenuLaunchers not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.nix.package.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "nix.package not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.nix.extraOptions.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "nix.extraOptions not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.system.stateVersion.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "system.stateVersion not defined by den/aspects/hosts/wsl.nix; got: $defs"
 }
 
 
