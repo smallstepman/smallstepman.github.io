@@ -9,6 +9,7 @@ let
     # inputs.niri-deep.overlays.default
     inputs.llm-agents.overlays.default
     inputs.git-repo-manager.overlays.git-repo-manager
+    inputs.yeet-and-yoink.overlays.default
 
     # Build non-flake packages from source
     (final: prev: {
@@ -192,33 +193,9 @@ PYEOF
       readFile = relative: builtins.readFile (requireFile relative);
     };
 
-  yeetAndYoink =
-    let
-      requirePath = relative:
-        let
-          path =
-            if inputs.yeetAndYoink == null then
-              null
-            else
-              inputs.yeetAndYoink + "/${relative}";
-        in
-          if path != null && builtins.pathExists path then
-            path
-          else
-            throw ''
-              Missing yeet-and-yoink input path `${relative}`.
-              Create a wrapper flake with `scripts/external-input-flake.sh`
-              or call `lib.mkOutputs { yeetAndYoink = <path>; }`.
-              Supported default location is `/Users/m/Projects/yeet-and-yoink`.
-            '';
-    in {
-      root = inputs.yeetAndYoink;
-      inherit requirePath;
-    };
-
   den = (nixpkgs.lib.evalModules {
     modules = [ ./default.nix ./hosts.nix (inputs.import-tree ./aspects) ];
-    specialArgs = { inherit generated inputs overlays yeetAndYoink; };
+    specialArgs = { inherit generated inputs overlays; };
   }).config;
 in {
   inherit (den.flake) nixosConfigurations darwinConfigurations;

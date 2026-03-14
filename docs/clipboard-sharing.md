@@ -32,7 +32,7 @@ macOS (host)                              NixOS VM (guest)
 | `patches/uniclip-bind-and-env-password.patch` | Adds `--bind` and `UNICLIP_PASSWORD` support to uniclip |
 | `flake.nix` | Builds the patched `pkgs.uniclip` package from `uniclip-src` |
 | `den/aspects/features/launchd.nix` | macOS launchd user agent for the uniclip server |
-| `den/aspects/features/vmware.nix` | VM Home Manager `systemd.user.services.uniclip` client |
+| `den/aspects/hosts/vm-aarch64.nix` | VM-specific Home Manager `systemd.user.services.uniclip` client |
 | `den/aspects/features/secrets.nix` | Declares `/run/secrets/uniclip/password` on the VM |
 
 ## macOS side
@@ -49,7 +49,7 @@ Behavior:
 
 ## VM side
 
-The client is defined in `den/aspects/features/vmware.nix`.
+The client is defined in `den/aspects/hosts/vm-aarch64.nix`.
 
 Behavior:
 - starts after `graphical-session.target`

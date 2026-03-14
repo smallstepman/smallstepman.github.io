@@ -137,7 +137,7 @@ macOS (host)                              VM (guest)
 - Uniclip is built from source with a custom patch (`patches/uniclip-bind-and-env-password.patch`) that adds `--bind` flag and `UNICLIP_PASSWORD` env var support
 - Password stored in rbw (Bitwarden) as `uniclip-password`
 - macOS side: launchd user agent in `den/aspects/features/launchd.nix`
-- VM side: systemd user service in `den/aspects/features/vmware.nix`
+- VM side: systemd user service in `den/aspects/hosts/vm-aarch64.nix`
 - Full documentation in `docs/clipboard-sharing.md`
 
 ## Directory Structure

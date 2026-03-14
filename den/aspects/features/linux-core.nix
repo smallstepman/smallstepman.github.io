@@ -1,14 +1,3 @@
-# den/aspects/features/linux-core.nix
-#
-# Core Linux system configuration aspect.
-#
-# Migrated from the legacy VM shared and Linux user entrypoints (Task 7 of den migration).
-# Covers: boot/kernel/Nix settings, networking, sudo, OpenSSH, flatpak/snap, firewall,
-#         fonts, locale, nix-ld, zsh, localBinInPath, and common system packages.
-#
-# Explicitly OUT of scope (remain in legacy for Task 8+):
-#   Desktop/Wayland/Niri/Mango/Noctalia, greetd, xserver, keyd, hardware.bluetooth,
-#   power-profiles-daemon, upower, i18n.inputMethod, wezterm, gtkmm3.
 { den, lib, inputs, ... }: {
 
   den.aspects.linux-core = {
@@ -136,15 +125,6 @@
             gnumake
             git
             killall
-            # Bats test runner with helper libraries; BATS_LIB_PATH is wired
-            # automatically by withLibraries so `bats tests.bats` just works.
-            # GNU parallel is required for `bats --jobs <N> tests.bats`.
-            parallel
-            (bats.withLibraries (libs: [
-              libs.bats-support
-              libs.bats-assert
-              libs.bats-file
-            ]))
           ];
 
           # ---------------------------------------------------------------

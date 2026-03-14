@@ -76,6 +76,10 @@
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
 
+    # yeet-and-yoink - window/app focus orchestrator for niri
+    yeet-and-yoink.url = "github:smallstepman/yeet-and-yoink";
+    yeet-and-yoink.inputs.nixpkgs.follows = "nixpkgs";
+
     # Mango window control for Wayland
     mangowc = {
       url = "github:DreamMaoMao/mangowc";
@@ -137,9 +141,9 @@
   inputs.flake-aspects.url = "github:vic/flake-aspects";
 
   outputs = { self, nixpkgs, ... }@inputs: {
-    lib.mkOutputs = { generated, yeetAndYoink ? null }:
+    lib.mkOutputs = { generated }:
       import ./den/mk-config-outputs.nix {
-        inputs = inputs // { inherit generated yeetAndYoink; };
+        inputs = inputs // { inherit generated; };
       };
   };
 }

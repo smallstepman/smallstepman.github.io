@@ -1,11 +1,3 @@
-# den/aspects/features/darwin-core.nix
-#
-# Darwin system-core slice for macbook-pro-m1.
-#
-# Migrated from machines/macbook-pro-m1.nix (Task 9 of den migration).
-# Covers: Determinate Nix integration, nix-daemon shell init, system package
-# baseline, SSH daemon, Touch ID sudo, and the remaining Darwin user record
-# fields that are not provided by den.provides.primary-user.
 { den, generated, ... }: {
   den.aspects.darwin-core = {
     includes = [
@@ -83,15 +75,6 @@
           environment.shells = with pkgs; [ bashInteractive zsh fish ];
           environment.systemPackages = with pkgs; [
             cachix
-            # Bats test runner with helper libraries; BATS_LIB_PATH is wired
-            # automatically by withLibraries so `bats tests.bats` just works.
-            # GNU parallel is required for `bats --jobs <N> tests.bats`.
-            parallel
-            (bats.withLibraries (libs: [
-              libs.bats-support
-              libs.bats-assert
-              libs.bats-file
-            ]))
           ];
 
           # The user already exists via den identity, but nix-darwin still needs

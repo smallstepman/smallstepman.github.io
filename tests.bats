@@ -194,7 +194,9 @@ setup_file() {
   grep -Fq 'inputs.niri.nixosModules.niri' den/aspects/features/linux-desktop.nix
   grep -Fq 'inputs.mangowc.nixosModules.mango' den/aspects/features/linux-desktop.nix
   grep -Fq 'inputs.noctalia.nixosModules.default' den/aspects/features/linux-desktop.nix
-  grep -Fq 'inputs.nixos-wsl.nixosModules.wsl' den/aspects/features/wsl.nix
+  if rg -n 'inputs\.nixos-wsl\.nixosModules\.wsl' den/aspects/features >/dev/null; then
+    fail 'WSL flake-module import should be owned upstream, not by den/aspects/features/*'
+  fi
   grep -Fq 'inputs.disko.nixosModules.disko' den/aspects/hosts/vm-aarch64.nix
 }
 
@@ -296,15 +298,27 @@ PYEOF
 }
 
 # bats test_tags=host-schema
-@test "host-schema: den/default.nix declares required schema options" {
-  grep -Fq 'options.profile' den/default.nix
-  grep -Fq 'options.vmware.enable' den/default.nix
-  grep -Fq 'options.graphical.enable' den/default.nix
+@test "host-schema: den/default.nix keeps hm-host wiring and does not add WSL aliases" {
+  grep -Fq 'den.ctx.hm-host.includes' den/default.nix
+  if grep -Fq 'den._.wsl' den/default.nix; then
+    fail 'den/default.nix must not include den._.wsl; WSL is enabled per-host via den.hosts.x86_64-linux.wsl.wsl.enable'
+  fi
+  if grep -Fq 'den.provides.wsl' den/default.nix; then
+    fail 'den/default.nix must not redeclare or include den.provides.wsl'
+  fi
 }
 
 # bats test_tags=host-schema
-@test "host-schema: options.profile has a description" {
-  grep -A4 'options\.profile' den/default.nix | grep -Fq 'description'
+@test "host-schema: den/default.nix drops profile schema and keeps remaining host flags" {
+  if grep -Fq 'options.profile' den/default.nix; then
+    fail 'profile should be removed from den/default.nix'
+  fi
+  if grep -Fq 'options.vmware.enable' den/default.nix; then
+    fail 'vmware.enable schema should be removed from den/default.nix (Task 7)'
+  fi
+  if grep -Fq 'options.graphical.enable' den/default.nix; then
+    fail 'graphical.enable schema should be removed from den/default.nix (Task 7)'
+  fi
 }
 
 # bats test_tags=host-schema
@@ -315,8 +329,21 @@ PYEOF
 }
 
 # bats test_tags=host-schema
-@test "host-schema: wsl host uses den built-in wsl.enable" {
+@test "host-schema: hosts.nix keeps den-provided and migration host flags" {
   grep -Fq 'den.hosts.x86_64-linux.wsl.wsl.enable = true' den/hosts.nix
+  if grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true' den/hosts.nix; then
+    fail 'den/hosts.nix should not contain vmware.enable (removed in Task 7)'
+  fi
+  if grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true' den/hosts.nix; then
+    fail 'den/hosts.nix should not contain graphical.enable (removed in Task 7)'
+  fi
+}
+
+# bats test_tags=host-schema
+@test "host-schema: hosts.nix removes only profile assignments" {
+  if rg -n 'profile = ' den/hosts.nix >/dev/null; then
+    fail 'den/hosts.nix should drop only profile host assignments in Task 1'
+  fi
 }
 
 
@@ -404,7 +431,8 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git and home-base aspect files exist" {
-  assert_file_exists den/aspects/features/shell-git.nix
+  assert_file_exists den/aspects/features/shell.nix
+  assert_file_exists den/aspects/features/git.nix
   assert_file_exists den/aspects/features/home-base.nix
 }
 
@@ -418,18 +446,18 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git.nix sets essential HM programs" {
-  grep -Fq 'programs.git = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.zsh = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.oh-my-posh = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.direnv = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.atuin = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.zoxide = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.gh = {' den/aspects/features/shell-git.nix
+  grep -Fq 'programs.git = {' den/aspects/features/git.nix
+  grep -Fq 'programs.zsh = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.oh-my-posh = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.direnv = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.atuin = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.zoxide = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.gh = {' den/aspects/features/git.nix
 }
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git.nix sets EDITOR session variable" {
-  grep -Fq 'EDITOR' den/aspects/features/shell-git.nix
+  grep -Fq 'EDITOR' den/aspects/features/shell.nix
 }
 
 # bats test_tags=home-manager-core
@@ -443,21 +471,20 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git includes g = git alias" {
-  grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell-git.nix
+  grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell.nix
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: user m aspect includes shell-git" {
-  grep -Fq 'den.aspects.shell-git' den/aspects/users/m.nix
+@test "home-manager-core: user m aspect includes shell and git" {
+  grep -Fq 'den.aspects.shell' den/aspects/users/m.nix
+  grep -Fq 'den.aspects.git'   den/aspects/users/m.nix
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: signing/GPG config is not in shell-git.nix" {
-  local non_comment_shell_git
-  non_comment_shell_git=$(grep -Ev '^[[:space:]]*#' den/aspects/features/shell-git.nix)
-  if printf '%s\n' "$non_comment_shell_git" | grep -Eq 'gitSigningKey|signByDefault|signing\.key|gpg\.program|services\.gpg-agent'; then
-    fail 'signing/GPG config found in shell-git.nix — it must stay in gpg.nix'
-  fi
+@test "home-manager-core: git.nix owns GPG and signing config" {
+  grep -Fq 'programs.gpg.enable' den/aspects/features/git.nix
+  grep -Fq 'services.gpg-agent'  den/aspects/features/git.nix
+  grep -Fq 'signing.signByDefault = true' den/aspects/features/git.nix
 }
 
 # bats test_tags=home-manager-core
@@ -705,26 +732,27 @@ PYEOF
 
 # bats test_tags=devtools
 @test "devtools: editors-devtools.nix and ai-tools.nix exist" {
-  assert_file_exists den/aspects/features/editors-devtools.nix
+  assert_file_exists den/aspects/features/editors.nix
+  assert_file_exists den/aspects/features/devtools.nix
   assert_file_exists den/aspects/features/ai-tools.nix
 }
 
 # bats test_tags=devtools
 @test "devtools: editors-devtools.nix owns required packages and programs" {
-  grep -Fq 'pkgs.go'                  den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.nodejs_22'           den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.doom-emacs'      den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.tmux'            den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.vscode'          den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.lazyvim'         den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.go'              den/aspects/features/editors-devtools.nix
-  grep -Fq 'installWritableTmuxMenus' den/aspects/features/editors-devtools.nix
-  grep -Fq 'services.emacs'           den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.starship'        den/aspects/features/editors-devtools.nix
-  grep -Fq 'programs.zellij'          den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.devenv'              den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.dust'                den/aspects/features/editors-devtools.nix
-  grep -Fq 'pkgs.zellij'              den/aspects/features/editors-devtools.nix
+  grep -Fq 'pkgs.go'                  den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.nodejs_22'           den/aspects/features/devtools.nix
+  grep -Fq 'programs.doom-emacs'      den/aspects/features/editors.nix
+  grep -Fq 'programs.tmux'            den/aspects/features/devtools.nix
+  grep -Fq 'programs.vscode'          den/aspects/features/editors.nix
+  grep -Fq 'programs.lazyvim'         den/aspects/features/editors.nix
+  grep -Fq 'programs.go'              den/aspects/features/devtools.nix
+  grep -Fq 'installWritableTmuxMenus' den/aspects/features/devtools.nix
+  grep -Fq 'services.emacs'           den/aspects/features/editors.nix
+  grep -Fq 'programs.starship'        den/aspects/features/devtools.nix
+  grep -Fq 'programs.zellij'          den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.devenv'              den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.dust'                den/aspects/features/devtools.nix
+  grep -Fq 'pkgs.zellij'              den/aspects/features/devtools.nix
 }
 
 # bats test_tags=devtools
@@ -739,25 +767,30 @@ PYEOF
   grep -Fq 'pkgs.llm-agents.beads'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.openspec'                 den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.copilot-language-server'  den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode/modules/home-manager.nix'        den/aspects/features/ai-tools.nix
+  if grep -Fq 'opencode/modules/home-manager.nix' den/aspects/features/ai-tools.nix; then
+    fail 'ai-tools.nix must not import opencode/modules/home-manager.nix (deleted)'
+  fi
+  grep -Fq 'opencode-serve' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'opencode-web'   den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=devtools
 @test "devtools: user m aspect wires editors-devtools and ai-tools" {
-  grep -Fq 'den.aspects.editors-devtools' den/aspects/users/m.nix
+  grep -Fq 'den.aspects.editors'  den/aspects/users/m.nix
+  grep -Fq 'den.aspects.devtools' den/aspects/users/m.nix
   grep -Fq 'den.aspects.ai-tools'         den/aspects/users/m.nix
 }
 
 # bats test_tags=devtools
 @test "devtools: Task 6 aspects do not contain out-of-scope items" {
-  for aspect in den/aspects/features/editors-devtools.nix den/aspects/features/ai-tools.nix; do
+  for aspect in den/aspects/features/editors.nix den/aspects/features/devtools.nix den/aspects/features/ai-tools.nix; do
     local non_comment
     non_comment=$(grep -Ev '^[[:space:]]*#' "$aspect")
     if printf '%s\n' "$non_comment" | grep -Eq 'projectsRoot|niriDeep'; then
-      fail "$aspect contains projectsRoot/niriDeep — must stay in home-manager.nix"
+      fail "$aspect contains projectsRoot/niriDeep — must stay in host aspects"
     fi
     if printf '%s\n' "$non_comment" | grep -Eq 'load_plugins'; then
-      fail "$aspect contains load_plugins — must stay in home-manager.nix (Task 8)"
+      fail "$aspect contains load_plugins — must stay in host aspects"
     fi
   done
 }
@@ -975,29 +1008,35 @@ PYEOF
 }
 
 # bats test_tags=vm-desktop
-@test "vm-desktop: vmware.nix owns VMware integration settings" {
-  grep -Fq 'virtualisation.vmware.guest.enable' den/aspects/features/vmware.nix
-  grep -Fq '.host:/Projects'                    den/aspects/features/vmware.nix
-  grep -Fq '.host:/nixos-config'                den/aspects/features/vmware.nix
-  grep -Fq 'yeetAndYoink.requirePath'           den/aspects/features/vmware.nix
-  grep -Fq 'src = yeetAndYoink.root;'           den/aspects/features/vmware.nix
-  grep -Fq 'cargoLock.lockFile = yeetAndYoink.requirePath "Cargo.lock";' den/aspects/features/vmware.nix
-  grep -Fq 'programs.ssh'                       den/aspects/features/vmware.nix
-  grep -Fq 'programs.niri.settings'             den/aspects/features/vmware.nix
-  grep -Fq 'DOCKER_CONTEXT'                     den/aspects/features/vmware.nix
-  grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN'      den/aspects/features/vmware.nix
-  grep -Fq 'load_plugins'                       den/aspects/features/vmware.nix
-  grep -Fq 'uniclip'                            den/aspects/features/vmware.nix
-  grep -Fq 'ensureHostDockerContext'             den/aspects/features/vmware.nix
-  grep -Fq 'mac-host-docker'                    den/aspects/features/vmware.nix
+@test "vm-desktop: vmware.nix keeps only generic VMware guest settings" {
+  grep -Fq 'virtualisation.vmware.guest.enable = true;' den/aspects/features/vmware.nix
+  grep -Fq 'environment.systemPackages = [ pkgs.gtkmm3 ];' den/aspects/features/vmware.nix
+
+  if grep -Eq 'programs\.ssh|programs\.niri\.settings|DOCKER_CONTEXT|yeetAndYoink|mac-host-docker|ensureHostDockerContext|uniclip|\.host:/Projects|\.host:/nixos-config|\.host:/nixos-generated|allowUnsupportedSystem|allowUnfree' den/aspects/features/vmware.nix; then
+    fail 'den/aspects/features/vmware.nix should keep only generic VMware guest settings'
+  fi
+}
+
+# bats test_tags=vm-desktop
+@test "vm-desktop: vmware.nix no longer checks host.vmware.enable" {
+  if grep -Eq 'host\.vmware\.enable|isVM' den/aspects/features/vmware.nix; then
+    fail 'den/aspects/features/vmware.nix should not check host.vmware.enable'
+  fi
 }
 
 # bats test_tags=vm-desktop
 @test "vm-desktop: scripts and docs reference external-input-flake.sh correctly" {
-  grep -Fq 'external-input-flake.sh'                           docs/vm.sh
-  grep -Fq 'external-input-flake.sh'                           den/aspects/features/shell-git.nix
-  grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break'    scripts/external-input-flake.sh
-  grep -Fq 'YEET_AND_YOINK_INPUT_DIR'                         den/aspects/features/shell-git.nix
+  grep -Fq 'external-input-flake.sh' docs/vm.sh
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
+  if grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh; then
+    fail 'scripts/external-input-flake.sh must not contain yeet-and-yoink git+file wrapper'
+  fi
+  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell.nix; then
+    fail 'shell.nix must not reference YEET_AND_YOINK_INPUT_DIR'
+  fi
+  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' docs/vm.sh; then
+    fail 'docs/vm.sh must not reference YEET_AND_YOINK_INPUT_DIR'
+  fi
 }
 
 # bats test_tags=vm-desktop
@@ -1008,6 +1047,33 @@ PYEOF
   grep -Fq 'networking.interfaces.enp2s0.useDHCP' den/aspects/hosts/vm-aarch64.nix
   if grep -Fq '../../../machines/hardware/' den/aspects/hosts/vm-aarch64.nix; then
     fail 'den/aspects/hosts/vm-aarch64.nix still imports machines/hardware/*'
+  fi
+}
+
+# bats test_tags=vm-desktop
+@test "vm-desktop: vm-aarch64 owns VMware bridge config" {
+  grep -Fq 'nixpkgs.config.allowUnfree = true;' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'nixpkgs.config.allowUnsupportedSystem = true;' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '.host:/Projects' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '.host:/nixos-config' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'inputs.yeet-and-yoink.homeManagerModules.default' den/aspects/features/linux-desktop.nix
+  grep -Fq 'pkgs.yeet-and-yoink' den/aspects/features/linux-desktop.nix
+  grep -Fq 'programs.ssh' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'programs.niri.settings' den/aspects/features/linux-desktop.nix
+  grep -Fq 'DOCKER_CONTEXT' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'ensureHostDockerContext' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'mac-host-docker' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'systemd.user.services.uniclip' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'pkgs.docker-client' den/aspects/hosts/vm-aarch64.nix
+  if grep -Fq 'yeetAndYoink.requirePath' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix still uses yeetAndYoink.requirePath — replace with pkgs.yeet-and-yoink'
+  fi
+  if grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix still references NIRI_DEEP_ZELLIJ_BREAK_PLUGIN'
+  fi
+  if grep -Fq 'load_plugins' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix still configures load_plugins (Zellij plugin removed)'
   fi
 }
 
@@ -1065,10 +1131,6 @@ PYEOF
 
   actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.niri.settings.prefer-no-csd)
   assert_equal "$actual" "true"
-
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zellij.settings.load_plugins)
-  printf '%s' "$actual" | grep -q 'yeet-and-yoink-zellij-break.wasm' \
-    || fail "load_plugins does not contain yeet-and-yoink-zellij-break.wasm; got '$actual'"
 
   actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.home.sessionVariables.DOCKER_CONTEXT)
   assert_equal "$actual" "host-mac"
@@ -1185,28 +1247,34 @@ PYEOF
 
 
 # ===========================================================================
-# wsl — wsl aspect migrated from machines/wsl.nix
+# wsl — upstream WSL activation with host-owned repo policy
 # ===========================================================================
 
 # bats test_tags=wsl
-@test "wsl: den/aspects/features/wsl.nix exists" {
-  assert_file_exists den/aspects/features/wsl.nix
+@test "wsl: host aspect exists and legacy feature aspect is removed" {
+  assert_file_exists den/aspects/hosts/wsl.nix
+  assert [ ! -e den/aspects/features/wsl.nix ]
 }
 
 # bats test_tags=wsl
-@test "wsl: wsl.nix owns required WSL settings" {
-  grep -Fq 'wsl.enable = true;'               den/aspects/features/wsl.nix
-  grep -Fq 'wslConf.automount.root = "/mnt";' den/aspects/features/wsl.nix
-  grep -Fq 'startMenuLaunchers = true;'       den/aspects/features/wsl.nix
-  grep -Fq 'package = pkgs.nixVersions.latest;' den/aspects/features/wsl.nix
-  grep -Fq 'system.stateVersion = "23.05";'   den/aspects/features/wsl.nix
-  grep -Fq 'den.aspects.wsl-system'           den/aspects/hosts/wsl.nix
+@test "wsl: den/aspects/hosts/wsl.nix statically owns repo-specific WSL settings" {
+  grep -Fq 'wsl.enable = true;' den/aspects/hosts/wsl.nix
+  grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
+  grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
+  grep -Fq 'nix.package = pkgs.nixVersions.latest;' den/aspects/hosts/wsl.nix
+  grep -Fq 'keep-outputs = true' den/aspects/hosts/wsl.nix
+  grep -Fq 'keep-derivations = true' den/aspects/hosts/wsl.nix
+  grep -Fq 'nix.settings.experimental-features = [ "nix-command" "flakes" ];' den/aspects/hosts/wsl.nix
+  grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
 }
 
 # bats test_tags=wsl
-@test "wsl: wsl.nix does not redefine wsl.defaultUser" {
-  if grep -Eq 'defaultUser[[:space:]]*=' den/aspects/features/wsl.nix; then
-    fail 'den/aspects/features/wsl.nix should not redefine wsl.defaultUser'
+@test "wsl: den/aspects/hosts/wsl.nix does not own upstream module import or defaultUser" {
+  if grep -Eq 'defaultUser[[:space:]]*=' den/aspects/hosts/wsl.nix; then
+    fail 'den/aspects/hosts/wsl.nix should not redefine wsl.defaultUser'
+  fi
+  if grep -Fq 'inputs.nixos-wsl.nixosModules.wsl' den/aspects/hosts/wsl.nix; then
+    fail 'den/aspects/hosts/wsl.nix should not import inputs.nixos-wsl.nixosModules.wsl'
   fi
 }
 
@@ -1248,19 +1316,32 @@ PYEOF
 }
 
 # bats test_tags=wsl
-@test "wsl: wsl.enable is defined by den/aspects/features/wsl.nix (provenance)" {
-  local defs
-  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.enable.definitionsWithLocations)
-  printf '%s' "$defs" | grep -q 'den/aspects/features/wsl.nix' \
-    || fail "wsl.enable not defined by den/aspects/features/wsl.nix; got: $defs"
-}
-
-# bats test_tags=wsl
 @test "wsl: wsl.defaultUser is defined by den provides/wsl.nix (provenance)" {
   local defs
   defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.defaultUser.definitionsWithLocations)
   printf '%s' "$defs" | grep -q 'provides/wsl.nix' \
     || fail "wsl.defaultUser not defined by den provides/wsl.nix; got: $defs"
+}
+
+# bats test_tags=wsl
+@test "wsl: available option provenance points at den/aspects/hosts/wsl.nix" {
+  local defs
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.startMenuLaunchers.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "wsl.startMenuLaunchers not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.nix.package.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "nix.package not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.nix.extraOptions.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "nix.extraOptions not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.system.stateVersion.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "system.stateVersion not defined by den/aspects/hosts/wsl.nix; got: $defs"
 }
 
 
@@ -1269,53 +1350,54 @@ PYEOF
 # ===========================================================================
 
 # bats test_tags=gpg
-@test "gpg: den/aspects/features/gpg.nix exists" {
-  assert_file_exists den/aspects/features/gpg.nix
+@test "gpg: den/aspects/features/git.nix owns GPG config" {
+  assert_file_exists den/aspects/features/git.nix
 }
 
 # bats test_tags=gpg
-@test "gpg: gpg.nix uses den-native host context (isVM/isDarwin, not currentSystemName)" {
-  grep -Fq 'isVM'     den/aspects/features/gpg.nix
-  grep -Fq 'isDarwin' den/aspects/features/gpg.nix
-  if grep -Fq 'currentSystemName' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix still uses legacy currentSystemName — must use den host context (isVM/isDarwin)'
+@test "gpg: git.nix uses den-native host context (isVM/isDarwin, not currentSystemName)" {
+  if grep -Fq 'isVM' den/aspects/features/git.nix; then
+    fail 'git.nix must not contain isVM — host-specific config belongs in host aspects'
+  fi
+  if grep -Fq 'currentSystemName' den/aspects/features/git.nix; then
+    fail 'git.nix still uses legacy currentSystemName'
   fi
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix contains the vm-aarch64 signing key" {
-  grep -Fq 'vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";' den/aspects/features/gpg.nix
+  grep -Fq 'vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";' den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix guards VM-only features with isVM" {
-  grep -Fq '(lib.optionalString isVM "allow-preset-passphrase")' den/aspects/features/gpg.nix
-  grep -Fq 'lib.optionals isVM ['                                den/aspects/features/gpg.nix
-  grep -Fq 'systemd.user.services.gpg-preset-passphrase-login = lib.mkIf isVM {' den/aspects/features/gpg.nix
+  grep -Fq 'allow-preset-passphrase'                           den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'gpgPresetPassphraseLogin'                          den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'systemd.user.services.gpg-preset-passphrase-login' den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix helper script implementation is correct" {
-  grep -Fq 'printf '\''%s'\'' "$passphrase" |' den/aspects/features/gpg.nix
-  grep -Fq 'mapfile -t keygrips < <('          den/aspects/features/gpg.nix
+  grep -Fq 'printf '\''%s'\'' "$passphrase" |' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'mapfile -t keygrips < <('          den/aspects/hosts/vm-aarch64.nix
   # The Nix file uses ''${...} escaping inside ''...'' string literals.
-  grep -Fq "for keygrip in \"''\${keygrips[@]}\"; do" den/aspects/features/gpg.nix
-  grep -Fq 'gpg-preset-passphrase --preset "$keygrip"' den/aspects/features/gpg.nix
-  if grep -Fq -- '--passphrase-fd' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix helper script still uses unsupported --passphrase-fd'
+  grep -Fq "for keygrip in \"''\${keygrips[@]}\"; do" den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'gpg-preset-passphrase --preset "$keygrip"' den/aspects/hosts/vm-aarch64.nix
+  if grep -Fq -- '--passphrase-fd' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'helper script still uses unsupported --passphrase-fd'
   fi
-  if grep -Fq -- '--passphrase "$passphrase"' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix helper script should not expose the passphrase via command-line arguments'
+  if grep -Fq -- '--passphrase "$passphrase"' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'helper script should not expose the passphrase via command-line arguments'
   fi
-  if grep -Fq "\$1 == \"grp\" { print \$10; exit }" den/aspects/features/gpg.nix; then
-    fail 'gpg.nix helper script still assumes the first grp line is the only relevant keygrip'
+  if grep -Fq "\$1 == \"grp\" { print \$10; exit }" den/aspects/hosts/vm-aarch64.nix; then
+    fail 'helper script still assumes the first grp line is the only relevant keygrip'
   fi
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix systemd service has retry settings" {
-  grep -Fq 'Restart = "on-failure";' den/aspects/features/gpg.nix
-  grep -Fq 'RestartSec = 30;'        den/aspects/features/gpg.nix
+  grep -Fq 'Restart = "on-failure";' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'RestartSec = 30;'        den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=gpg
@@ -1442,8 +1524,7 @@ PYEOF
 # bats test_tags=generated-input
 @test "generated-input: sentinel placeholder files are not tracked in git" {
   for sentinel in \
-    .generated-input-sentinel/.keep \
-    .yeet-and-yoink-input-sentinel/.keep; do
+    .generated-input-sentinel/.keep; do
     if git ls-files --error-unmatch "$sentinel" >/dev/null 2>&1; then
       if git diff --name-only --diff-filter=D -- "$sentinel" | grep -q . \
         || git diff --cached --name-only --diff-filter=D -- "$sentinel" | grep -q .; then
@@ -1470,6 +1551,7 @@ PYEOF
   if grep -Fq 'inputs.yeetAndYoink = {' flake.nix; then
     fail 'flake.nix must not contain a sentinel yeetAndYoink input declaration'
   fi
+  grep -Fq 'yeet-and-yoink.url' flake.nix
 }
 
 # bats test_tags=generated-input
@@ -1514,7 +1596,7 @@ PYEOF
 @test "generated-input: docs reference external-input-flake.sh" {
   grep -Fq 'external-input-flake.sh' docs/macbook.sh
   grep -Fq 'external-input-flake.sh' docs/vm.sh
-  grep -Fq 'external-input-flake.sh' den/aspects/features/shell-git.nix
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
 }
 
 # bats test_tags=generated-input
@@ -1534,8 +1616,8 @@ PYEOF
 }
 
 # bats test_tags=generated-input
-@test "generated-input: vmware aspect and vm.sh wire the nixos-generated shared folder" {
-  grep -Fq '.host:/nixos-generated' den/aspects/features/vmware.nix
+@test "generated-input: vm-aarch64 host aspect and vm.sh wire the nixos-generated shared folder" {
+  grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'guestName = "nixos-generated"' docs/vm.sh
   grep -Fq 'vmrun -T fusion setSharedFolderState "$vmx" "$share_name" "$host_path" writable' docs/vm.sh
   grep -Fq 'vmrun -T fusion addSharedFolder "$vmx" "$share_name" "$host_path"' docs/vm.sh
@@ -1553,53 +1635,46 @@ PYEOF
 
 
 # ===========================================================================
-# bats-package — bats with libraries is wired at the system level
+# bats-package — bats with libraries is wired in devtools
 # ===========================================================================
 
 # bats test_tags=bats-package
-@test "bats-package: pkgs.bats is not in editors-devtools home.packages" {
-  # bats must be a system-level package (with wired BATS_LIB_PATH), not a
-  # bare user-level entry in editors-devtools.
-  if grep -Eq '^[[:space:]]*pkgs\.bats\b' den/aspects/features/editors-devtools.nix; then
-    fail 'pkgs.bats still in editors-devtools home.packages — must be system-level with bats.withLibraries'
+@test "bats-package: pkgs.bats is not a bare entry in editors or devtools home.packages" {
+  if grep -Eq '^[[:space:]]*pkgs\.bats\b' den/aspects/features/editors.nix den/aspects/features/devtools.nix; then
+    fail 'pkgs.bats as a bare entry — must use bats.withLibraries'
   fi
 }
 
 # bats test_tags=bats-package
-@test "bats-package: linux-core.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/features/linux-core.nix
-  grep -Fq 'bats-support' den/aspects/features/linux-core.nix
-  grep -Fq 'bats-assert'  den/aspects/features/linux-core.nix
-  grep -Fq 'bats-file'    den/aspects/features/linux-core.nix
+@test "bats-package: devtools.nix provides bats with libraries" {
+  grep -Fq 'bats.withLibraries' den/aspects/features/devtools.nix
+  grep -Fq 'bats-support' den/aspects/features/devtools.nix
+  grep -Fq 'bats-assert'  den/aspects/features/devtools.nix
+  grep -Fq 'bats-file'    den/aspects/features/devtools.nix
 }
 
 # bats test_tags=bats-package
-@test "bats-package: darwin-core.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/features/darwin-core.nix
-  grep -Fq 'bats-support' den/aspects/features/darwin-core.nix
-  grep -Fq 'bats-assert'  den/aspects/features/darwin-core.nix
-  grep -Fq 'bats-file'    den/aspects/features/darwin-core.nix
+@test "bats-package: devtools.nix provides GNU parallel for bats --jobs" {
+  grep -Fq 'pkgs.parallel' den/aspects/features/devtools.nix
 }
 
 # bats test_tags=bats-package
-@test "bats-package: wsl.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/features/wsl.nix
-  grep -Fq 'bats-support' den/aspects/features/wsl.nix
-  grep -Fq 'bats-assert'  den/aspects/features/wsl.nix
-  grep -Fq 'bats-file'    den/aspects/features/wsl.nix
+@test "bats-package: linux-core.nix does not duplicate bats" {
+  if grep -Fq 'bats' den/aspects/features/linux-core.nix; then
+    fail 'linux-core.nix still contains bats — moved to devtools.nix'
+  fi
 }
 
 # bats test_tags=bats-package
-@test "bats-package: linux-core.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+parallel([[:space:]]|$)' den/aspects/features/linux-core.nix
+@test "bats-package: darwin-core.nix does not duplicate bats" {
+  if grep -Fq 'bats' den/aspects/features/darwin-core.nix; then
+    fail 'darwin-core.nix still contains bats — moved to devtools.nix'
+  fi
 }
 
 # bats test_tags=bats-package
-@test "bats-package: darwin-core.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+parallel([[:space:]]|$)' den/aspects/features/darwin-core.nix
-}
-
-# bats test_tags=bats-package
-@test "bats-package: wsl.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+pkgs\.parallel([[:space:]]|$)' den/aspects/features/wsl.nix
+@test "bats-package: wsl.nix does not duplicate bats" {
+  if grep -Fq 'bats' den/aspects/hosts/wsl.nix; then
+    fail 'wsl.nix still contains bats — moved to devtools.nix'
+  fi
 }

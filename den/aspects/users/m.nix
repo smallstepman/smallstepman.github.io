@@ -3,9 +3,10 @@
     includes = [
       den.aspects.identity
       den.aspects.home-base
-      den.aspects.shell-git
-      den.aspects.gpg
-      den.aspects.editors-devtools
+      den.aspects.shell
+      den.aspects.git
+      den.aspects.editors
+      den.aspects.devtools
       den.aspects.ai-tools
     ];
   };
