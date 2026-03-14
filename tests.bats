@@ -431,7 +431,8 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git and home-base aspect files exist" {
-  assert_file_exists den/aspects/features/shell-git.nix
+  assert_file_exists den/aspects/features/shell.nix
+  assert_file_exists den/aspects/features/git.nix
   assert_file_exists den/aspects/features/home-base.nix
 }
 
@@ -445,18 +446,18 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git.nix sets essential HM programs" {
-  grep -Fq 'programs.git = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.zsh = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.oh-my-posh = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.direnv = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.atuin = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.zoxide = {' den/aspects/features/shell-git.nix
-  grep -Fq 'programs.gh = {' den/aspects/features/shell-git.nix
+  grep -Fq 'programs.git = {' den/aspects/features/git.nix
+  grep -Fq 'programs.zsh = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.oh-my-posh = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.direnv = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.atuin = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.zoxide = {' den/aspects/features/shell.nix
+  grep -Fq 'programs.gh = {' den/aspects/features/git.nix
 }
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git.nix sets EDITOR session variable" {
-  grep -Fq 'EDITOR' den/aspects/features/shell-git.nix
+  grep -Fq 'EDITOR' den/aspects/features/shell.nix
 }
 
 # bats test_tags=home-manager-core
@@ -470,21 +471,20 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git includes g = git alias" {
-  grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell-git.nix
+  grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell.nix
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: user m aspect includes shell-git" {
-  grep -Fq 'den.aspects.shell-git' den/aspects/users/m.nix
+@test "home-manager-core: user m aspect includes shell and git" {
+  grep -Fq 'den.aspects.shell' den/aspects/users/m.nix
+  grep -Fq 'den.aspects.git'   den/aspects/users/m.nix
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: signing/GPG config is not in shell-git.nix" {
-  local non_comment_shell_git
-  non_comment_shell_git=$(grep -Ev '^[[:space:]]*#' den/aspects/features/shell-git.nix)
-  if printf '%s\n' "$non_comment_shell_git" | grep -Eq 'gitSigningKey|signByDefault|signing\.key|gpg\.program|services\.gpg-agent'; then
-    fail 'signing/GPG config found in shell-git.nix — it must stay in gpg.nix'
-  fi
+@test "home-manager-core: git.nix owns GPG and signing config" {
+  grep -Fq 'programs.gpg.enable' den/aspects/features/git.nix
+  grep -Fq 'services.gpg-agent'  den/aspects/features/git.nix
+  grep -Fq 'signing.signByDefault = true' den/aspects/features/git.nix
 }
 
 # bats test_tags=home-manager-core
@@ -1027,12 +1027,12 @@ PYEOF
 # bats test_tags=vm-desktop
 @test "vm-desktop: scripts and docs reference external-input-flake.sh correctly" {
   grep -Fq 'external-input-flake.sh' docs/vm.sh
-  grep -Fq 'external-input-flake.sh' den/aspects/features/shell-git.nix
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
   if grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh; then
     fail 'scripts/external-input-flake.sh must not contain yeet-and-yoink git+file wrapper'
   fi
-  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell-git.nix; then
-    fail 'shell-git.nix must not reference YEET_AND_YOINK_INPUT_DIR'
+  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell.nix; then
+    fail 'shell.nix must not reference YEET_AND_YOINK_INPUT_DIR'
   fi
   if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' docs/vm.sh; then
     fail 'docs/vm.sh must not reference YEET_AND_YOINK_INPUT_DIR'
@@ -1350,20 +1350,17 @@ PYEOF
 # ===========================================================================
 
 # bats test_tags=gpg
-@test "gpg: den/aspects/features/gpg.nix exists" {
-  assert_file_exists den/aspects/features/gpg.nix
+@test "gpg: den/aspects/features/git.nix owns GPG config" {
+  assert_file_exists den/aspects/features/git.nix
 }
 
 # bats test_tags=gpg
-@test "gpg: gpg.nix uses den-native host context (isVM/isDarwin, not currentSystemName)" {
-  if grep -Fq 'isVM' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix must not contain isVM — host-specific config belongs in host aspects'
+@test "gpg: git.nix uses den-native host context (isVM/isDarwin, not currentSystemName)" {
+  if grep -Fq 'isVM' den/aspects/features/git.nix; then
+    fail 'git.nix must not contain isVM — host-specific config belongs in host aspects'
   fi
-  if grep -Fq 'isDarwin' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix must not contain isDarwin — host-specific config belongs in host aspects'
-  fi
-  if grep -Fq 'currentSystemName' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix still uses legacy currentSystemName'
+  if grep -Fq 'currentSystemName' den/aspects/features/git.nix; then
+    fail 'git.nix still uses legacy currentSystemName'
   fi
 }
 
@@ -1599,7 +1596,7 @@ PYEOF
 @test "generated-input: docs reference external-input-flake.sh" {
   grep -Fq 'external-input-flake.sh' docs/macbook.sh
   grep -Fq 'external-input-flake.sh' docs/vm.sh
-  grep -Fq 'external-input-flake.sh' den/aspects/features/shell-git.nix
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
 }
 
 # bats test_tags=generated-input
