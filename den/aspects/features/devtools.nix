@@ -5,26 +5,29 @@
 
       home.packages = [
         pkgs.devenv
+        pkgs.just
+        pkgs.gnumake
 
+        pkgs.btop
+        pkgs.dust
+        pkgs.tree
+        pkgs.watch
         pkgs.websocat
-        pkgs.bws
+        pkgs.yazi
         pkgs.yq
+        pkgs.jq
+
+        pkgs.bws
         pkgs.fluxcd
         pkgs.kubernetes-helm
-        pkgs.tree
         pkgs.terragrunt
-        pkgs.watch
-        pkgs.yazi
-        pkgs.btop
-        pkgs.gnumake
-        pkgs.just
-        pkgs.dust
 
         pkgs.parallel
         (pkgs.bats.withLibraries (libs: [
           libs.bats-support
           libs.bats-assert
           libs.bats-file
+          libs.bats-detik
         ]))
 
         pkgs.go
