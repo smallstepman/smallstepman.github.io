@@ -12,6 +12,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # ---------------------------------------------------------------------------
 # Static structure checks
 # ---------------------------------------------------------------------------
@@ -52,14 +55,14 @@ if [ -e "$wsl_machine" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Live nix eval helpers
+# Live nix_generated_eval helpers
 # ---------------------------------------------------------------------------
 
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1
@@ -71,20 +74,6 @@ _nix_eval() {
 
 nix_eval_raw()  { _nix_eval --raw  "$1"; }
 nix_eval_json() { _nix_eval --json "$1"; }
-
-nix_eval_expr_raw() {
-  local expr="$1" out err_file
-  err_file=$(mktemp)
-  if ! out=$(nix eval --impure --raw --expr "$expr" 2>"$err_file"); then
-    echo "FAIL: nix eval expr failed with:" >&2
-    cat "$err_file" >&2
-    rm -f "$err_file"
-    exit 1
-  fi
-  cat "$err_file" >&2
-  rm -f "$err_file"
-  printf '%s' "$out"
-}
 
 # ---------------------------------------------------------------------------
 # Live eval: WSL config
@@ -107,7 +96,7 @@ actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.wsl.startMenuLaunchers"
   || { echo "FAIL: wsl.startMenuLaunchers: expected true, got $actual" >&2; exit 1; }
 
 actual=$(nix_eval_raw ".#nixosConfigurations.wsl.config.nix.package.version")
-expected=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); pkgs = import flake.inputs.nixpkgs { system = "x86_64-linux"; config.allowUnfree = true; }; in pkgs.nixVersions.latest.version')
+expected=$(nix_eval_raw ".#nixosConfigurations.wsl.pkgs.nixVersions.latest.version")
 [ "$actual" = "$expected" ] \
   || { echo "FAIL: nix.package.version: expected unstable $expected, got $actual" >&2; exit 1; }
 

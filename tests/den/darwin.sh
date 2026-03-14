@@ -14,6 +14,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # ---------------------------------------------------------------------------
 # Static structure checks — new aspect files must exist
 # ---------------------------------------------------------------------------
@@ -90,14 +93,14 @@ if [ -e "$darwin_user" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Live nix eval helper
+# Live nix_generated_eval helper
 # ---------------------------------------------------------------------------
 
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1
@@ -110,11 +113,11 @@ _nix_eval() {
 nix_eval_raw()  { _nix_eval --raw  "$1"; }
 nix_eval_json() { _nix_eval --json "$1"; }
 
-nix_eval_expr_raw() {
-  local expr="$1" out err_file
+nix_eval_apply_raw() {
+  local attr="$1" apply="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure --raw --expr "$expr" 2>"$err_file"); then
-    echo "FAIL: nix eval expr failed with:" >&2
+  if ! out=$(nix_generated_eval --raw --apply "$apply" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval apply failed for '$attr' with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1
@@ -152,7 +155,7 @@ actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.system.stat
 [ "$actual" = "5" ] \
   || { echo "FAIL: system.stateVersion: expected 5, got $actual" >&2; exit 1; }
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.system.defaults.CustomUserPreferences."com.apple.finder".AppleShowAllFiles then "true" else "false"')
+actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.system.defaults.CustomUserPreferences.\"com.apple.finder\".AppleShowAllFiles")
 [ "$actual" = "true" ] \
   || { echo "FAIL: system.defaults.CustomUserPreferences.com.apple.finder.AppleShowAllFiles: expected true, got $actual" >&2; exit 1; }
 
@@ -164,11 +167,11 @@ actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.services.sk
 [ "$actual" = "true" ] \
   || { echo "FAIL: services.skhd.enable: expected true, got $actual" >&2; exit 1; }
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.pkgs ? uniclip then "yes" else "no"')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.pkgs" 'pkgs: if pkgs ? uniclip then "yes" else "no"')
 [ "$actual" = "yes" ] \
   || { echo "FAIL: darwin system pkgs missing overlay package uniclip" >&2; exit 1; }
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.nixosConfigurations.vm-aarch64.pkgs ? uniclip then "yes" else "no"')
+actual=$(nix_eval_apply_raw ".#nixosConfigurations.vm-aarch64.pkgs" 'pkgs: if pkgs ? uniclip then "yes" else "no"')
 [ "$actual" = "yes" ] \
   || { echo "FAIL: vm system pkgs missing overlay package uniclip" >&2; exit 1; }
 
@@ -176,11 +179,11 @@ actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.launchd.use
 [ "$actual" = "true" ] \
   || { echo "FAIL: launchd.user.agents.uniclip.serviceConfig.RunAtLoad: expected true, got $actual" >&2; exit 1; }
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.launchd.user.agents ? opencode-serve then "yes" else "no"')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents" 'agents: if agents ? "opencode-serve" then "yes" else "no"')
 [ "$actual" = "yes" ] \
   || { echo "FAIL: launchd.user.agents.opencode-serve missing from Darwin config" >&2; exit 1; }
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.launchd.user.agents ? opencode-web then "yes" else "no"')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents" 'agents: if agents ? "opencode-web" then "yes" else "no"')
 [ "$actual" = "yes" ] \
   || { echo "FAIL: launchd.user.agents.opencode-web missing from Darwin config" >&2; exit 1; }
 

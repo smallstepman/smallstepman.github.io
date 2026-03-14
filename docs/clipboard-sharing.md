@@ -65,8 +65,10 @@ The shared encryption password is stored in Bitwarden under
 `uniclip-password`.
 
 - **macOS:** fetched live by the launchd agent through `rbw`
-- **VM:** collected into `generated/secrets.yaml`, decrypted by sops-nix, and
-  exposed as `/run/secrets/uniclip/password`
+- **VM:** collected into the external generated dataset
+  (`~/.local/share/nix-config-generated` on macOS, mounted as `/nixos-generated`
+  in the VM), decrypted by sops-nix, and exposed as
+  `/run/secrets/uniclip/password`
 
 ## Debugging
 

@@ -7,8 +7,9 @@
 #
 # NixOS scope:
 #   nixpkgs.config.allowUnfree + allowUnsupportedSystem,
-#   virtualisation.vmware.guest.enable, HGFS mounts (/nixos-config and
-#   /Users/m/Projects), gtkmm3 (VMware clipboard integration).
+#   virtualisation.vmware.guest.enable, HGFS mounts (/nixos-config,
+#   /nixos-generated, and /Users/m/Projects), gtkmm3 (VMware clipboard
+#   integration).
 #
 # home-manager scope:
 #   projectsRoot fallback logic, niriDeep plugin build (yeet-and-yoink),
@@ -21,7 +22,7 @@
 #   docker-client package.
 #
 # Guarded by host.vmware.enable (set for vm-aarch64 in den/hosts.nix).
-{ den, lib, ... }: {
+{ den, lib, yeetAndYoink, ... }: {
 
   den.aspects.vmware = {
     includes = [
@@ -61,6 +62,19 @@
             fileSystems."/nixos-config" = {
               fsType = "fuse./run/current-system/sw/bin/vmhgfs-fuse";
               device = ".host:/nixos-config";
+              options = [
+                "umask=22"
+                "uid=1000"
+                "gid=1000"
+                "allow_other"
+                "auto_unmount"
+                "defaults"
+              ];
+            };
+
+            fileSystems."/nixos-generated" = {
+              fsType = "fuse./run/current-system/sw/bin/vmhgfs-fuse";
+              device = ".host:/nixos-generated";
               options = [
                 "umask=22"
                 "uid=1000"
@@ -113,14 +127,14 @@
                     pname = "yeet-and-yoink-zellij-break";
                     version = "0.1.0";
                     src = lib.cleanSourceWith {
-                      src = projectsRoot + "/yeet-and-yoink/plugins/zellij-break";
+                      src = yeetAndYoink.root;
                       filter = path: type:
                         let
                           baseName = builtins.baseNameOf path;
                         in
                           baseName != "target" && baseName != ".git";
                     };
-                    cargoLock.lockFile = projectsRoot + "/yeet-and-yoink/plugins/zellij-break/Cargo.lock";
+                    cargoLock.lockFile = yeetAndYoink.requirePath "Cargo.lock";
                     buildPhase = ''
                       runHook preBuild
                       cargo build --frozen --release --target wasm32-wasip1

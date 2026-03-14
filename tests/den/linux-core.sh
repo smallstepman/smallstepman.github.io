@@ -12,6 +12,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # ---------------------------------------------------------------------------
 # Static structure checks — new files must exist
 # ---------------------------------------------------------------------------
@@ -124,14 +127,14 @@ if [ -e "$vmshared" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Live nix eval helper
+# Live nix_generated_eval helper
 # ---------------------------------------------------------------------------
 
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1
@@ -205,14 +208,11 @@ printf '%s' "$actual" | grep -q '"lxd"' \
   || { echo "FAIL: extraGroups missing lxd, got '$actual'" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Live eval: sops defaultSopsFile must point to generated/secrets.yaml
+# Live eval: sops defaultSopsFile must resolve through the generated input
 # ---------------------------------------------------------------------------
 
 actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.sops.defaultSopsFile")
 printf '%s' "$actual" | grep -q 'secrets.yaml' \
   || { echo "FAIL: sops.defaultSopsFile does not mention secrets.yaml, got '$actual'" >&2; exit 1; }
-# Verify it's the repo's secrets.yaml (store path ends with generated/secrets.yaml)
-printf '%s' "$actual" | grep -q 'generated/secrets.yaml' \
-  || { echo "FAIL: sops.defaultSopsFile path unexpected, got '$actual'" >&2; exit 1; }
 
 echo "All linux-core checks passed."

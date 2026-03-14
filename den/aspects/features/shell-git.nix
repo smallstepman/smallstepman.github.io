@@ -22,6 +22,24 @@
           isWSL         = host.wsl.enable or false;
           isNonWSLLinux = isLinux && !isWSL;
           isVM          = host.vmware.enable or false;  # VMware shared-folder host
+          defaultGeneratedDir =
+            if isVM then
+              "/nixos-generated"
+            else
+              "$HOME/.local/share/nix-config-generated";
+          generatedDirSetup = ''
+            generated_dir="''${GENERATED_INPUT_DIR-}"
+            if [ -z "$generated_dir" ]; then
+              generated_dir="${defaultGeneratedDir}"
+            fi
+          '';
+          yeetAndYoinkDirSetup = ''
+            yeet_and_yoink_dir="''${YEET_AND_YOINK_INPUT_DIR-}"
+            if [ -z "$yeet_and_yoink_dir" ]; then
+              yeet_and_yoink_dir="/Users/m/Projects/yeet-and-yoink"
+            fi
+            yeet_and_yoink_flake_ref="git+file://$yeet_and_yoink_dir?dir=plugins/zellij-break"
+          '';
         in {
           homeManager = { pkgs, lib, ... }:
             let
@@ -62,12 +80,12 @@
                 open    = "xdg-open";
                 noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
                 nix-config = "nvim /nix-config";
-                niks = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --impure --flake 'path:/nixos-config#vm-aarch64'";
-                nikt = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --impure --flake 'path:/nixos-config#vm-aarch64'";
+                niks = "${generatedDirSetup}; ${yeetAndYoinkDirSetup}; sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake 'path:/nixos-config#vm-aarch64' --override-input generated \"path:$generated_dir\" --override-input yeetAndYoink \"$yeet_and_yoink_flake_ref\"";
+                nikt = "${generatedDirSetup}; ${yeetAndYoinkDirSetup}; sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake 'path:/nixos-config#vm-aarch64' --override-input generated \"path:$generated_dir\" --override-input yeetAndYoink \"$yeet_and_yoink_flake_ref\"";
               }) // (lib.optionalAttrs isDarwin {
                 nix-config = "nvim ~/.config/nix-config";
-                niks = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --impure --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --impure --flake '.#macbook-pro-m1'";
-                nikt = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --impure --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --impure --flake '.#macbook-pro-m1'";
+                niks = "cd ~/.config/nix && ${generatedDirSetup} && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --override-input generated \"path:$generated_dir\" --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake '.#macbook-pro-m1' --override-input generated \"path:$generated_dir\"";
+                nikt = "cd ~/.config/nix && ${generatedDirSetup} && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' '.#darwinConfigurations.macbook-pro-m1.system' --override-input generated \"path:$generated_dir\" && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake '.#macbook-pro-m1' --override-input generated \"path:$generated_dir\"";
                 pinentry = "pinentry-mac";
               });
 

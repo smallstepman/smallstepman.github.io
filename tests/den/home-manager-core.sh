@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # --- Static structure checks ---
 
 # shell-git feature aspect must exist
@@ -79,13 +82,13 @@ if [ -e users/m/home-manager.nix ]; then
   done
 fi
 
-# --- Live nix eval helper (borrowed from identity.sh) ---
+# --- Live nix_generated_eval helper (borrowed from identity.sh) ---
 
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1
@@ -97,11 +100,11 @@ _nix_eval() {
 
 nix_eval_raw()  { _nix_eval --raw  "$1"; }
 nix_eval_json() { _nix_eval --json "$1"; }
-nix_eval_expr_raw() {
-  local expr="$1" out err_file
+nix_eval_apply_raw() {
+  local attr="$1" apply="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure --raw --expr "$expr" 2>"$err_file"); then
-    echo "FAIL: nix eval expr failed with:" >&2
+  if ! out=$(nix_generated_eval --raw --apply "$apply" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval apply failed for '$attr' with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1
@@ -188,7 +191,7 @@ if [ "$actual" != "true" ]; then
   exit 1
 fi
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in toString flake.nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry')
+actual=$(nix_eval_apply_raw ".#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry" 'pinentry: toString pinentry')
 if [[ "$actual" != *pinentry-wayprompt* ]]; then
   echo "FAIL: vm-aarch64 rbw pinentry: expected pinentry-wayprompt, got '$actual'" >&2
   exit 1
@@ -313,13 +316,13 @@ if printf '%s' "$darwin_packages" | grep -q -- '-git-credential-github'; then
   exit 1
 fi
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile ? "grm/repos.yaml" then "true" else "false"')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile" 'cfg: if cfg ? "grm/repos.yaml" then "true" else "false"')
 if [ "$actual" != "true" ]; then
   echo "FAIL: macbook-pro-m1 missing xdg.configFile.\"grm/repos.yaml\"" >&2
   exit 1
 fi
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in toString flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile."grm/repos.yaml".source')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile.\"grm/repos.yaml\".source" 'source: toString source')
 if [[ "$actual" != *dotfiles/common/grm-repos.yaml ]]; then
   echo "FAIL: macbook-pro-m1 grm/repos.yaml source unexpected: '$actual'" >&2
   exit 1
@@ -330,20 +333,20 @@ for key in \
   'activitywatch/scripts' \
   'kanata-tray' \
   'kanata'; do
-  actual=$(nix_eval_expr_raw "let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile ? \"${key}\" then \"true\" else \"false\"")
+  actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile" "cfg: if cfg ? \"${key}\" then \"true\" else \"false\"")
   if [ "$actual" != "true" ]; then
     echo "FAIL: macbook-pro-m1 missing xdg.configFile.\"${key}\"" >&2
     exit 1
   fi
 done
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); pkgs = flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages; in if builtins.any (pkg: builtins.match ".*ghostty.*" (pkg.name or "") != null) pkgs then "true" else "false"')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages" 'pkgs: if builtins.any (pkg: builtins.match ".*ghostty.*" (pkg.name or "") != null) pkgs then "true" else "false"')
 if [ "$actual" != "true" ]; then
   echo "FAIL: macbook-pro-m1 home.packages missing ghostty" >&2
   exit 1
 fi
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); pkgs = flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages; in if builtins.any (pkg: builtins.match ".*sentry-cli.*" (pkg.name or "") != null) pkgs then "true" else "false"')
+actual=$(nix_eval_apply_raw ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages" 'pkgs: if builtins.any (pkg: builtins.match ".*sentry-cli.*" (pkg.name or "") != null) pkgs then "true" else "false"')
 if [ "$actual" != "true" ]; then
   echo "FAIL: macbook-pro-m1 home.packages missing sentry-cli" >&2
   exit 1
@@ -401,7 +404,7 @@ if [ "$actual" != "true" ]; then
   exit 1
 fi
 
-actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in toString flake.nixosConfigurations.wsl.config.home-manager.users.m.programs.rbw.settings.pinentry')
+actual=$(nix_eval_apply_raw ".#nixosConfigurations.wsl.config.home-manager.users.m.programs.rbw.settings.pinentry" 'pinentry: toString pinentry')
 if [[ "$actual" != *pinentry-tty* ]]; then
   echo "FAIL: wsl rbw pinentry: expected pinentry-tty, got '$actual'" >&2
   exit 1

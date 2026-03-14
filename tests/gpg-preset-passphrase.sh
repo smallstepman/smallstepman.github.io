@@ -4,12 +4,15 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 nix_eval_raw() {
-  nix --extra-experimental-features 'nix-command flakes' eval --impure --raw "$@"
+  nix_generated_eval --raw "$@"
 }
 
 nix_eval_json() {
-  nix --extra-experimental-features 'nix-command flakes' eval --impure --json "$@"
+  nix_generated_eval --json "$@"
 }
 
 fail() {
@@ -75,7 +78,7 @@ if [ -e users/m/home-manager.nix ]; then
   fi
 fi
 
-# --- Live nix eval: gpg-agent behavior ---
+# --- Live nix_generated_eval: gpg-agent behavior ---
 
 vm_extra_config=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.services.gpg-agent.extraConfig)
 [[ "$vm_extra_config" == *allow-preset-passphrase* ]] || fail 'vm-aarch64 gpg-agent does not allow preset passphrases'
@@ -91,14 +94,14 @@ mac_default_cache_ttl=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.conf
 mac_max_cache_ttl=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.services.gpg-agent.maxCacheTtl)
 [[ "$mac_max_cache_ttl" == "1" ]] || fail 'macbook-pro-m1 should cap gpg-agent cache entries at 1 second'
 
-# --- Live nix eval: helper script package ---
+# --- Live nix_generated_eval: helper script package ---
 
 vm_helper_present=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.home.packages --apply 'pkgs: builtins.any (pkg: (pkg.name or "") == "gpg-preset-passphrase-login") pkgs')
 [[ "$vm_helper_present" == "true" ]] || fail 'vm-aarch64 helper script package is missing'
 
-# --- Live nix eval: systemd user service ---
+# --- Live nix_generated_eval: systemd user service ---
 
-vm_service_present=$(nix_eval_json --expr 'let flake = builtins.getFlake (toString ./.); in flake.nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services ? gpg-preset-passphrase-login')
+vm_service_present=$(nix_generated_eval --json --apply 'services: services ? "gpg-preset-passphrase-login"' ".#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services")
 [[ "$vm_service_present" == "true" ]] || fail 'vm-aarch64 systemd user service is missing'
 
 vm_service_type=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Service.Type)
@@ -120,10 +123,10 @@ vm_service_after=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-ma
 vm_service_wanted_by=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Install.WantedBy)
 [[ "$vm_service_wanted_by" == *default.target* ]] || fail 'vm-aarch64 systemd user service is not enabled for login-time startup'
 
-mac_service_present=$(nix_eval_json --expr 'let flake = builtins.getFlake (toString ./.); in flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.systemd.user.services ? gpg-preset-passphrase-login')
+mac_service_present=$(nix_generated_eval --json --apply 'services: services ? "gpg-preset-passphrase-login"' ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.systemd.user.services")
 [[ "$mac_service_present" == "false" ]] || fail 'macbook-pro-m1 unexpectedly defines the systemd user service'
 
-# --- Live nix eval: git signing ---
+# --- Live nix_generated_eval: git signing ---
 
 vm_signing_key=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.git.signing.key)
 [[ "$vm_signing_key" == "071F6FE39FC26713930A702401E5F9A947FA8F5C" ]] || fail "vm-aarch64 git signing key is '$vm_signing_key', expected 071F6FE39FC26713930A702401E5F9A947FA8F5C"

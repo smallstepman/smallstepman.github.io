@@ -3,18 +3,9 @@ backup.tar.gz
 result
 iso/nixos.iso
 
-# Encrypted secrets: safe to commit (age-encrypted), but kept out of the
-# public repo as defense-in-depth against future cryptographic breaks.
-# On the VM, helper scripts `git add -f` this file so the flake can see it.
-generated/secrets.yaml
-
-# Generated during bootstrap -- tracked on purpose (public keys only).
-# This negation lets `git add` work without -f.
-!generated/
-generated/*
-!generated/host-authorized-keys
-!generated/mac-host-authorized-keys
-!generated/vm-age-pubkey
+# Local scratch copy of the generated dataset. The canonical dataset now lives
+# outside the repo and is passed in via `--override-input generated ...`.
+generated/
 
 # bv (beads viewer) local config and caches
 .bv/

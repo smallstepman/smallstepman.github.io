@@ -477,6 +477,18 @@
         "type": "github"
       }
     },
+    "generated": {
+      "flake": false,
+      "locked": {
+        "path": "./.generated-input-sentinel",
+        "type": "path"
+      },
+      "original": {
+        "path": "./.generated-input-sentinel",
+        "type": "path"
+      },
+      "parent": []
+    },
     "git-repo-manager": {
       "inputs": {
         "nixpkgs": [
@@ -1084,6 +1096,7 @@
         "disko": "disko",
         "flake-aspects": "flake-aspects",
         "gastown": "gastown",
+        "generated": "generated",
         "git-repo-manager": "git-repo-manager",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
@@ -1106,7 +1119,8 @@
         "sopsidy": "sopsidy",
         "tmux-menus-src": "tmux-menus-src",
         "uniclip-src": "uniclip-src",
-        "uv2nix": "uv2nix"
+        "uv2nix": "uv2nix",
+        "yeetAndYoink": "yeetAndYoink"
       }
     },
     "rust-overlay": {
@@ -1427,6 +1441,18 @@
         "repo": "xwayland-satellite",
         "type": "github"
       }
+    },
+    "yeetAndYoink": {
+      "flake": false,
+      "locked": {
+        "path": "./.yeet-and-yoink-input-sentinel",
+        "type": "path"
+      },
+      "original": {
+        "path": "./.yeet-and-yoink-input-sentinel",
+        "type": "path"
+      },
+      "parent": []
     }
   },
   "root": "root",

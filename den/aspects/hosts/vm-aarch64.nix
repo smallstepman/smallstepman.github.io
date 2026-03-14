@@ -11,7 +11,7 @@
 #   - 127.0.0.1 hosts entry for vm-macbook
 #   - openwebui-local-proxy systemd service
 #   - users.users.m host-specific settings (extraGroups, authorizedKeys)
-{ den, inputs, ... }: {
+{ den, generated, inputs, ... }: {
   den.aspects.vm-aarch64 = {
     includes = [
       # Core Linux system behavior (non-desktop, non-WSL-specific).
@@ -85,7 +85,7 @@
 
             # Host-specific sops age public key used by secret collection.
             sops.hostPubKey = lib.removeSuffix "\n"
-              (builtins.readFile ../../../generated/vm-age-pubkey);
+              (generated.readFile "vm-age-pubkey");
 
             # Ensure vm-macbook resolves locally regardless of DNS state.
             networking.hosts."127.0.0.1" = [ "vm-macbook" "localhost" ];
@@ -108,7 +108,7 @@
             users.users.m = {
               extraGroups = [ "lxd" ];
               openssh.authorizedKeys.keyFiles = [
-                ../../../generated/host-authorized-keys
+                (generated.requireFile "host-authorized-keys")
               ];
             };
           };

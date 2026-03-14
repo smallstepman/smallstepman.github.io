@@ -6,7 +6,7 @@
 # Covers: Determinate Nix integration, nix-daemon shell init, system package
 # baseline, SSH daemon, Touch ID sudo, and the remaining Darwin user record
 # fields that are not provided by den.provides.primary-user.
-{ den, ... }: {
+{ den, generated, ... }: {
   den.aspects.darwin-core = {
     includes = [
       ({ ... }: {
@@ -88,12 +88,12 @@
           # The user already exists via den identity, but nix-darwin still needs
           # these Darwin-specific fields to know the home directory and host SSH
           # trust configuration for host/guest integration.
-          users.users.m = {
-            home = "/Users/m";
-            openssh.authorizedKeys.keyFiles = [
-              ../../../generated/mac-host-authorized-keys
-            ];
-          };
+            users.users.m = {
+              home = "/Users/m";
+              openssh.authorizedKeys.keyFiles = [
+                (generated.requireFile "mac-host-authorized-keys")
+              ];
+            };
 
           services.openssh.enable = true;
           services.openssh.extraConfig = ''

@@ -13,6 +13,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # ---------------------------------------------------------------------------
 # Static structure checks — new aspect files must exist
 # ---------------------------------------------------------------------------
@@ -46,6 +49,9 @@ grep -Fq 'wl-clipboard'                      den/aspects/features/linux-desktop.
 grep -Fq 'virtualisation.vmware.guest.enable' den/aspects/features/vmware.nix
 grep -Fq '.host:/Projects'                    den/aspects/features/vmware.nix
 grep -Fq '.host:/nixos-config'               den/aspects/features/vmware.nix
+grep -Fq 'yeetAndYoink.requirePath'           den/aspects/features/vmware.nix
+grep -Fq 'src = yeetAndYoink.root;'           den/aspects/features/vmware.nix
+grep -Fq 'cargoLock.lockFile = yeetAndYoink.requirePath "Cargo.lock";' den/aspects/features/vmware.nix
 grep -Fq 'programs.ssh'                       den/aspects/features/vmware.nix
 grep -Fq 'programs.niri.settings'             den/aspects/features/vmware.nix
 grep -Fq 'DOCKER_CONTEXT'                     den/aspects/features/vmware.nix
@@ -54,6 +60,11 @@ grep -Fq 'load_plugins'                       den/aspects/features/vmware.nix
 grep -Fq 'uniclip'                            den/aspects/features/vmware.nix
 grep -Fq 'ensureHostDockerContext'            den/aspects/features/vmware.nix
 grep -Fq 'mac-host-docker'                   den/aspects/features/vmware.nix
+grep -Fq -- '--override-input yeetAndYoink' docs/vm.sh
+grep -Fq -- '--override-input yeetAndYoink' den/aspects/features/shell-git.nix
+grep -Fq 'git+file://%s/yeet-and-yoink?dir=plugins/zellij-break' docs/vm.sh
+grep -Fq 'git+file://%s?dir=plugins/zellij-break' tests/lib/generated-input.sh
+grep -Fq 'git+file://$yeet_and_yoink_dir?dir=plugins/zellij-break' den/aspects/features/shell-git.nix
 
 # ---------------------------------------------------------------------------
 # vm-aarch64 host aspect wires both new feature aspects
@@ -164,14 +175,14 @@ if [ -e "$hm" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Live nix eval helper
+# Live nix_generated_eval helper
 # ---------------------------------------------------------------------------
 
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1

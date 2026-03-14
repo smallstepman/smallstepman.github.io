@@ -12,6 +12,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # ---------------------------------------------------------------------------
 # Static structure checks — new files must exist
 # ---------------------------------------------------------------------------
@@ -141,14 +144,14 @@ if [ -e "$hm" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Live nix eval helper
+# Live nix_generated_eval helper
 # ---------------------------------------------------------------------------
 
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval --impure "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1

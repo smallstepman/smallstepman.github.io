@@ -133,7 +133,7 @@ macOS (host)                              VM (guest)
 | Directory | Purpose |
 |-----------|---------|
 | `/den/` | den framework wiring: hosts, shared context, and reusable aspects |
-| `/generated/` | Generated files and encrypted secrets used by den aspects (`secrets.yaml`, SSH pubkeys, age pubkeys) |
+| `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS: `secrets.yaml`, SSH pubkeys, and the VM age pubkey; passed to the flake via `--override-input generated ...` |
 | `/modules/` | Reusable NixOS modules |
 | `/modules/specialization/` | System specializations (alternative desktop environments, e.g., GNOME+ibus) |
 | `/dotfiles/common/` | Shared user-owned assets consumed by den aspects (shell config, editors, OpenCode, repo-manager config) |
@@ -165,12 +165,12 @@ scripts in `docs/` plus direct Nix commands:
 | `bash docs/macbook.sh` | Bootstrap a fresh macOS host and apply the nix-darwin config |
 | `bash docs/vm.sh bootstrap` | Create/install the NixOS VM and perform first-time provisioning |
 | `bash docs/vm.sh switch` | Apply the current VM configuration over SSH/shared folders |
-| `bash docs/vm.sh refresh-secrets` | Refresh the VM age public key, generated SSH pubkeys, and `generated/secrets.yaml` |
+| `bash docs/vm.sh refresh-secrets` | Refresh the VM age public key, generated SSH pubkeys, and the external `secrets.yaml` dataset |
 | `bash docs/vm.sh ssh` | SSH into the VM (or run a command) |
-| `nix run .#collect-secrets` | Regenerate `generated/secrets.yaml` locally via sopsidy |
-| `nix build .#darwinConfigurations.macbook-pro-m1.system --impure` | Build the Darwin system closure |
-| `sudo ./result/sw/bin/darwin-rebuild switch --impure --flake .#macbook-pro-m1` | Apply the built Darwin system |
-| `nix build .#nixosConfigurations.vm-aarch64.config.system.build.toplevel` | Build the VM system closure |
+| `nix run --override-input generated "path:$HOME/.local/share/nix-config-generated" .#collect-secrets` | Regenerate the external `secrets.yaml` dataset locally via sopsidy |
+| `nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" .#darwinConfigurations.macbook-pro-m1.system` | Build the Darwin system closure |
+| `sudo ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --override-input generated "path:$HOME/.local/share/nix-config-generated"` | Apply the built Darwin system |
+| `nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" --override-input yeetAndYoink "git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break" .#nixosConfigurations.vm-aarch64.config.system.build.toplevel` | Build the VM system closure |
 
 **Environment Variables for VM Operations:**
 - `NIXADDR` - Preferred VM IP address (default: `192.168.130.3`; `docs/vm.sh` also falls back through `vm_detect_ip`)
@@ -179,7 +179,9 @@ scripts in `docs/` plus direct Nix commands:
 - `NIXNAME` - Configuration name (default: vm-aarch64)
 - `NIXINSTALLUSER` - Bootstrap SSH username during install (default: root)
 - `NIX_CONFIG_DIR` - Local checkout path used by `docs/vm.sh` (default: `~/.config/nix`)
-- `HOST_SSH_PUBKEY_FILE` - Host public key copied into `generated/` (default: `~/.ssh/id_ed25519.pub`)
+- `GENERATED_DIR` - Canonical generated dataset path on macOS (default: `~/.local/share/nix-config-generated`)
+- `VM_SHARED_GENERATED_DIR` - VM mountpoint for the generated dataset (default: `/nixos-generated`)
+- `HOST_SSH_PUBKEY_FILE` - Host public key copied into the generated dataset (default: `~/.ssh/id_ed25519.pub`)
 
 ## Key Configuration Files
 
@@ -315,26 +317,29 @@ object rather than legacy `config._module.args` values like
 ### Useful Commands
 
 ```bash
+GENERATED_REF="path:$HOME/.local/share/nix-config-generated"
+YEET_AND_YOINK_REF="git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break"
+
 # Evaluate a specific configuration without building
-nix eval .#nixosConfigurations.vm-aarch64.config.networking.hostName
+nix eval --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF" .#nixosConfigurations.vm-aarch64.config.networking.hostName
 
 # Open a REPL with the flake loaded
-nix repl .#nixosConfigurations.vm-aarch64
+nix repl --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF" .#nixosConfigurations.vm-aarch64
 
 # Check flake for errors
-nix flake check
+nix flake check --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
 
 # Show what would be built/changed
-nixos-rebuild dry-run --flake .#vm-aarch64
+nixos-rebuild dry-run --flake .#vm-aarch64 --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
 
 # Build without switching (outputs to ./result)
-nixos-rebuild build --flake .#vm-aarch64
+nixos-rebuild build --flake .#vm-aarch64 --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
 
 # Show derivation details
-nix derivation show .#nixosConfigurations.vm-aarch64.config.system.build.toplevel
+nix derivation show --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF" .#nixosConfigurations.vm-aarch64.config.system.build.toplevel
 
 # List available outputs
-nix flake show
+nix flake show --override-input generated "$GENERATED_REF" --override-input yeetAndYoink "$YEET_AND_YOINK_REF"
 ```
 
 ### Common Errors and Solutions
@@ -367,8 +372,8 @@ vmrun getGuestIPAddress "/path/to/NixOS 25.11 aarch64.vmx" -wait
 launchctl list | grep nix
 
 # Build and apply directly
-nix build .#darwinConfigurations.macbook-pro-m1.system --impure
-sudo ./result/sw/bin/darwin-rebuild switch --impure --flake .#macbook-pro-m1
+nix build --override-input generated "path:$HOME/.local/share/nix-config-generated" .#darwinConfigurations.macbook-pro-m1.system
+sudo ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --override-input generated "path:$HOME/.local/share/nix-config-generated"
 ```
 
 **Helper script PATH issues:**
@@ -393,7 +398,7 @@ sudo ./result/sw/bin/darwin-rebuild switch --impure --flake .#macbook-pro-m1
 
 3. **macOS GUI apps**: Add to `den/aspects/features/homebrew.nix` (`homebrew.casks`, `brews`, or `masApps`)
 
-4. **Test:** `nix build .#nixosConfigurations.<name>.config.system.build.toplevel` (or the relevant den regression tests)
+4. **Test:** use the relevant helper script or a direct Nix build with the required external inputs (for example the commands in **Build / Bootstrap Commands**)
 
 5. **Remember:** New files must be `git add`ed before building — Nix flakes only see tracked files in dirty git trees.
 
@@ -433,7 +438,7 @@ Specializations provide alternative boot configurations (e.g., GNOME instead of 
 ```bash
 # At boot, greetd shows available sessions
 # Or switch to a specialization:
-sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus
+sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus --override-input generated "path:$HOME/.local/share/nix-config-generated" --override-input yeetAndYoink "git+file://$HOME/Projects/yeet-and-yoink?dir=plugins/zellij-break"
 ```
 
 ### Secrets Management
@@ -441,7 +446,7 @@ sudo nixos-rebuild switch --flake .#vm-aarch64 --specialisation gnome-ibus
 - **rbw (Bitwarden):** Used for runtime secrets on Linux (API keys, tokens, passwords)
 - **sops-nix + sopsidy:** Used for declarative secrets in NixOS configurations
 - API keys are injected per-process via shell functions and wrapper scripts, NOT as global env vars
-- `nix run .#collect-secrets` collects sopsidy secrets; `bash docs/vm.sh refresh-secrets` refreshes VM age/pubkey material
+- `nix run --override-input generated "path:$GENERATED_DIR" .#collect-secrets` collects sopsidy secrets into the external dataset; `bash docs/vm.sh refresh-secrets` refreshes VM age/pubkey material
 
 ## Desktop Environment (Linux VM)
 

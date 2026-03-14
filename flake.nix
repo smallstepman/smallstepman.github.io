@@ -136,6 +136,20 @@
   # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
   inputs.flake-aspects.url = "github:vic/flake-aspects";
 
+  # Pure external dataset containing generated keys and secrets metadata.
+  # Supported entrypoints override this sentinel path with the real dataset.
+  inputs.generated = {
+    url = "path:./.generated-input-sentinel";
+    flake = false;
+  };
+
+  # Pure external source snapshot for the VM-only yeet-and-yoink plugin build.
+  # Supported VM entrypoints override this sentinel path with the live checkout.
+  inputs.yeetAndYoink = {
+    url = "path:./.yeet-and-yoink-input-sentinel";
+    flake = false;
+  };
+
   outputs = { self, nixpkgs, home-manager, lazyvim, darwin, ... }@inputs: let
     # Overlays is the list of overlays we want to apply from flake inputs.
     overlays = [
@@ -301,9 +315,49 @@ PYEOF
       })
     ];
 
+    generated =
+      let
+        requireFile = relative:
+          let
+            path = inputs.generated + "/${relative}";
+          in
+            if builtins.pathExists path then
+              path
+            else
+              throw ''
+                Missing generated input file `${relative}`.
+                Supply the external generated dataset with `--override-input generated path:/absolute/path`.
+                Supported default locations are `~/.local/share/nix-config-generated` on macOS
+                and `/nixos-generated` inside the VMware guest.
+              '';
+      in {
+        root = inputs.generated;
+        inherit requireFile;
+        readFile = relative: builtins.readFile (requireFile relative);
+      };
+
+    yeetAndYoink =
+      let
+        requirePath = relative:
+          let
+            path = inputs.yeetAndYoink + "/${relative}";
+          in
+            if builtins.pathExists path then
+              path
+            else
+              throw ''
+                Missing yeet-and-yoink input path `${relative}`.
+                Supply the VM plugin source repo with `--override-input yeetAndYoink git+file:///absolute/path/to/yeet-and-yoink?dir=plugins/zellij-break`.
+                Supported default location is `/Users/m/Projects/yeet-and-yoink`.
+              '';
+      in {
+        root = inputs.yeetAndYoink;
+        inherit requirePath;
+      };
+
     den = (nixpkgs.lib.evalModules {
       modules = [ (inputs.import-tree ./den) ];
-      specialArgs = { inherit inputs overlays; };
+      specialArgs = { inherit generated inputs overlays yeetAndYoink; };
     }).config;
   in {
     inherit (den.flake) nixosConfigurations darwinConfigurations;

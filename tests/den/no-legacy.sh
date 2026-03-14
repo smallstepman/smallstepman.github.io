@@ -4,17 +4,20 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
   exit 1
 }
 
 nix_eval_raw() {
-  nix --extra-experimental-features 'nix-command flakes' eval --impure --raw "$@"
+  nix_generated_eval --raw "$@"
 }
 
 nix_eval_json() {
-  nix --extra-experimental-features 'nix-command flakes' eval --impure --json "$@"
+  nix_generated_eval --json "$@"
 }
 
 for legacy_path in \
@@ -38,21 +41,35 @@ for required_dir in \
   dotfiles/common \
   dotfiles/by-host/darwin \
   dotfiles/by-host/vm \
-  dotfiles/by-host/wsl \
-  generated; do
+  dotfiles/by-host/wsl; do
   if [ ! -d "$required_dir" ]; then
     fail "$required_dir missing"
   fi
 done
 
-grep -Fq '../../../generated/secrets.yaml' den/aspects/features/secrets.nix \
-  || fail 'den/aspects/features/secrets.nix must source generated/secrets.yaml'
-grep -Fq '../../../generated/mac-host-authorized-keys' den/aspects/features/darwin-core.nix \
-  || fail 'den/aspects/features/darwin-core.nix must source generated/mac-host-authorized-keys'
-grep -Fq '../../../generated/vm-age-pubkey' den/aspects/hosts/vm-aarch64.nix \
-  || fail 'den/aspects/hosts/vm-aarch64.nix must source generated/vm-age-pubkey'
-grep -Fq '../../../generated/host-authorized-keys' den/aspects/hosts/vm-aarch64.nix \
-  || fail 'den/aspects/hosts/vm-aarch64.nix must source generated/host-authorized-keys'
+tracked_generated=$(git ls-files 'generated/*')
+[ -z "$tracked_generated" ] \
+  || fail 'generated/ artifacts are still tracked in git'
+
+grep -Fq 'inputs.generated = {' flake.nix \
+  || fail 'flake.nix must declare the external generated input'
+grep -Fq 'url = "path:./.generated-input-sentinel";' flake.nix \
+  || fail 'flake.nix must keep a sentinel generated input path'
+grep -Fq 'inputs.yeetAndYoink = {' flake.nix \
+  || fail 'flake.nix must declare the external yeetAndYoink input'
+grep -Fq 'specialArgs = { inherit generated inputs overlays yeetAndYoink; };' flake.nix \
+  || fail 'flake.nix must pass generated and yeetAndYoink into den specialArgs'
+
+grep -Fq 'generated.requireFile "secrets.yaml"' den/aspects/features/secrets.nix \
+  || fail 'den/aspects/features/secrets.nix must source secrets.yaml from generated input'
+grep -Fq '(generated.requireFile "mac-host-authorized-keys")' den/aspects/features/darwin-core.nix \
+  || fail 'den/aspects/features/darwin-core.nix must source mac-host-authorized-keys from generated input'
+grep -Fq 'generated.readFile "vm-age-pubkey"' den/aspects/hosts/vm-aarch64.nix \
+  || fail 'den/aspects/hosts/vm-aarch64.nix must source vm-age-pubkey from generated input'
+grep -Fq '(generated.requireFile "host-authorized-keys")' den/aspects/hosts/vm-aarch64.nix \
+  || fail 'den/aspects/hosts/vm-aarch64.nix must source host-authorized-keys from generated input'
+grep -Fxq 'generated/' .gitignore \
+  || fail '.gitignore must ignore local generated/ copies'
 
 grep -Fq 'inputs.den.flakeModule' den/default.nix \
   || fail 'den/default.nix no longer imports inputs.den.flakeModule'

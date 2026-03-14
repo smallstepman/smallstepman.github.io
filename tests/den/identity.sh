@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 
+# shellcheck source=../lib/generated-input.sh
+. "$repo_root/tests/lib/generated-input.sh"
+
 # --- Static structure checks ---
 
 # identity feature aspect must include the key user-context batteries
@@ -24,17 +27,17 @@ grep -Fq 'vm-macbook' den/hosts.nix
 test -f den/aspects/hosts/macbook-pro-m1.nix
 test -f den/aspects/hosts/wsl.nix
 
-# --- Live nix eval checks ---
+# --- Live nix_generated_eval checks ---
 
-# Helper: run nix eval, surface the real error output on failure instead of
+# Helper: run nix_generated_eval, surface the real error output on failure instead of
 # silently swallowing it with 2>/dev/null.  stderr is routed to a temp file so
 # that it never contaminates the captured stdout; on failure it is forwarded to
 # stderr so the caller sees the actual error.
 _nix_eval() {
   local fmt="$1" attr="$2" out err_file
   err_file=$(mktemp)
-  if ! out=$(nix eval "$fmt" "$attr" 2>"$err_file"); then
-    echo "FAIL: nix eval '$attr' failed with:" >&2
+  if ! out=$(nix_generated_eval "$fmt" "$attr" 2>"$err_file"); then
+    echo "FAIL: nix_generated_eval '$attr' failed with:" >&2
     cat "$err_file" >&2
     rm -f "$err_file"
     exit 1

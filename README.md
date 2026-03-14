@@ -67,8 +67,9 @@ forwarded to the host daemon.
 
 **SSH key provisioning:** the VM authenticates to the macOS host using the
 host's normal `~/.ssh/id_ed25519` key inside the VM. The matching public key is
-stored in `generated/mac-host-authorized-keys` and deployed to the
-macOS host's `~/.ssh/authorized_keys` by the Darwin host aspects. No separate
+stored in the external generated dataset (`~/.local/share/nix-config-generated`
+on macOS, exposed to the VM as `/nixos-generated`) and deployed to the macOS
+host's `~/.ssh/authorized_keys` by the Darwin host aspects. No separate
 VM-specific key is needed.
 
 **Bind-mount constraint:** because the daemon lives on macOS, bind-mount source

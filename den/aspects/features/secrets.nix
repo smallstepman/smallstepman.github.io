@@ -11,7 +11,7 @@
 # the legacy top-level isWSL arg for pinentry selection. Even though this aspect
 # is only attached to vm-aarch64 in Task 7, the host-aware pattern keeps the
 # logic den-native and reusable later.
-{ den, lib, inputs, ... }: {
+{ den, lib, generated, inputs, ... }: {
 
   den.aspects.secrets = {
     includes = [
@@ -28,7 +28,7 @@
             # sops-nix: default secrets file
             # ---------------------------------------------------------------
 
-            sops.defaultSopsFile = ../../../generated/secrets.yaml;
+            sops.defaultSopsFile = generated.requireFile "secrets.yaml";
 
             # ---------------------------------------------------------------
             # sops-nix: age + gnupg key paths
