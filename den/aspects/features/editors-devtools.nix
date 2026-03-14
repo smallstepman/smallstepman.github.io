@@ -79,7 +79,7 @@
               pkgs.zellij
               pkgs.kitty
               pkgs.alacritty
-              pkgs.uniclip  # Clipboard sharing (macOS <-> VM via SSH tunnel)
+              pkgs.uniclip  # Clipboard sharing (macOS <-> VM over a direct TCP connection)
             ];
 
             # -----------------------------------------------------------------
