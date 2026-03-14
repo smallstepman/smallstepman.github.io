@@ -296,15 +296,23 @@ PYEOF
 }
 
 # bats test_tags=host-schema
-@test "host-schema: den/default.nix declares required schema options" {
-  grep -Fq 'options.profile' den/default.nix
-  grep -Fq 'options.vmware.enable' den/default.nix
-  grep -Fq 'options.graphical.enable' den/default.nix
+@test "host-schema: den/default.nix keeps hm-host wiring and does not add WSL aliases" {
+  grep -Fq 'den.ctx.hm-host.includes' den/default.nix
+  if grep -Fq 'den._.wsl' den/default.nix; then
+    fail 'den/default.nix must not include den._.wsl; WSL is enabled per-host via den.hosts.x86_64-linux.wsl.wsl.enable'
+  fi
+  if grep -Fq 'den.provides.wsl' den/default.nix; then
+    fail 'den/default.nix must not redeclare or include den.provides.wsl'
+  fi
 }
 
 # bats test_tags=host-schema
-@test "host-schema: options.profile has a description" {
-  grep -A4 'options\.profile' den/default.nix | grep -Fq 'description'
+@test "host-schema: den/default.nix drops profile schema and keeps remaining host flags" {
+  if grep -Fq 'options.profile' den/default.nix; then
+    fail 'profile should be removed from den/default.nix'
+  fi
+  grep -Fq 'options.vmware.enable' den/default.nix
+  grep -Fq 'options.graphical.enable' den/default.nix
 }
 
 # bats test_tags=host-schema
@@ -315,8 +323,17 @@ PYEOF
 }
 
 # bats test_tags=host-schema
-@test "host-schema: wsl host uses den built-in wsl.enable" {
+@test "host-schema: hosts.nix keeps den-provided and migration host flags" {
   grep -Fq 'den.hosts.x86_64-linux.wsl.wsl.enable = true' den/hosts.nix
+  grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true' den/hosts.nix
+  grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true' den/hosts.nix
+}
+
+# bats test_tags=host-schema
+@test "host-schema: hosts.nix removes only profile assignments" {
+  if rg -n 'profile = ' den/hosts.nix >/dev/null; then
+    fail 'den/hosts.nix should drop only profile host assignments in Task 1'
+  fi
 }
 
 
