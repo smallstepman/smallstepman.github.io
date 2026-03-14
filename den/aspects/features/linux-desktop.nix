@@ -67,8 +67,10 @@
 
     homeManager = { pkgs, lib, config, ... }:
       let
-        yny    = "/Projects/m/yeet-and-yoink/target/release/yny";
-        ynyDbg = "${yny} --log-file=/tmp/yeet-and-yoink/debug.log --profile --log-append";
+        yny      = "/Projects/m/yeet-and-yoink/target/release/yny";
+        ynyFlags = [ "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append" ];
+        ynyArgv  = args: [ yny ] ++ ynyFlags ++ args;                  # for niri (argv list)
+        ynyDbg   = lib.concatStringsSep " " ([ yny ] ++ ynyFlags);    # for mango/hyprland (shell string)
       in
       {
       imports = [
@@ -142,26 +144,13 @@
 
         binds =
           {
-            "Mod+T".action.spawn = [
-              yny "focus-or-cycle"
-              "--app-id" "org.wezfurlong.wezterm"
-              "--spawn" "wezterm"
-            ];
+            "Mod+T".action.spawn = ynyArgv [ "focus-or-cycle" "--app-id" "org.wezfurlong.wezterm" "--spawn" "wezterm" ];
             "Mod+Shift+T".action.spawn = "wezterm";
 
-            "Mod+S".action.spawn = [
-              yny "focus-or-cycle"
-              "--app-id" "librewolf"
-              "--spawn" "librewolf"
-            ];
+            "Mod+S".action.spawn = ynyArgv [ "focus-or-cycle" "--app-id" "librewolf" "--spawn" "librewolf" ];
             "Mod+Shift+S".action.spawn = "librewolf";
 
-            "Mod+P".action.spawn = [
-              yny "focus-or-cycle"
-              "--app-id" "spotify"
-              "--spawn" "spotify"
-              "--summon"
-            ];
+            "Mod+P".action.spawn = ynyArgv [ "focus-or-cycle" "--app-id" "spotify" "--spawn" "spotify" "--summon" ];
 
             "Mod+Space".action.spawn = "wlr-which-key";
             "Mod+Q".action.close-window = {};
@@ -174,16 +163,16 @@
             "Mod+W".action.toggle-column-tabbed-display = {};
             "Mod+Slash".action.toggle-overview = {};
 
-            "Mod+N".action.spawn = [ ynyDbg "focus" "west" ];
-            "Mod+E".action.spawn = [ ynyDbg "focus" "south" ];
-            "Mod+I".action.spawn = [ ynyDbg "focus" "north" ];
-            "Mod+O".action.spawn = [ ynyDbg "focus" "east" ];
+            "Mod+N".action.spawn = ynyArgv [ "focus" "west" ];
+            "Mod+E".action.spawn = ynyArgv [ "focus" "south" ];
+            "Mod+I".action.spawn = ynyArgv [ "focus" "north" ];
+            "Mod+O".action.spawn = ynyArgv [ "focus" "east" ];
 
             "Mod+H".action.consume-or-expel-window-left = {};
-            "Mod+L".action.spawn = [ ynyDbg "move" "west" ];
-            "Mod+U".action.spawn = [ ynyDbg "move" "south" ];
-            "Mod+Y".action.spawn = [ ynyDbg "move" "north" ];
-            "Mod+Semicolon".action.spawn = [ ynyDbg "move" "east" ];
+            "Mod+L".action.spawn = ynyArgv [ "move" "west" ];
+            "Mod+U".action.spawn = ynyArgv [ "move" "south" ];
+            "Mod+Y".action.spawn = ynyArgv [ "move" "north" ];
+            "Mod+Semicolon".action.spawn = ynyArgv [ "move" "east" ];
             "Mod+Return".action.consume-or-expel-window-right = {};
 
             "Mod+f1".action.focus-workspace = 1;
@@ -333,11 +322,11 @@
           "$mod" = "ALT";
 
           bind = [
-            "$mod, T,           exec, ${yny} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm"
+            "$mod, T,           exec, ${ynyDbg} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm"
             "$mod SHIFT, T,     exec, wezterm"
-            "$mod, S,           exec, ${yny} focus-or-cycle --app-id librewolf --spawn librewolf"
+            "$mod, S,           exec, ${ynyDbg} focus-or-cycle --app-id librewolf --spawn librewolf"
             "$mod SHIFT, S,     exec, librewolf"
-            "$mod, P,           exec, ${yny} focus-or-cycle --app-id spotify --spawn spotify --summon"
+            "$mod, P,           exec, ${ynyDbg} focus-or-cycle --app-id spotify --spawn spotify --summon"
             "$mod, Space,       exec, wlr-which-key"
             "$mod, Q,           killactive"
             "$mod, F,           fullscreen, 1"
@@ -459,12 +448,12 @@
           bind=SUPER,r,reload_config
 
           # Apps
-          bind=Alt,Return,spawn,${yny} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
-          bind=Alt,t,spawn,${yny} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
+          bind=Alt,Return,spawn,${ynyDbg} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
+          bind=Alt,t,spawn,${ynyDbg} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
           bind=Alt+SHIFT,t,spawn,wezterm
-          bind=Alt,s,spawn,${yny} focus-or-cycle --app-id librewolf --spawn librewolf
+          bind=Alt,s,spawn,${ynyDbg} focus-or-cycle --app-id librewolf --spawn librewolf
           bind=Alt+SHIFT,s,spawn,librewolf
-          bind=Alt,p,spawn,${yny} focus-or-cycle --app-id spotify --spawn spotify --summon
+          bind=Alt,p,spawn,${ynyDbg} focus-or-cycle --app-id spotify --spawn spotify --summon
           bind=Alt,space,spawn,wlr-which-key
 
           # Close window
