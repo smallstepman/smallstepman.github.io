@@ -137,7 +137,10 @@
 
         binds =
           let
-            yny = "${pkgs.yeet-and-yoink}/bin/yeet-and-yoink";
+            # will use this one once it stablizes
+            # yny = "${pkgs.yeet-and-yoink}/bin/yny";
+            # but for now we use devel version 
+            yny = "/Projects/m/yeet-and-yoink/target/release/yny";
           in {
             "Mod+T".action.spawn = [
               yny "focus-or-cycle"
@@ -171,16 +174,16 @@
             "Mod+W".action.toggle-column-tabbed-display = {};
             "Mod+Slash".action.toggle-overview = {};
 
-            "Mod+N".action.spawn = [ yny "focus" "west" ];
-            "Mod+E".action.spawn = [ yny "focus" "south" ];
-            "Mod+I".action.spawn = [ yny "focus" "north" ];
-            "Mod+O".action.spawn = [ yny "focus" "east" ];
+            "Mod+N".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "west" ];
+            "Mod+E".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "south" ];
+            "Mod+I".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "north" ];
+            "Mod+O".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "east" ];
 
             "Mod+H".action.consume-or-expel-window-left = {};
-            "Mod+L".action.spawn = [ yny "move" "west" ];
-            "Mod+U".action.spawn = [ yny "move" "south" ];
-            "Mod+Y".action.spawn = [ yny "move" "north" ];
-            "Mod+Semicolon".action.spawn = [ yny "move" "east" ];
+            "Mod+L".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "west" ];
+            "Mod+U".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "south" ];
+            "Mod+Y".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "north" ];
+            "Mod+Semicolon".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "east" ];
             "Mod+Return".action.consume-or-expel-window-right = {};
 
             "Mod+f1".action.focus-workspace = 1;
@@ -272,7 +275,112 @@
       wayland.windowManager.hyprland = {
         enable = true;
         settings = {
-          monitor = ",preferred,auto,1";
+          monitor = ",preferred,auto,2";
+
+          general = {
+            gaps_in    = 8;
+            gaps_out   = 16;
+            border_size = 2;
+            "col.active_border"   = "rgba(7fc8ffff)";
+            "col.inactive_border" = "rgba(505050ff)";
+            layout = "dwindle";
+          };
+
+          decoration = {
+            rounding = 12;
+            blur = {
+              enabled = false;
+            };
+            shadow = {
+              enabled = false;
+            };
+          };
+
+          animations = {
+            enabled = true;
+            bezier = "myBezier, 0.05, 0.9, 0.1, 1.05";
+            animation = [
+              "windows,     1, 4, myBezier"
+              "windowsOut,  1, 4, default, popin 80%"
+              "border,      1, 8, default"
+              "fade,        1, 6, default"
+              "workspaces,  1, 4, default"
+            ];
+          };
+
+          input = {
+            kb_layout = "us";
+            repeat_delay = 150;
+            repeat_rate  = 50;
+            touchpad = {
+              natural_scroll   = true;
+              tap-to-click     = true;
+              drag_lock        = true;
+            };
+          };
+
+          dwindle = {
+            pseudotile        = true;
+            preserve_split    = true;
+            always_center_new = true;
+          };
+
+          misc = {
+            force_default_wallpaper = 0;
+            disable_hyprland_logo   = true;
+          };
+
+          "$mod" = "ALT";
+
+          bind = [
+            "$mod, T,     exec, wezterm"
+            "$mod, S,     exec, librewolf"
+            "$mod, P,     exec, spotify"
+            "$mod, Space, exec, wlr-which-key"
+            "$mod, Q,     killactive"
+            "$mod, F,     fullscreen, 1"
+
+            "$mod, N, movefocus, l"
+            "$mod, E, movefocus, d"
+            "$mod, I, movefocus, u"
+            "$mod, O, movefocus, r"
+
+            "$mod SHIFT, N, movewindow, l"
+            "$mod SHIFT, E, movewindow, d"
+            "$mod SHIFT, I, movewindow, u"
+            "$mod SHIFT, O, movewindow, r"
+
+            "$mod, R, togglesplit"
+
+            "$mod, F1, workspace, 1"
+            "$mod, F2, workspace, 2"
+            "$mod, F3, workspace, 3"
+            "$mod, F4, workspace, 4"
+            "$mod, F5, workspace, 5"
+            "$mod, F6, workspace, 6"
+            "$mod, F7, workspace, 7"
+            "$mod, F8, workspace, 8"
+            "$mod, F9, workspace, 9"
+
+            "$mod SHIFT, F1, movetoworkspace, 1"
+            "$mod SHIFT, F2, movetoworkspace, 2"
+            "$mod SHIFT, F3, movetoworkspace, 3"
+            "$mod SHIFT, F4, movetoworkspace, 4"
+            "$mod SHIFT, F5, movetoworkspace, 5"
+            "$mod SHIFT, F6, movetoworkspace, 6"
+            "$mod SHIFT, F7, movetoworkspace, 7"
+            "$mod SHIFT, F8, movetoworkspace, 8"
+            "$mod SHIFT, F9, movetoworkspace, 9"
+          ];
+
+          bindm = [
+            "$mod, mouse:272, movewindow"
+            "$mod, mouse:273, resizewindow"
+          ];
+
+          exec-once = [
+            "mako"
+          ];
         };
       };
 
@@ -283,9 +391,134 @@
 
       wayland.windowManager.mango = {
         enable = true;
-        settings = builtins.readFile ../../../dotfiles/by-host/vm/mangowc.cfg;
         autostart_sh = ''
           mako &
+        '';
+        settings = ''
+          # Window appearance
+          border_radius       = 12
+          borderpx            = 2
+          focuscolor          = 0x7fc8ffff
+          bordercolor         = 0x505050ff
+          rootcolor           = 0x1a1a2eff
+          focused_opacity     = 1.0
+          unfocused_opacity   = 0.95
+
+          # Gaps
+          gappih = 8
+          gappiv = 8
+          gappoh = 16
+          gappov = 16
+
+          # Animations
+          animations                 = 1
+          animation_type_open        = slide
+          animation_type_close       = slide
+          animation_fade_in          = 1
+          animation_fade_out         = 1
+          animation_duration_open    = 400
+          animation_duration_close   = 400
+          animation_duration_move    = 350
+          animation_duration_tag     = 350
+          animation_curve_open       = 0.46,1.0,0.29,1
+          animation_curve_move       = 0.46,1.0,0.29,1
+          animation_curve_close      = 0.08,0.92,0,1
+          animation_curve_tag        = 0.46,1.0,0.29,1
+
+          # Input
+          xkb_rules_layout = us
+          repeat_delay     = 150
+          repeat_rate      = 50
+          tap_to_click     = 1
+          tap_and_drag     = 1
+          drag_lock        = 1
+          trackpad_natural_scrolling = 1
+          warpcursor       = 1
+          sloppyfocus      = 1
+
+          # Layout (default: tile, per-tag layout rules below)
+          default_mfact = 0.5
+          smartgaps     = 0
+          scroller_focus_center = 1
+          scroller_default_proportion = 0.5
+          scroller_proportion_preset  = 0.33,0.5,0.67,1.0
+
+          tagrule=id:1,layout_name:tile
+          tagrule=id:2,layout_name:tile
+          tagrule=id:3,layout_name:tile
+          tagrule=id:4,layout_name:tile
+          tagrule=id:5,layout_name:tile
+          tagrule=id:6,layout_name:tile
+          tagrule=id:7,layout_name:tile
+          tagrule=id:8,layout_name:tile
+          tagrule=id:9,layout_name:tile
+
+          # Reload
+          bind=SUPER,r,reload_config
+
+          # Apps — mirrors niri Mod+T/S/P bindings
+          bind=Alt,Return,spawn,wezterm
+          bind=Alt,t,spawn,wezterm
+          bind=Alt,s,spawn,librewolf
+          bind=Alt,space,spawn,wlr-which-key
+
+          # Close window
+          bind=Alt,q,killclient
+
+          # Fullscreen / floating
+          bind=Alt,f,togglefullscreen
+          bind=Alt,backslash,togglefloating
+
+          # Focus — NEIO matching niri west/south/north/east
+          bind=Alt,n,focusdir,left
+          bind=Alt,e,focusdir,down
+          bind=Alt,i,focusdir,up
+          bind=Alt,o,focusdir,right
+
+          # Move window
+          bind=Alt+SHIFT,n,exchange_client,left
+          bind=Alt+SHIFT,e,exchange_client,down
+          bind=Alt+SHIFT,i,exchange_client,up
+          bind=Alt+SHIFT,o,exchange_client,right
+
+          # Resize (master factor)
+          bind=Alt,minus,set_mfact,-0.05
+          bind=Alt,equal,set_mfact,+0.05
+
+          # Scroller proportion presets (mirrors niri Mod+R)
+          bind=Alt,r,switch_proportion_preset
+
+          # Switch layout
+          bind=SUPER,n,switch_layout
+
+          # Overview (mirrors niri Mod+Slash)
+          bind=Alt,slash,toggleoverview
+
+          # Workspace (tag) switching — F1-F9 matches niri
+          bind=Ctrl,1,view,1,0
+          bind=Ctrl,2,view,2,0
+          bind=Ctrl,3,view,3,0
+          bind=Ctrl,4,view,4,0
+          bind=Ctrl,5,view,5,0
+          bind=Ctrl,6,view,6,0
+          bind=Ctrl,7,view,7,0
+          bind=Ctrl,8,view,8,0
+          bind=Ctrl,9,view,9,0
+
+          # Move window to tag
+          bind=Alt,1,tag,1,0
+          bind=Alt,2,tag,2,0
+          bind=Alt,3,tag,3,0
+          bind=Alt,4,tag,4,0
+          bind=Alt,5,tag,5,0
+          bind=Alt,6,tag,6,0
+          bind=Alt,7,tag,7,0
+          bind=Alt,8,tag,8,0
+          bind=Alt,9,tag,9,0
+
+          # Mouse
+          mousebind=SUPER,btn_left,moveresize,curmove
+          mousebind=SUPER,btn_right,moveresize,curresize
         '';
       };
 
