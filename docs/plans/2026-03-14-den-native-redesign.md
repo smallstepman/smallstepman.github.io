@@ -588,7 +588,7 @@ Run:
 ```bash
 bash tests/den/no-legacy.sh && \
 bash tests/den/flake-smoke.sh && \
-bash tests/den/host-schema.sh && \
+bats --filter-tags host-schema tests.bats && \
 bash tests/den/identity.sh && \
 bash tests/den/home-manager-core.sh && \
 bash tests/den/devtools.sh && \
