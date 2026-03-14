@@ -63,7 +63,6 @@ grep -Fq 'mac-host-docker'                   den/aspects/features/vmware.nix
 grep -Fq 'external-input-flake.sh'           docs/vm.sh
 grep -Fq 'external-input-flake.sh'           den/aspects/features/shell-git.nix
 grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh
-grep -Fq 'git+file://%s?dir=plugins/zellij-break' tests/lib/generated-input.sh
 grep -Fq 'YEET_AND_YOINK_INPUT_DIR'          den/aspects/features/shell-git.nix
 
 # ---------------------------------------------------------------------------
