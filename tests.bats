@@ -994,21 +994,20 @@ PYEOF
 }
 
 # bats test_tags=vm-desktop
-@test "vm-desktop: vmware.nix owns VMware integration settings" {
-  grep -Fq 'virtualisation.vmware.guest.enable' den/aspects/features/vmware.nix
-  grep -Fq '.host:/Projects'                    den/aspects/features/vmware.nix
-  grep -Fq '.host:/nixos-config'                den/aspects/features/vmware.nix
-  grep -Fq 'yeetAndYoink.requirePath'           den/aspects/features/vmware.nix
-  grep -Fq 'src = yeetAndYoink.root;'           den/aspects/features/vmware.nix
-  grep -Fq 'cargoLock.lockFile = yeetAndYoink.requirePath "Cargo.lock";' den/aspects/features/vmware.nix
-  grep -Fq 'programs.ssh'                       den/aspects/features/vmware.nix
-  grep -Fq 'programs.niri.settings'             den/aspects/features/vmware.nix
-  grep -Fq 'DOCKER_CONTEXT'                     den/aspects/features/vmware.nix
-  grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN'      den/aspects/features/vmware.nix
-  grep -Fq 'load_plugins'                       den/aspects/features/vmware.nix
-  grep -Fq 'uniclip'                            den/aspects/features/vmware.nix
-  grep -Fq 'ensureHostDockerContext'             den/aspects/features/vmware.nix
-  grep -Fq 'mac-host-docker'                    den/aspects/features/vmware.nix
+@test "vm-desktop: vmware.nix keeps only generic VMware guest settings" {
+  grep -Fq 'virtualisation.vmware.guest.enable = true;' den/aspects/features/vmware.nix
+  grep -Fq 'environment.systemPackages = [ pkgs.gtkmm3 ];' den/aspects/features/vmware.nix
+
+  if grep -Eq 'programs\.ssh|programs\.niri\.settings|DOCKER_CONTEXT|yeetAndYoink|mac-host-docker|ensureHostDockerContext|uniclip|\.host:/Projects|\.host:/nixos-config|\.host:/nixos-generated|allowUnsupportedSystem|allowUnfree' den/aspects/features/vmware.nix; then
+    fail 'den/aspects/features/vmware.nix should keep only generic VMware guest settings'
+  fi
+}
+
+# bats test_tags=vm-desktop
+@test "vm-desktop: vmware.nix no longer checks host.vmware.enable" {
+  if grep -Eq 'host\.vmware\.enable|isVM' den/aspects/features/vmware.nix; then
+    fail 'den/aspects/features/vmware.nix should not check host.vmware.enable'
+  fi
 }
 
 # bats test_tags=vm-desktop
@@ -1028,6 +1027,27 @@ PYEOF
   if grep -Fq '../../../machines/hardware/' den/aspects/hosts/vm-aarch64.nix; then
     fail 'den/aspects/hosts/vm-aarch64.nix still imports machines/hardware/*'
   fi
+}
+
+# bats test_tags=vm-desktop
+@test "vm-desktop: vm-aarch64 owns VMware bridge config" {
+  grep -Fq 'nixpkgs.config.allowUnfree = true;' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'nixpkgs.config.allowUnsupportedSystem = true;' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '.host:/Projects' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '.host:/nixos-config' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'yeetAndYoink.requirePath' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'src = yeetAndYoink.root;' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'cargoLock.lockFile = yeetAndYoink.requirePath "Cargo.lock";' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'programs.ssh' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'programs.niri.settings' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'DOCKER_CONTEXT' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'load_plugins' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'ensureHostDockerContext' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'mac-host-docker' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'systemd.user.services.uniclip' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'pkgs.docker-client' den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=vm-desktop
@@ -1572,8 +1592,8 @@ PYEOF
 }
 
 # bats test_tags=generated-input
-@test "generated-input: vmware aspect and vm.sh wire the nixos-generated shared folder" {
-  grep -Fq '.host:/nixos-generated' den/aspects/features/vmware.nix
+@test "generated-input: vm-aarch64 host aspect and vm.sh wire the nixos-generated shared folder" {
+  grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'guestName = "nixos-generated"' docs/vm.sh
   grep -Fq 'vmrun -T fusion setSharedFolderState "$vmx" "$share_name" "$host_path" writable' docs/vm.sh
   grep -Fq 'vmrun -T fusion addSharedFolder "$vmx" "$share_name" "$host_path"' docs/vm.sh

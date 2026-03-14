@@ -175,13 +175,14 @@ git -c commit.gpgsign=false commit -m "test: encode WSL ownership evidence" -m "
 ### Task 3: Move vm-aarch64-only VM behavior out of the generic VMware feature
 
 **Files:**
-- Modify: `tests/den/vm-desktop.sh`
+- Modify: `tests.bats`
 - Modify: `den/aspects/features/vmware.nix`
 - Modify: `den/aspects/hosts/vm-aarch64.nix`
+- Modify: `docs/plans/2026-03-14-den-native-redesign.md`
 
 **Step 1: Write the failing test**
 
-Update `tests/den/vm-desktop.sh` so it enforces the new ownership split:
+Update the `vm-desktop` section in `tests.bats` so it enforces the new ownership split:
 
 ```bash
 grep -Fq 'virtualisation.vmware.guest.enable' den/aspects/features/vmware.nix
@@ -204,7 +205,7 @@ Also make the test fail if `den/aspects/features/vmware.nix` still checks `host.
 
 **Step 2: Run test to verify it fails**
 
-Run: `bash tests/den/vm-desktop.sh`
+Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 --filter-tags vm-desktop tests.bats'`
 
 Expected: FAIL because `den/aspects/features/vmware.nix` still owns HGFS mounts, Niri config, Docker context, SSH, and other vm-aarch64-only details.
 
@@ -242,14 +243,14 @@ Keep `den.aspects.vmware` in the host aspect include chain, but let the host asp
 
 **Step 4: Run test to verify it passes**
 
-Run: `bash tests/den/vm-desktop.sh`
+Run: `nix shell /nix/store/9yxwknz8879048wkjn4zmq98h0mdch9y-bats-with-libraries-1.12.0 /nix/store/r5nxk4m4xqgazpysjk98mk96k2symkas-parallel-20260122 --command bash -lc 'bats --jobs 4 --filter-tags vm-desktop tests.bats'`
 
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add tests/den/vm-desktop.sh den/aspects/features/vmware.nix den/aspects/hosts/vm-aarch64.nix
+  git add tests.bats den/aspects/features/vmware.nix den/aspects/hosts/vm-aarch64.nix docs/plans/2026-03-14-den-native-redesign.md
 git -c commit.gpgsign=false commit -m "refactor: move vm host logic out of vmware feature" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
