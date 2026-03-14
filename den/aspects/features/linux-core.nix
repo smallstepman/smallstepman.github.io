@@ -136,6 +136,15 @@
             gnumake
             git
             killall
+            # Bats test runner with helper libraries; BATS_LIB_PATH is wired
+            # automatically by withLibraries so `bats tests.bats` just works.
+            # GNU parallel is required for `bats --jobs <N> tests.bats`.
+            parallel
+            (bats.withLibraries (libs: [
+              libs.bats-support
+              libs.bats-assert
+              libs.bats-file
+            ]))
           ];
 
           # ---------------------------------------------------------------
