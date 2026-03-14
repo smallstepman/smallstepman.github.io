@@ -34,9 +34,4 @@
   den.schema.user = { ... }: {
     config.classes = lib.mkDefault [ "homeManager" ];
   };
-
-  den.schema.host = { lib, ... }: {
-    options.vmware.enable = lib.mkEnableOption "VMware-specific host behavior";
-    options.graphical.enable = lib.mkEnableOption "Graphical desktop behavior";
-  };
 }

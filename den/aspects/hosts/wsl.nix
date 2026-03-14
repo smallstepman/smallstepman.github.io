@@ -24,5 +24,10 @@
         ]))
       ];
     };
+
+    homeManager = { pkgs, ... }: {
+      programs.rbw.settings.pinentry = pkgs.pinentry-tty;
+      programs.git.signing.key = "247AE5FC6A838272";
+    };
   };
 }

@@ -1,20 +1,9 @@
 # den/aspects/features/editors-devtools.nix
 #
 # Editors, developer tools, and terminal environment aspect for user m.
-#
-# Migrated from the legacy Home Manager entrypoint (Task 6 of den migration).
-# Covers: developer package set, Doom Emacs, tmux, zellij (enable+force-close),
-#         VSCode, Go, LazyVim, Starship, gdbinit, tmux menus, and the
+# Covers: developer package set, Doom Emacs, tmux, zellij, VSCode, Go,
+#         LazyVim, Starship, gdbinit, tmux menus, and the
 #         installWritableTmuxMenus activation hook.
-#
-# Intentionally excluded (left in home-manager.nix for later tasks):
-#   - programs.zellij.settings.load_plugins (Task 8 / impure niriDeep plugin)
-#   - programs.kitty module config (Linux desktop / Task 7)
-#   - programs.ssh, programs.niri, wayland.windowManager.*, programs.wayprompt
-#   - programs.noctalia-shell, programs.librewolf, mozilla.*
-#   - Linux/Darwin xdg.configFile entries except tmux menus
-#   - systemd services except services.emacs
-#   - projectsRoot / niriDeep* related logic
 { den, lib, inputs, ... }: {
 
   den.aspects.editors-devtools = {
@@ -26,8 +15,6 @@
         in {
           homeManager = { pkgs, lib, config, ... }: {
 
-            # Load HM modules that are not part of the standard home-manager set.
-            # These mirror the sharedModules in lib/mksystem.nix for the legacy path.
             imports = [
               inputs.nix-doom-emacs-unstraightened.homeModule
               inputs.lazyvim.homeManagerModules.default
@@ -146,7 +133,7 @@
             };
 
             # -----------------------------------------------------------------
-            # Zellij (enable + force-close only; load_plugins stays in legacy)
+            # Zellij
             # -----------------------------------------------------------------
             programs.zellij = {
               enable = true;

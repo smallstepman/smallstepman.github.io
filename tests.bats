@@ -313,8 +313,12 @@ PYEOF
   if grep -Fq 'options.profile' den/default.nix; then
     fail 'profile should be removed from den/default.nix'
   fi
-  grep -Fq 'options.vmware.enable' den/default.nix
-  grep -Fq 'options.graphical.enable' den/default.nix
+  if grep -Fq 'options.vmware.enable' den/default.nix; then
+    fail 'vmware.enable schema should be removed from den/default.nix (Task 7)'
+  fi
+  if grep -Fq 'options.graphical.enable' den/default.nix; then
+    fail 'graphical.enable schema should be removed from den/default.nix (Task 7)'
+  fi
 }
 
 # bats test_tags=host-schema
@@ -327,8 +331,12 @@ PYEOF
 # bats test_tags=host-schema
 @test "host-schema: hosts.nix keeps den-provided and migration host flags" {
   grep -Fq 'den.hosts.x86_64-linux.wsl.wsl.enable = true' den/hosts.nix
-  grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true' den/hosts.nix
-  grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true' den/hosts.nix
+  if grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true' den/hosts.nix; then
+    fail 'den/hosts.nix should not contain vmware.enable (removed in Task 7)'
+  fi
+  if grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true' den/hosts.nix; then
+    fail 'den/hosts.nix should not contain graphical.enable (removed in Task 7)'
+  fi
 }
 
 # bats test_tags=host-schema
@@ -758,7 +766,11 @@ PYEOF
   grep -Fq 'pkgs.llm-agents.beads'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.openspec'                 den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.copilot-language-server'  den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode/modules/home-manager.nix'        den/aspects/features/ai-tools.nix
+  if grep -Fq 'opencode/modules/home-manager.nix' den/aspects/features/ai-tools.nix; then
+    fail 'ai-tools.nix must not import opencode/modules/home-manager.nix (deleted)'
+  fi
+  grep -Fq 'opencode-serve' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'opencode-web'   den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=devtools
@@ -773,10 +785,10 @@ PYEOF
     local non_comment
     non_comment=$(grep -Ev '^[[:space:]]*#' "$aspect")
     if printf '%s\n' "$non_comment" | grep -Eq 'projectsRoot|niriDeep'; then
-      fail "$aspect contains projectsRoot/niriDeep — must stay in home-manager.nix"
+      fail "$aspect contains projectsRoot/niriDeep — must stay in host aspects"
     fi
     if printf '%s\n' "$non_comment" | grep -Eq 'load_plugins'; then
-      fail "$aspect contains load_plugins — must stay in home-manager.nix (Task 8)"
+      fail "$aspect contains load_plugins — must stay in host aspects"
     fi
   done
 }
@@ -1012,10 +1024,17 @@ PYEOF
 
 # bats test_tags=vm-desktop
 @test "vm-desktop: scripts and docs reference external-input-flake.sh correctly" {
-  grep -Fq 'external-input-flake.sh'                           docs/vm.sh
-  grep -Fq 'external-input-flake.sh'                           den/aspects/features/shell-git.nix
-  grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break'    scripts/external-input-flake.sh
-  grep -Fq 'YEET_AND_YOINK_INPUT_DIR'                         den/aspects/features/shell-git.nix
+  grep -Fq 'external-input-flake.sh' docs/vm.sh
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell-git.nix
+  if grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh; then
+    fail 'scripts/external-input-flake.sh must not contain yeet-and-yoink git+file wrapper'
+  fi
+  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell-git.nix; then
+    fail 'shell-git.nix must not reference YEET_AND_YOINK_INPUT_DIR'
+  fi
+  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' docs/vm.sh; then
+    fail 'docs/vm.sh must not reference YEET_AND_YOINK_INPUT_DIR'
+  fi
 }
 
 # bats test_tags=vm-desktop
@@ -1036,18 +1055,24 @@ PYEOF
   grep -Fq '.host:/Projects' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '.host:/nixos-config' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'yeetAndYoink.requirePath' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'src = yeetAndYoink.root;' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'cargoLock.lockFile = yeetAndYoink.requirePath "Cargo.lock";' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'inputs.yeet-and-yoink.homeManagerModules.default' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'pkgs.yeet-and-yoink' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'programs.ssh' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'programs.niri.settings' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'DOCKER_CONTEXT' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'load_plugins' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'ensureHostDockerContext' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'mac-host-docker' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'systemd.user.services.uniclip' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'pkgs.docker-client' den/aspects/hosts/vm-aarch64.nix
+  if grep -Fq 'yeetAndYoink.requirePath' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix still uses yeetAndYoink.requirePath — replace with pkgs.yeet-and-yoink'
+  fi
+  if grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix still references NIRI_DEEP_ZELLIJ_BREAK_PLUGIN'
+  fi
+  if grep -Fq 'load_plugins' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix still configures load_plugins (Zellij plugin removed)'
+  fi
 }
 
 # bats test_tags=vm-desktop
@@ -1104,10 +1129,6 @@ PYEOF
 
   actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.niri.settings.prefer-no-csd)
   assert_equal "$actual" "true"
-
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zellij.settings.load_plugins)
-  printf '%s' "$actual" | grep -q 'yeet-and-yoink-zellij-break.wasm' \
-    || fail "load_plugins does not contain yeet-and-yoink-zellij-break.wasm; got '$actual'"
 
   actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.home.sessionVariables.DOCKER_CONTEXT)
   assert_equal "$actual" "host-mac"
@@ -1333,47 +1354,51 @@ PYEOF
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix uses den-native host context (isVM/isDarwin, not currentSystemName)" {
-  grep -Fq 'isVM'     den/aspects/features/gpg.nix
-  grep -Fq 'isDarwin' den/aspects/features/gpg.nix
+  if grep -Fq 'isVM' den/aspects/features/gpg.nix; then
+    fail 'gpg.nix must not contain isVM — host-specific config belongs in host aspects'
+  fi
+  if grep -Fq 'isDarwin' den/aspects/features/gpg.nix; then
+    fail 'gpg.nix must not contain isDarwin — host-specific config belongs in host aspects'
+  fi
   if grep -Fq 'currentSystemName' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix still uses legacy currentSystemName — must use den host context (isVM/isDarwin)'
+    fail 'gpg.nix still uses legacy currentSystemName'
   fi
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix contains the vm-aarch64 signing key" {
-  grep -Fq 'vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";' den/aspects/features/gpg.nix
+  grep -Fq 'vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";' den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix guards VM-only features with isVM" {
-  grep -Fq '(lib.optionalString isVM "allow-preset-passphrase")' den/aspects/features/gpg.nix
-  grep -Fq 'lib.optionals isVM ['                                den/aspects/features/gpg.nix
-  grep -Fq 'systemd.user.services.gpg-preset-passphrase-login = lib.mkIf isVM {' den/aspects/features/gpg.nix
+  grep -Fq 'allow-preset-passphrase'                           den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'gpgPresetPassphraseLogin'                          den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'systemd.user.services.gpg-preset-passphrase-login' den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix helper script implementation is correct" {
-  grep -Fq 'printf '\''%s'\'' "$passphrase" |' den/aspects/features/gpg.nix
-  grep -Fq 'mapfile -t keygrips < <('          den/aspects/features/gpg.nix
+  grep -Fq 'printf '\''%s'\'' "$passphrase" |' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'mapfile -t keygrips < <('          den/aspects/hosts/vm-aarch64.nix
   # The Nix file uses ''${...} escaping inside ''...'' string literals.
-  grep -Fq "for keygrip in \"''\${keygrips[@]}\"; do" den/aspects/features/gpg.nix
-  grep -Fq 'gpg-preset-passphrase --preset "$keygrip"' den/aspects/features/gpg.nix
-  if grep -Fq -- '--passphrase-fd' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix helper script still uses unsupported --passphrase-fd'
+  grep -Fq "for keygrip in \"''\${keygrips[@]}\"; do" den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'gpg-preset-passphrase --preset "$keygrip"' den/aspects/hosts/vm-aarch64.nix
+  if grep -Fq -- '--passphrase-fd' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'helper script still uses unsupported --passphrase-fd'
   fi
-  if grep -Fq -- '--passphrase "$passphrase"' den/aspects/features/gpg.nix; then
-    fail 'gpg.nix helper script should not expose the passphrase via command-line arguments'
+  if grep -Fq -- '--passphrase "$passphrase"' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'helper script should not expose the passphrase via command-line arguments'
   fi
-  if grep -Fq "\$1 == \"grp\" { print \$10; exit }" den/aspects/features/gpg.nix; then
-    fail 'gpg.nix helper script still assumes the first grp line is the only relevant keygrip'
+  if grep -Fq "\$1 == \"grp\" { print \$10; exit }" den/aspects/hosts/vm-aarch64.nix; then
+    fail 'helper script still assumes the first grp line is the only relevant keygrip'
   fi
 }
 
 # bats test_tags=gpg
 @test "gpg: gpg.nix systemd service has retry settings" {
-  grep -Fq 'Restart = "on-failure";' den/aspects/features/gpg.nix
-  grep -Fq 'RestartSec = 30;'        den/aspects/features/gpg.nix
+  grep -Fq 'Restart = "on-failure";' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'RestartSec = 30;'        den/aspects/hosts/vm-aarch64.nix
 }
 
 # bats test_tags=gpg
@@ -1500,8 +1525,7 @@ PYEOF
 # bats test_tags=generated-input
 @test "generated-input: sentinel placeholder files are not tracked in git" {
   for sentinel in \
-    .generated-input-sentinel/.keep \
-    .yeet-and-yoink-input-sentinel/.keep; do
+    .generated-input-sentinel/.keep; do
     if git ls-files --error-unmatch "$sentinel" >/dev/null 2>&1; then
       if git diff --name-only --diff-filter=D -- "$sentinel" | grep -q . \
         || git diff --cached --name-only --diff-filter=D -- "$sentinel" | grep -q .; then
@@ -1528,6 +1552,7 @@ PYEOF
   if grep -Fq 'inputs.yeetAndYoink = {' flake.nix; then
     fail 'flake.nix must not contain a sentinel yeetAndYoink input declaration'
   fi
+  grep -Fq 'yeet-and-yoink.url' flake.nix
 }
 
 # bats test_tags=generated-input

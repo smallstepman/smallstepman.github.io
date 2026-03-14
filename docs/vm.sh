@@ -518,7 +518,7 @@ vm_install() {
         rm -rf "$NIXCFG_CLEAN" &&
         mkdir -p "$NIXCFG_CLEAN" &&
         tar -C '"$VM_SHARED_NIX_CONFIG_DIR"' --exclude="*.sock" -cf - . | tar -C "$NIXCFG_CLEAN" -xf - &&
-        WRAPPER=$(NIX_CONFIG_DIR="$NIXCFG_CLEAN" GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' YEET_AND_YOINK_INPUT_DIR='"$VM_SHARED_PROJECTS_GUEST_DIR"'/yeet-and-yoink bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
+        WRAPPER=$(NIX_CONFIG_DIR="$NIXCFG_CLEAN" GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
         DISKO_SCRIPT=$(sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nix build \
             --extra-experimental-features "nix-command flakes" \
             --no-write-lock-file \
@@ -655,7 +655,7 @@ cmd_switch() {
     echo "Switching NixOS config on VM at $addr..."
 
     ssh -t $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "$REMOTE_MOUNT_SHARED"' &&
-        WRAPPER=$(NIX_CONFIG_DIR='"$VM_SHARED_NIX_CONFIG_DIR"' GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' YEET_AND_YOINK_INPUT_DIR='"$VM_SHARED_PROJECTS_GUEST_DIR"'/yeet-and-yoink bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
+        WRAPPER=$(NIX_CONFIG_DIR='"$VM_SHARED_NIX_CONFIG_DIR"' GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
         sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake "path:$WRAPPER#'"$NIXNAME"'" --no-write-lock-file
     '
 }
