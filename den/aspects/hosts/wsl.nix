@@ -1,7 +1,28 @@
 { den, ... }: {
   den.aspects.wsl = {
-    includes = [
-      den.aspects.wsl-system
-    ];
+    wsl.enable = true;
+
+    nixos = { pkgs, ... }: {
+      wsl.wslConf.automount.root = "/mnt";
+      wsl.startMenuLaunchers = true;
+
+      nix.package = pkgs.nixVersions.latest;
+      nix.extraOptions = ''
+        keep-outputs = true
+        keep-derivations = true
+      '';
+      nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+      system.stateVersion = "23.05";
+
+      environment.systemPackages = [
+        pkgs.parallel
+        (pkgs.bats.withLibraries (libs: [
+          libs.bats-support
+          libs.bats-assert
+          libs.bats-file
+        ]))
+      ];
+    };
   };
 }

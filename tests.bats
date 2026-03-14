@@ -194,7 +194,9 @@ setup_file() {
   grep -Fq 'inputs.niri.nixosModules.niri' den/aspects/features/linux-desktop.nix
   grep -Fq 'inputs.mangowc.nixosModules.mango' den/aspects/features/linux-desktop.nix
   grep -Fq 'inputs.noctalia.nixosModules.default' den/aspects/features/linux-desktop.nix
-  grep -Fq 'inputs.nixos-wsl.nixosModules.wsl' den/aspects/features/wsl.nix
+  if rg -n 'inputs\.nixos-wsl\.nixosModules\.wsl' den/aspects/features >/dev/null; then
+    fail 'WSL flake-module import should be owned upstream, not by den/aspects/features/*'
+  fi
   grep -Fq 'inputs.disko.nixosModules.disko' den/aspects/hosts/vm-aarch64.nix
 }
 
@@ -1202,28 +1204,33 @@ PYEOF
 
 
 # ===========================================================================
-# wsl — wsl aspect migrated from machines/wsl.nix
+# wsl — upstream WSL activation with host-owned repo policy
 # ===========================================================================
 
 # bats test_tags=wsl
-@test "wsl: den/aspects/features/wsl.nix exists" {
-  assert_file_exists den/aspects/features/wsl.nix
+@test "wsl: host aspect exists and legacy feature aspect is removed" {
+  assert_file_exists den/aspects/hosts/wsl.nix
+  assert [ ! -e den/aspects/features/wsl.nix ]
 }
 
 # bats test_tags=wsl
-@test "wsl: wsl.nix owns required WSL settings" {
-  grep -Fq 'wsl.enable = true;'               den/aspects/features/wsl.nix
-  grep -Fq 'wslConf.automount.root = "/mnt";' den/aspects/features/wsl.nix
-  grep -Fq 'startMenuLaunchers = true;'       den/aspects/features/wsl.nix
-  grep -Fq 'package = pkgs.nixVersions.latest;' den/aspects/features/wsl.nix
-  grep -Fq 'system.stateVersion = "23.05";'   den/aspects/features/wsl.nix
-  grep -Fq 'den.aspects.wsl-system'           den/aspects/hosts/wsl.nix
+@test "wsl: den/aspects/hosts/wsl.nix owns repo-specific WSL settings only" {
+  grep -Fq 'wsl.wslConf.automount.root = "/mnt";' den/aspects/hosts/wsl.nix
+  grep -Fq 'wsl.startMenuLaunchers = true;' den/aspects/hosts/wsl.nix
+  grep -Fq 'nix.package = pkgs.nixVersions.latest;' den/aspects/hosts/wsl.nix
+  grep -Fq 'keep-outputs = true' den/aspects/hosts/wsl.nix
+  grep -Fq 'keep-derivations = true' den/aspects/hosts/wsl.nix
+  grep -Fq 'nix.settings.experimental-features = [ "nix-command" "flakes" ];' den/aspects/hosts/wsl.nix
+  grep -Fq 'system.stateVersion = "23.05";' den/aspects/hosts/wsl.nix
 }
 
 # bats test_tags=wsl
-@test "wsl: wsl.nix does not redefine wsl.defaultUser" {
-  if grep -Eq 'defaultUser[[:space:]]*=' den/aspects/features/wsl.nix; then
-    fail 'den/aspects/features/wsl.nix should not redefine wsl.defaultUser'
+@test "wsl: den/aspects/hosts/wsl.nix does not own upstream module import or defaultUser" {
+  if grep -Eq 'defaultUser[[:space:]]*=' den/aspects/hosts/wsl.nix; then
+    fail 'den/aspects/hosts/wsl.nix should not redefine wsl.defaultUser'
+  fi
+  if grep -Fq 'inputs.nixos-wsl.nixosModules.wsl' den/aspects/hosts/wsl.nix; then
+    fail 'den/aspects/hosts/wsl.nix should not import inputs.nixos-wsl.nixosModules.wsl'
   fi
 }
 
@@ -1265,11 +1272,11 @@ PYEOF
 }
 
 # bats test_tags=wsl
-@test "wsl: wsl.enable is defined by den/aspects/features/wsl.nix (provenance)" {
+@test "wsl: wsl.enable is defined by den provides/wsl.nix (provenance)" {
   local defs
   defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.enable.definitionsWithLocations)
-  printf '%s' "$defs" | grep -q 'den/aspects/features/wsl.nix' \
-    || fail "wsl.enable not defined by den/aspects/features/wsl.nix; got: $defs"
+  printf '%s' "$defs" | grep -q 'provides/wsl.nix' \
+    || fail "wsl.enable not defined by den provides/wsl.nix; got: $defs"
 }
 
 # bats test_tags=wsl
@@ -1278,6 +1285,27 @@ PYEOF
   defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.defaultUser.definitionsWithLocations)
   printf '%s' "$defs" | grep -q 'provides/wsl.nix' \
     || fail "wsl.defaultUser not defined by den provides/wsl.nix; got: $defs"
+}
+
+# bats test_tags=wsl
+@test "wsl: repo-specific WSL settings are defined by den/aspects/hosts/wsl.nix (provenance)" {
+  local defs
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.wsl.startMenuLaunchers.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "wsl.startMenuLaunchers not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.nix.package.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "nix.package not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.nix.extraOptions.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "nix.extraOptions not defined by den/aspects/hosts/wsl.nix; got: $defs"
+
+  defs=$(nix_eval_json .#nixosConfigurations.wsl.options.system.stateVersion.definitionsWithLocations)
+  printf '%s' "$defs" | grep -q 'den/aspects/hosts/wsl.nix' \
+    || fail "system.stateVersion not defined by den/aspects/hosts/wsl.nix; got: $defs"
 }
 
 
@@ -1600,10 +1628,10 @@ PYEOF
 
 # bats test_tags=bats-package
 @test "bats-package: wsl.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/features/wsl.nix
-  grep -Fq 'bats-support' den/aspects/features/wsl.nix
-  grep -Fq 'bats-assert'  den/aspects/features/wsl.nix
-  grep -Fq 'bats-file'    den/aspects/features/wsl.nix
+  grep -Fq 'bats.withLibraries' den/aspects/hosts/wsl.nix
+  grep -Fq 'bats-support' den/aspects/hosts/wsl.nix
+  grep -Fq 'bats-assert'  den/aspects/hosts/wsl.nix
+  grep -Fq 'bats-file'    den/aspects/hosts/wsl.nix
 }
 
 # bats test_tags=bats-package
@@ -1618,5 +1646,5 @@ PYEOF
 
 # bats test_tags=bats-package
 @test "bats-package: wsl.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+pkgs\.parallel([[:space:]]|$)' den/aspects/features/wsl.nix
+  grep -Eq '^[[:space:]]+pkgs\.parallel([[:space:]]|$)' den/aspects/hosts/wsl.nix
 }
