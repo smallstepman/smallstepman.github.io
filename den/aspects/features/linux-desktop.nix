@@ -65,7 +65,12 @@
       };
     };
 
-    homeManager = { pkgs, lib, config, ... }: {
+    homeManager = { pkgs, lib, config, ... }:
+      let
+        yny    = "/Projects/m/yeet-and-yoink/target/release/yny";
+        ynyDbg = "${yny} --log-file=/tmp/yeet-and-yoink/debug.log --profile --log-append";
+      in
+      {
       imports = [
         inputs.noctalia.homeModules.default
         inputs.mangowc.hmModules.mango
@@ -136,12 +141,7 @@
         };
 
         binds =
-          let
-            # will use this one once it stablizes
-            # yny = "${pkgs.yeet-and-yoink}/bin/yny";
-            # but for now we use devel version 
-            yny = "/Projects/m/yeet-and-yoink/target/release/yny";
-          in {
+          {
             "Mod+T".action.spawn = [
               yny "focus-or-cycle"
               "--app-id" "org.wezfurlong.wezterm"
@@ -174,16 +174,16 @@
             "Mod+W".action.toggle-column-tabbed-display = {};
             "Mod+Slash".action.toggle-overview = {};
 
-            "Mod+N".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "west" ];
-            "Mod+E".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "south" ];
-            "Mod+I".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "north" ];
-            "Mod+O".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "focus" "east" ];
+            "Mod+N".action.spawn = [ ynyDbg "focus" "west" ];
+            "Mod+E".action.spawn = [ ynyDbg "focus" "south" ];
+            "Mod+I".action.spawn = [ ynyDbg "focus" "north" ];
+            "Mod+O".action.spawn = [ ynyDbg "focus" "east" ];
 
             "Mod+H".action.consume-or-expel-window-left = {};
-            "Mod+L".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "west" ];
-            "Mod+U".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "south" ];
-            "Mod+Y".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "north" ];
-            "Mod+Semicolon".action.spawn = [ yny "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append"  "move" "east" ];
+            "Mod+L".action.spawn = [ ynyDbg "move" "west" ];
+            "Mod+U".action.spawn = [ ynyDbg "move" "south" ];
+            "Mod+Y".action.spawn = [ ynyDbg "move" "north" ];
+            "Mod+Semicolon".action.spawn = [ ynyDbg "move" "east" ];
             "Mod+Return".action.consume-or-expel-window-right = {};
 
             "Mod+f1".action.focus-workspace = 1;
@@ -333,22 +333,24 @@
           "$mod" = "ALT";
 
           bind = [
-            "$mod, T,     exec, wezterm"
-            "$mod, S,     exec, librewolf"
-            "$mod, P,     exec, spotify"
-            "$mod, Space, exec, wlr-which-key"
-            "$mod, Q,     killactive"
-            "$mod, F,     fullscreen, 1"
+            "$mod, T,           exec, ${yny} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm"
+            "$mod SHIFT, T,     exec, wezterm"
+            "$mod, S,           exec, ${yny} focus-or-cycle --app-id librewolf --spawn librewolf"
+            "$mod SHIFT, S,     exec, librewolf"
+            "$mod, P,           exec, ${yny} focus-or-cycle --app-id spotify --spawn spotify --summon"
+            "$mod, Space,       exec, wlr-which-key"
+            "$mod, Q,           killactive"
+            "$mod, F,           fullscreen, 1"
 
-            "$mod, N, movefocus, l"
-            "$mod, E, movefocus, d"
-            "$mod, I, movefocus, u"
-            "$mod, O, movefocus, r"
+            "$mod, N, exec, ${ynyDbg} focus west"
+            "$mod, E, exec, ${ynyDbg} focus south"
+            "$mod, I, exec, ${ynyDbg} focus north"
+            "$mod, O, exec, ${ynyDbg} focus east"
 
-            "$mod SHIFT, N, movewindow, l"
-            "$mod SHIFT, E, movewindow, d"
-            "$mod SHIFT, I, movewindow, u"
-            "$mod SHIFT, O, movewindow, r"
+            "$mod SHIFT, N, exec, ${ynyDbg} move west"
+            "$mod SHIFT, E, exec, ${ynyDbg} move south"
+            "$mod SHIFT, I, exec, ${ynyDbg} move north"
+            "$mod SHIFT, O, exec, ${ynyDbg} move east"
 
             "$mod, R, togglesplit"
 
@@ -456,10 +458,13 @@
           # Reload
           bind=SUPER,r,reload_config
 
-          # Apps — mirrors niri Mod+T/S/P bindings
-          bind=Alt,Return,spawn,wezterm
-          bind=Alt,t,spawn,wezterm
-          bind=Alt,s,spawn,librewolf
+          # Apps
+          bind=Alt,Return,spawn,${yny} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
+          bind=Alt,t,spawn,${yny} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
+          bind=Alt+SHIFT,t,spawn,wezterm
+          bind=Alt,s,spawn,${yny} focus-or-cycle --app-id librewolf --spawn librewolf
+          bind=Alt+SHIFT,s,spawn,librewolf
+          bind=Alt,p,spawn,${yny} focus-or-cycle --app-id spotify --spawn spotify --summon
           bind=Alt,space,spawn,wlr-which-key
 
           # Close window
@@ -470,16 +475,16 @@
           bind=Alt,backslash,togglefloating
 
           # Focus — NEIO matching niri west/south/north/east
-          bind=Alt,n,focusdir,left
-          bind=Alt,e,focusdir,down
-          bind=Alt,i,focusdir,up
-          bind=Alt,o,focusdir,right
+          bind=Alt,n,spawn,${ynyDbg} focus west
+          bind=Alt,e,spawn,${ynyDbg} focus south
+          bind=Alt,i,spawn,${ynyDbg} focus north
+          bind=Alt,o,spawn,${ynyDbg} focus east
 
           # Move window
-          bind=Alt+SHIFT,n,exchange_client,left
-          bind=Alt+SHIFT,e,exchange_client,down
-          bind=Alt+SHIFT,i,exchange_client,up
-          bind=Alt+SHIFT,o,exchange_client,right
+          bind=Alt+SHIFT,n,spawn,${ynyDbg} move west
+          bind=Alt+SHIFT,e,spawn,${ynyDbg} move south
+          bind=Alt+SHIFT,i,spawn,${ynyDbg} move north
+          bind=Alt+SHIFT,o,spawn,${ynyDbg} move east
 
           # Resize (master factor)
           bind=Alt,minus,set_mfact,-0.05
