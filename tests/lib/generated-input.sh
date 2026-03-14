@@ -4,14 +4,6 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # shellcheck source=../../scripts/external-input-flake.sh
 . "$repo_root/scripts/external-input-flake.sh"
 
-generated_input_flake_ref() {
-  printf 'path:%s' "$(generated_input_dir)"
-}
-
-yeet_and_yoink_input_flake_ref() {
-  printf 'git+file://%s?dir=plugins/zellij-break' "$(yeet_and_yoink_input_dir)"
-}
-
 _nix_with_wrapper() {
   local cmd="$1"
   shift

@@ -448,7 +448,7 @@ den/aspects/
                 <div class="arch-diagram">
 <span class="comment">&#9484;&#9472; Build Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;</span>
 &#9474;                                                                           &#9474;
-&#9474;  <span class="fn">nix run</span> .#collect-secrets       <span class="comment"># macOS, with --override-input generated</span> &#9474;
+&#9474;  <span class="fn">nix run</span> <span class="fn">path:$WRAPPER</span>#collect-secrets  <span class="comment"># macOS, via wrapper flake</span>         &#9474;
 &#9474;    &#9474;                                                                      &#9474;
 &#9474;    &#9500;&#9472;&#9472; reads VM age pubkey       <span class="comment"># ~/.local/share/nix-config-generated</span>    &#9474;
 &#9474;    &#9500;&#9472;&#9472; fetches boot secrets      <span class="comment"># rbw / EU-hosted Bitwarden</span>              &#9474;
