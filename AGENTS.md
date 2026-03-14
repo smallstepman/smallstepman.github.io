@@ -238,7 +238,6 @@ scripts in `docs/` plus direct Nix commands:
 | `git-repo-manager` | - | Declarative git repo management |
 | `sops-nix` | - | Secrets management |
 | `sopsidy` | - | Secrets management (companion to sops-nix) |
-| `agent-of-empires-src` | non-flake | Terminal session manager for AI agents (built from source) |
 | `uniclip-src` | non-flake | Clipboard sharing tool (built from source with custom patch) |
 
 **Channel Strategy:**

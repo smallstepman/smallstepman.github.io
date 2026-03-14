@@ -9,8 +9,8 @@ in {
         "/bin/bash" "-c"
         ''
           /bin/wait4path /nix/store
-          ${pkgs.llm-agents.opencode}/bin/opencode models --refresh
-          exec ${pkgs.llm-agents.opencode}/bin/opencode serve --mdns --mdns-domain ${opencode.stableMdnsDomain} --port ${toString opencode.stablePort}
+          ${pkgs.opencode}/bin/opencode models --refresh
+          exec ${pkgs.opencode}/bin/opencode serve --mdns --mdns-domain ${opencode.stableMdnsDomain} --port ${toString opencode.stablePort}
         ''
       ];
       RunAtLoad = true;
@@ -26,8 +26,8 @@ in {
         "/bin/bash" "-c"
         ''
           /bin/wait4path /nix/store
-          ${pkgs.opencode-dev}/bin/opencode models --refresh
-          exec ${pkgs.opencode-dev}/bin/opencode web --mdns --mdns-domain ${opencode.webMdnsDomain} --port ${toString opencode.webPort}
+          ${pkgs.opencode}/bin/opencode models --refresh
+          exec ${pkgs.opencode}/bin/opencode web --mdns --mdns-domain ${opencode.webMdnsDomain} --port ${toString opencode.webPort}
         ''
       ];
       RunAtLoad = true;

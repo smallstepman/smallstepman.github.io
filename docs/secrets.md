@@ -65,8 +65,8 @@ through sops; otherwise it is fetched live from Bitwarden.
 | `den/mk-config-outputs.nix` | Builds system outputs plus the `collect-secrets` package once external inputs are provided |
 | `scripts/external-input-flake.sh` | Creates a temporary wrapper flake with the live generated / yeet-and-yoink inputs |
 | `den/aspects/features/secrets.nix` | Owns secret declarations, Tailscale auth, hashed password wiring, `rbw-config`, and `generated.requireFile "secrets.yaml"` |
-| `den/aspects/features/home-base.nix` | Owns Linux `programs.rbw` settings |
-| `den/aspects/features/shell-git.nix` | Owns runtime rbw-backed shell helpers (`gh`, `claude`, `codex`, `with-openai`, `with-amp`) |
+| `den/aspects/features/git.nix` | Owns Linux `programs.rbw` settings and GitHub credential-helper wiring |
+| `den/aspects/features/shell.nix` | Owns runtime rbw-backed shell helpers (`gh`, `claude`, `codex`, `with-openai`, `with-amp`) |
 | `den/aspects/hosts/vm-aarch64.nix` | Reads the VM age public key from the generated input via `sops.hostPubKey` |
 | `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS (`secrets.yaml`, SSH pubkeys, age pubkey) |
 | `docs/vm.sh` | VM provisioning/switch helper, including `refresh-secrets` |

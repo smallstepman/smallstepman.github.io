@@ -41,14 +41,15 @@
 
     # Niri - scrollable-tiling Wayland compositor
     niri.url = "github:sodiboo/niri-flake";
-    niri-scratchpad.url = "github:argosnothing/niri-scratchpad-rs";
-    # niri-deep = {
-    #   url = "/Users/m/Projects/niri-deep";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    # };
 
     # LLM agents for Nix
     llm-agents.url = "github:numtide/llm-agents.nix";
+
+    # OpenCode upstream flake (the repository's current branch with flake support)
+    opencode = {
+      url = "github:anomalyco/opencode/dev";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
+    };
 
     # Python/uv packaging toolchain (used for APM and other uv-based Python tools)
     pyproject-nix = {
@@ -70,15 +71,16 @@
     # LazyVim Nix (declarative Neovim + LazyVim)
     lazyvim.url = "github:pfassina/lazyvim-nix";
 
-    # Non-flake sources for packages we build ourselves
+    # Agent of Empires - AI agent game
     agent-of-empires-src.url = "github:njbrake/agent-of-empires";
+
+    # Non-flake sources for packages we build ourselves
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
 
     # yeet-and-yoink - window/app focus orchestrator for niri
     yeet-and-yoink.url = "github:smallstepman/yeet-and-yoink";
-    yeet-and-yoink.inputs.nixpkgs.follows = "nixpkgs";
 
     # Mango window control for Wayland
     mangowc = {

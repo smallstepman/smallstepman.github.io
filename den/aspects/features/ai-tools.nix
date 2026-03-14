@@ -7,17 +7,14 @@
       in {
         home.packages = [
           pkgs.agent-of-empires
-          pkgs.gastown
 
           pkgs.llm-agents.amp
           pkgs.llm-agents.ccusage-amp
-          pkgs.llm-agents.eca
           pkgs.llm-agents.claude-code
           pkgs.llm-agents.ccusage
           pkgs.llm-agents.copilot-cli
           pkgs.llm-agents.pi
           pkgs.llm-agents.ccusage-pi
-          pkgs.llm-agents.qwen-code
           pkgs.llm-agents.ccusage-opencode
 
           pkgs.llm-agents.beads
@@ -25,6 +22,7 @@
           pkgs.llm-agents.beads-viewer
           pkgs.llm-agents.openspec
           pkgs.llm-agents.workmux
+          pkgs.gastown
 
           pkgs.dotagents
           pkgs.apm
@@ -32,9 +30,6 @@
           pkgs.llm-agents.copilot-language-server
           pkgs.llm-agents.openskills
         ];
-
-        programs.zsh.shellAliases.opencode-dev = "${pkgs.opencode-dev}/bin/opencode";
-        programs.bash.shellAliases.opencode-dev = "${pkgs.opencode-dev}/bin/opencode";
 
         xdg.configFile."opencode/plugins/superpowers.js".source =
           opencodeAwesome.superpowersPlugin;
@@ -56,7 +51,7 @@
 
         programs.opencode = {
           enable = true;
-          package = pkgs.llm-agents.opencode;
+          package = pkgs.opencode;
           settings = builtins.fromJSON (builtins.readFile ../../../dotfiles/common/opencode/settings.json);
           agents = opencodeAwesome.agents;
           commands = opencodeAwesome.commands;

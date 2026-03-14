@@ -105,6 +105,34 @@
             reattach = true;
           };
         };
+
+        homeManager = { pkgs, ... }: {
+          home.packages = [
+            pkgs.ghostty-bin
+            pkgs.skhd
+            pkgs.cachix
+            pkgs.gettext
+            pkgs.sentry-cli
+            pkgs.rsync
+            pkgs.sshpass
+          ];
+
+          xdg.configFile = {
+            "wezterm/wezterm.lua".text = builtins.readFile ../../../dotfiles/by-host/darwin/wezterm.lua;
+            "activitywatch/scripts" = {
+              source = ../../../dotfiles/by-host/darwin/activitywatch;
+              recursive = true;
+            };
+            "kanata-tray" = {
+              source = ../../../dotfiles/by-host/darwin/kanata/tray;
+              recursive = true;
+            };
+            "kanata" = {
+              source = ../../../dotfiles/by-host/darwin/kanata/config-macbook-iso;
+              recursive = true;
+            };
+          };
+        };
       })
     ];
   };

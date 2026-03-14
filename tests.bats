@@ -461,11 +461,20 @@ PYEOF
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: home-base.nix owns remaining user-level HM config" {
-  grep -Fq 'programs.rbw = lib.mkIf isLinux' den/aspects/features/home-base.nix
+@test "home-manager-core: home-base stays shared while platform HM config lives with platform aspects" {
   grep -Fq '"grm/repos.yaml"' den/aspects/features/home-base.nix
-  grep -Fq 'ghostty-bin' den/aspects/features/home-base.nix
-  grep -Fq '"wezterm/wezterm.lua"' den/aspects/features/home-base.nix
+  if grep -Fq 'programs.rbw = lib.mkIf isLinux' den/aspects/features/home-base.nix; then
+    fail 'home-base.nix still owns Linux rbw config'
+  fi
+  if grep -Fq 'ghostty-bin' den/aspects/features/home-base.nix; then
+    fail 'home-base.nix still owns Darwin packages'
+  fi
+  if grep -Fq '"wezterm/wezterm.lua"' den/aspects/features/home-base.nix; then
+    fail 'home-base.nix still owns Darwin xdg config'
+  fi
+  grep -Fq 'programs.rbw = lib.mkIf isLinux' den/aspects/features/git.nix
+  grep -Fq 'ghostty-bin' den/aspects/features/darwin-core.nix
+  grep -Fq '"wezterm/wezterm.lua"' den/aspects/features/darwin-core.nix
   grep -Fq 'den.aspects.home-base' den/aspects/users/m.nix
 }
 
@@ -759,16 +768,26 @@ PYEOF
 @test "devtools: ai-tools.nix owns AI package and program entries" {
   grep -Fq 'pkgs.llm-agents.copilot-cli'             den/aspects/features/ai-tools.nix
   grep -Fq 'programs.opencode'                        den/aspects/features/ai-tools.nix
+  grep -Fq 'package = pkgs.opencode;'                 den/aspects/features/ai-tools.nix
   grep -Fq 'opencodeAwesome'                          den/aspects/features/ai-tools.nix
   grep -Fq 'ensureOpencodePackageJsonWritable'        den/aspects/features/ai-tools.nix
-  grep -Fq 'pkgs.agent-of-empires'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.dotagents'                           den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.apm'                                 den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.beads'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.openspec'                 den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.copilot-language-server'  den/aspects/features/ai-tools.nix
+  grep -Fq 'ocd = "opencode";'                        den/aspects/features/shell.nix
   if grep -Fq 'opencode/modules/home-manager.nix' den/aspects/features/ai-tools.nix; then
     fail 'ai-tools.nix must not import opencode/modules/home-manager.nix (deleted)'
+  fi
+  if rg -n 'pkgs\.llm-agents\.opencode|pkgs\.opencode-dev|opencode-dev' \
+    den/aspects/features/ai-tools.nix \
+    den/aspects/features/shell.nix \
+    den/aspects/hosts/vm-aarch64.nix \
+    dotfiles/common/opencode/modules/darwin.nix \
+    den/mk-config-outputs.nix \
+    >/dev/null; then
+    fail 'OpenCode must use a single upstream package; stale llm-agents/opencode-dev references remain'
   fi
   grep -Fq 'opencode-serve' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'opencode-web'   den/aspects/hosts/vm-aarch64.nix
@@ -786,9 +805,6 @@ PYEOF
   for aspect in den/aspects/features/editors.nix den/aspects/features/devtools.nix den/aspects/features/ai-tools.nix; do
     local non_comment
     non_comment=$(grep -Ev '^[[:space:]]*#' "$aspect")
-    if printf '%s\n' "$non_comment" | grep -Eq 'projectsRoot|niriDeep'; then
-      fail "$aspect contains projectsRoot/niriDeep — must stay in host aspects"
-    fi
     if printf '%s\n' "$non_comment" | grep -Eq 'load_plugins'; then
       fail "$aspect contains load_plugins — must stay in host aspects"
     fi
@@ -1068,9 +1084,6 @@ PYEOF
   grep -Fq 'pkgs.docker-client' den/aspects/hosts/vm-aarch64.nix
   if grep -Fq 'yeetAndYoink.requirePath' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64.nix still uses yeetAndYoink.requirePath — replace with pkgs.yeet-and-yoink'
-  fi
-  if grep -Fq 'NIRI_DEEP_ZELLIJ_BREAK_PLUGIN' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'vm-aarch64.nix still references NIRI_DEEP_ZELLIJ_BREAK_PLUGIN'
   fi
   if grep -Fq 'load_plugins' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64.nix still configures load_plugins (Zellij plugin removed)'

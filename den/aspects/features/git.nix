@@ -37,6 +37,15 @@
               gitCredentialHelper.enable = isDarwin;
             };
 
+            programs.rbw = lib.mkIf isLinux {
+              enable = true;
+              settings = {
+                base_url = "https://api.bitwarden.eu";
+                email = "overwritten-by-systemd";
+                lock_timeout = 86400;
+              };
+            };
+
             programs.git = {
               enable = true;
               settings = {

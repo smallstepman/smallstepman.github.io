@@ -234,8 +234,8 @@
               };
               Service = {
                 Type = "simple";
-                ExecStartPre = "${pkgs.llm-agents.opencode}/bin/opencode models --refresh";
-                ExecStart = "${pkgs.llm-agents.opencode}/bin/opencode serve --mdns --mdns-domain ${opencode.stableMdnsDomain} --port ${toString opencode.stablePort}";
+                ExecStartPre = "${pkgs.opencode}/bin/opencode models --refresh";
+                ExecStart = "${pkgs.opencode}/bin/opencode serve --mdns --mdns-domain ${opencode.stableMdnsDomain} --port ${toString opencode.stablePort}";
                 Restart = "on-failure";
                 RestartSec = 5;
               };
@@ -244,13 +244,13 @@
 
             systemd.user.services.opencode-web = {
               Unit = {
-                Description = "OpenCode web interface (patched dev)";
+                Description = "OpenCode web interface";
                 After = [ "default.target" ];
               };
               Service = {
                 Type = "simple";
-                ExecStartPre = "${pkgs.opencode-dev}/bin/opencode models --refresh";
-                ExecStart = "${pkgs.opencode-dev}/bin/opencode web --mdns --mdns-domain ${opencode.webMdnsDomain} --port ${toString opencode.webPort}";
+                ExecStartPre = "${pkgs.opencode}/bin/opencode models --refresh";
+                ExecStart = "${pkgs.opencode}/bin/opencode web --mdns --mdns-domain ${opencode.webMdnsDomain} --port ${toString opencode.webPort}";
                 Restart = "on-failure";
                 RestartSec = 5;
               };

@@ -8,7 +8,7 @@
           isLinux       = host.class == "nixos";
           isWSL         = host.wsl.enable or false;
           isNonWSLLinux = isLinux && !isWSL;
-          generatedDirSetup = ''
+          generatedDirSetup = lib.removeSuffix "\n" ''
             generated_dir="''${GENERATED_INPUT_DIR:-''${HOME}/.local/share/nix-config-generated}"
           '';
         in {
@@ -35,7 +35,7 @@
 
                 # cc = "claude";
                 oc  = "opencode";
-                ocd = "opencode-dev";
+                ocd = "opencode";
                 openspec-in-progress = "openspec list --json | jq -r '.changes[] | select(.status == \"in-progress\").name'";
 
                 rs      = "cargo";
