@@ -24,7 +24,7 @@
             imports = [ ../../../dotfiles/common/opencode/modules/darwin.nix ];
 
             # Uniclip: encrypted clipboard sharing between macOS and NixOS VM.
-            # Server binds to VM network interface; VM connects directly (no SSH tunnel).
+            # Server binds to 192.168.130.1 (macOS host-side VMware interface); VM connects directly (no SSH tunnel).
             launchd.user.agents.uniclip = {
               serviceConfig = {
                 ProgramArguments = [
