@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bootstrap a fresh macbook with nix-darwin config
-# Usage: sh <(curl -sL https://smallstepman.github.io/macbook.sh)
+# Usage: bash <(curl -sL https://smallstepman.github.io/macbook.sh)
 
 set -euo pipefail
 
