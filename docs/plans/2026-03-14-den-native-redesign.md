@@ -4,7 +4,7 @@
 
 **Goal:** Simplify the den rewrite so it follows den's own structure more closely, removes migration-era scaffolding, and handles WSL/VM behavior through den-native composition instead of repo-local special casing.
 
-**Architecture:** Keep `den/default.nix` limited to true global policy, schema, and integration hooks; let host aspects select features and own one-off behavior; use den's built-in WSL battery for WSL activation; and push WSL/VM-specific deltas out of broad reusable features and into host-owned config. The refactor should preserve current behavior for `vm-aarch64`, `macbook-pro-m1`, and `wsl` while making the graph easier to read and less stateful.
+**Architecture:** Keep `den/default.nix` limited to true global policy, schema, and integration hooks; let host aspects select features and own one-off behavior; keep WSL expressed the way den already supports it via `host.wsl.enable`; and push WSL/VM-specific deltas out of broad reusable features and into host-owned config. The refactor should preserve current behavior for `vm-aarch64`, `macbook-pro-m1`, and `wsl` while making the graph easier to read and less stateful.
 
 **Tech Stack:** Nix flakes, den, nixos-wsl, home-manager, nix-darwin, sops-nix, sopsidy, shell-based regression tests
 
@@ -20,52 +20,51 @@
 ### Task 1: Make den defaults and host declarations den-native
 
 **Files:**
-- Modify: `tests/den/host-schema.sh`
+- Modify: `tests.bats`
 - Modify: `den/default.nix`
 - Modify: `den/hosts.nix`
+- Modify: `docs/plans/2026-03-14-den-native-redesign.md`
 
 **Step 1: Write the failing test**
 
-Update `tests/den/host-schema.sh` so it enforces the new architecture:
+Update the `host-schema` section in `tests.bats` so it enforces the corrected scope:
 
 ```bash
-grep -Fq 'den._.wsl' den/default.nix
+if grep -Fq 'den._.wsl' den/default.nix; then
+  echo "ERROR: den/default.nix must not include den._.wsl" >&2
+  exit 1
+fi
+grep -Fq 'den.ctx.hm-host.includes' den/default.nix
 
 if grep -Fq 'options.profile' den/default.nix; then
   echo "ERROR: profile should be removed from den/default.nix" >&2
   exit 1
 fi
-if grep -Fq 'options.vmware.enable' den/default.nix; then
-  echo "ERROR: vmware.enable should be removed from den/default.nix" >&2
-  exit 1
-fi
-if grep -Fq 'options.graphical.enable' den/default.nix; then
-  echo "ERROR: graphical.enable should be removed from den/default.nix" >&2
-  exit 1
-fi
+grep -Fq 'options.vmware.enable' den/default.nix
+grep -Fq 'options.graphical.enable' den/default.nix
 
 grep -Fq 'den.hosts.x86_64-linux.wsl.wsl.enable = true' den/hosts.nix
-if rg -n 'profile = |vmware\.enable = |graphical\.enable = ' den/hosts.nix >/dev/null; then
-  echo "ERROR: den/hosts.nix still carries migration-era host flags" >&2
+grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true' den/hosts.nix
+grep -Fq 'den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true' den/hosts.nix
+if rg -n 'profile = ' den/hosts.nix >/dev/null; then
+  echo "ERROR: den/hosts.nix should drop only profile host assignments in Task 1" >&2
   exit 1
 fi
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `bash tests/den/host-schema.sh`
+Run: `bats --filter-tags host-schema tests.bats`
 
-Expected: FAIL because `den/default.nix` still defines `profile`, `vmware.enable`, and `graphical.enable`, and `den/hosts.nix` still sets those fields.
+Expected: FAIL because Task 1 must keep `vmware.enable` and `graphical.enable` in both schema and host assignments until Tasks 3-6 migrate their remaining consumers.
 
 **Step 3: Write minimal implementation**
 
-Refactor `den/default.nix` and `den/hosts.nix`:
+Refactor `den/default.nix` and `den/hosts.nix` only as far as this task needs:
 
 ```nix
 # den/default.nix
 den.default = {
-  includes = [ den._.wsl ];
-
   nixos = {
     nixpkgs.overlays = overlays;
     nixpkgs.config.allowUnfree = true;
@@ -76,12 +75,19 @@ den.default = {
     nixpkgs.config.allowUnfree = true;
   };
 };
+
+den.schema.host = { lib, ... }: {
+  options.vmware.enable = lib.mkEnableOption "VMware-specific host behavior";
+  options.graphical.enable = lib.mkEnableOption "Graphical desktop behavior";
+};
 ```
 
 ```nix
 # den/hosts.nix
 {
   den.hosts.aarch64-linux.vm-aarch64.hostName = "vm-macbook";
+  den.hosts.aarch64-linux.vm-aarch64.vmware.enable = true;
+  den.hosts.aarch64-linux.vm-aarch64.graphical.enable = true;
   den.hosts.aarch64-linux.vm-aarch64.users.m = { };
 
   den.hosts.aarch64-darwin.macbook-pro-m1.users.m = { };
@@ -91,22 +97,22 @@ den.default = {
 }
 ```
 
-Delete the custom `den.schema.host` entries for `profile`, `vmware.enable`, and `graphical.enable` from `den/default.nix`.
+Remove only the `profile` schema and host assignments in Task 1. Keep `den.ctx.hm-host.includes` intact. Do not remove `vmware.enable` or `graphical.enable` until Tasks 3-6 have migrated `vmware.nix`, `linux-desktop.nix`, `gpg.nix`, and `shell-git.nix` away from those fields.
 
-**Step 4: Run test to verify it passes**
+**Step 4: Run tests to verify it passes**
 
-Run: `bash tests/den/host-schema.sh`
+Run: `bats --filter-tags host-schema tests.bats && bats --filter-tags vm-desktop tests.bats`
 
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add tests/den/host-schema.sh den/default.nix den/hosts.nix
-git -c commit.gpgsign=false commit -m "refactor: simplify den defaults and hosts" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git add tests.bats den/default.nix den/hosts.nix docs/plans/2026-03-14-den-native-redesign.md
+git -c commit.gpgsign=false commit -m "fix: restore den host flags for pending migrations" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
-### Task 2: Move WSL activation to den's WSL battery and the WSL host aspect
+### Task 2: Keep WSL activation on den's existing host wiring and the WSL host aspect
 
 **Files:**
 - Modify: `tests/den/wsl.sh`
@@ -119,7 +125,10 @@ git -c commit.gpgsign=false commit -m "refactor: simplify den defaults and hosts
 Update `tests/den/wsl.sh` so it stops expecting repo-local NixOS-WSL wiring and instead enforces den-native ownership:
 
 ```bash
-grep -Fq 'den._.wsl' den/default.nix
+if grep -Fq 'den._.wsl' den/default.nix; then
+  echo "FAIL: den/default.nix should not include den._.wsl" >&2
+  exit 1
+fi
 test -f den/aspects/hosts/wsl.nix
 if [ -e den/aspects/features/wsl.nix ]; then
   echo "FAIL: den/aspects/features/wsl.nix should be removed" >&2
@@ -171,7 +180,7 @@ Delete the repo-local WSL activation aspect and move only repo-specific WSL sett
 }
 ```
 
-Do not reintroduce `wsl.enable = true` or `imports = [ inputs.nixos-wsl.nixosModules.wsl ]` here; the den WSL battery should own that.
+Do not reintroduce `options.wsl.enable`, a custom `den.provides.wsl`, or `den._.wsl` here; keep relying on den's built-in host wiring via `den.hosts.x86_64-linux.wsl.wsl.enable = true`.
 
 **Step 4: Run test to verify it passes**
 
