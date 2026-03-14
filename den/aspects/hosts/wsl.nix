@@ -15,14 +15,7 @@
 
       system.stateVersion = "23.05";
 
-      environment.systemPackages = [
-        pkgs.parallel
-        (pkgs.bats.withLibraries (libs: [
-          libs.bats-support
-          libs.bats-assert
-          libs.bats-file
-        ]))
-      ];
+      environment.systemPackages = [];
     };
 
     homeManager = { pkgs, ... }: {

@@ -20,6 +20,13 @@
         pkgs.just
         pkgs.dust
 
+        pkgs.parallel
+        (pkgs.bats.withLibraries (libs: [
+          libs.bats-support
+          libs.bats-assert
+          libs.bats-file
+        ]))
+
         pkgs.go
         pkgs.gopls
 

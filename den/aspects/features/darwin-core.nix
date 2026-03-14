@@ -75,15 +75,6 @@
           environment.shells = with pkgs; [ bashInteractive zsh fish ];
           environment.systemPackages = with pkgs; [
             cachix
-            # Bats test runner with helper libraries; BATS_LIB_PATH is wired
-            # automatically by withLibraries so `bats tests.bats` just works.
-            # GNU parallel is required for `bats --jobs <N> tests.bats`.
-            parallel
-            (bats.withLibraries (libs: [
-              libs.bats-support
-              libs.bats-assert
-              libs.bats-file
-            ]))
           ];
 
           # The user already exists via den identity, but nix-darwin still needs

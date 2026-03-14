@@ -1638,53 +1638,46 @@ PYEOF
 
 
 # ===========================================================================
-# bats-package — bats with libraries is wired at the system level
+# bats-package — bats with libraries is wired in devtools
 # ===========================================================================
 
 # bats test_tags=bats-package
-@test "bats-package: pkgs.bats is not in editors-devtools home.packages" {
-  # bats must be a system-level package (with wired BATS_LIB_PATH), not a
-  # bare user-level entry in editors-devtools.
+@test "bats-package: pkgs.bats is not a bare entry in editors or devtools home.packages" {
   if grep -Eq '^[[:space:]]*pkgs\.bats\b' den/aspects/features/editors.nix den/aspects/features/devtools.nix; then
-    fail 'pkgs.bats still in editors/devtools home.packages — must be system-level with bats.withLibraries'
+    fail 'pkgs.bats as a bare entry — must use bats.withLibraries'
   fi
 }
 
 # bats test_tags=bats-package
-@test "bats-package: linux-core.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/features/linux-core.nix
-  grep -Fq 'bats-support' den/aspects/features/linux-core.nix
-  grep -Fq 'bats-assert'  den/aspects/features/linux-core.nix
-  grep -Fq 'bats-file'    den/aspects/features/linux-core.nix
+@test "bats-package: devtools.nix provides bats with libraries" {
+  grep -Fq 'bats.withLibraries' den/aspects/features/devtools.nix
+  grep -Fq 'bats-support' den/aspects/features/devtools.nix
+  grep -Fq 'bats-assert'  den/aspects/features/devtools.nix
+  grep -Fq 'bats-file'    den/aspects/features/devtools.nix
 }
 
 # bats test_tags=bats-package
-@test "bats-package: darwin-core.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/features/darwin-core.nix
-  grep -Fq 'bats-support' den/aspects/features/darwin-core.nix
-  grep -Fq 'bats-assert'  den/aspects/features/darwin-core.nix
-  grep -Fq 'bats-file'    den/aspects/features/darwin-core.nix
+@test "bats-package: devtools.nix provides GNU parallel for bats --jobs" {
+  grep -Fq 'pkgs.parallel' den/aspects/features/devtools.nix
 }
 
 # bats test_tags=bats-package
-@test "bats-package: wsl.nix provides bats with libraries at system level" {
-  grep -Fq 'bats.withLibraries' den/aspects/hosts/wsl.nix
-  grep -Fq 'bats-support' den/aspects/hosts/wsl.nix
-  grep -Fq 'bats-assert'  den/aspects/hosts/wsl.nix
-  grep -Fq 'bats-file'    den/aspects/hosts/wsl.nix
+@test "bats-package: linux-core.nix does not duplicate bats" {
+  if grep -Fq 'bats' den/aspects/features/linux-core.nix; then
+    fail 'linux-core.nix still contains bats — moved to devtools.nix'
+  fi
 }
 
 # bats test_tags=bats-package
-@test "bats-package: linux-core.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+parallel([[:space:]]|$)' den/aspects/features/linux-core.nix
+@test "bats-package: darwin-core.nix does not duplicate bats" {
+  if grep -Fq 'bats' den/aspects/features/darwin-core.nix; then
+    fail 'darwin-core.nix still contains bats — moved to devtools.nix'
+  fi
 }
 
 # bats test_tags=bats-package
-@test "bats-package: darwin-core.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+parallel([[:space:]]|$)' den/aspects/features/darwin-core.nix
-}
-
-# bats test_tags=bats-package
-@test "bats-package: wsl.nix provides GNU parallel for bats --jobs" {
-  grep -Eq '^[[:space:]]+pkgs\.parallel([[:space:]]|$)' den/aspects/hosts/wsl.nix
+@test "bats-package: wsl.nix does not duplicate bats" {
+  if grep -Fq 'bats' den/aspects/hosts/wsl.nix; then
+    fail 'wsl.nix still contains bats — moved to devtools.nix'
+  fi
 }
