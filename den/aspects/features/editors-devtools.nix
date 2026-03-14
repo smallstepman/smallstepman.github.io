@@ -44,7 +44,6 @@
 
               # CLI tools
               pkgs.websocat
-              pkgs.bats
               pkgs.bws
               pkgs.yq
               pkgs.fluxcd
