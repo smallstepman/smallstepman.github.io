@@ -335,7 +335,7 @@
                 <div class="feature-card">
                     <span class="overline"><a href="https://github.com/Mic92/sops-nix">sops-nix</a> + <a href="https://github.com/doy/rbw">Bitwarden</a></span>
                     <h4>Encrypted Secrets</h4>
-                    <p><a href="https://github.com/Mic92/sops-nix">sops-nix</a> + age encryption + Bitwarden backend hosted in the EU. No secret values in git ever (exposing secrets to the open internet is a choice, and it's the wrong one). API keys injected per-process.</p>
+                    <p><a href="https://github.com/Mic92/sops-nix">sops-nix</a> + <a href="https://github.com/timewave-computer/sopsidy">sopsidy</a> keep boot-time secrets in an external generated dataset outside git, shared into the VM at <code>/nixos-generated</code>. Runtime tokens stay in Bitwarden/rbw and are injected per-process.</p>
                 </div>
                 <div class="feature-card">
                     <span class="overline">Cross-Platform</span>
@@ -438,35 +438,35 @@ den/aspects/
             </div>
             <div class="reveal drop-cap" style="max-width: 40rem; margin-bottom: 3rem; color: var(--muted-fg); font-size: 0.95rem;">
                 Secret <em>values</em> never touch version control &mdash;
-                the repository stores only encrypted <em>references</em> that are useless without
-                the host's physical age keypair. The actual credentials live in a self-hosted,
-                EU-based Bitwarden vault, fetched at build time through rbw, and injected
-                per-process at runtime. Paranoid? Maybe. But I've seen what happens when
-                <code>GITHUB_TOKEN</code> ends up in shell history.
+                the repo keeps only declarative wiring, while boot-time secrets live in an
+                external generated dataset outside git and the VM keeps the matching age
+                private key. Runtime tokens stay in a self-hosted, EU-based Bitwarden vault
+                and are injected only into the process that needs them. Paranoid? Maybe. But
+                I've seen what happens when <code>GITHUB_TOKEN</code> ends up in shell history.
             </div>
 
             <div class="reveal" style="margin-bottom: 3rem;">
                 <div class="arch-diagram">
 <span class="comment">&#9484;&#9472; Build Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;</span>
 &#9474;                                                                           &#9474;
-&#9474;  <span class="fn">sopsidy</span> collect-secrets          <span class="comment"># runs on macOS, talks to Bitwarden</span>  &#9474;
+&#9474;  <span class="fn">nix run</span> .#collect-secrets       <span class="comment"># macOS, with --override-input generated</span> &#9474;
 &#9474;    &#9474;                                                                      &#9474;
-&#9474;    &#9500;&#9472;&#9472; reads host age pubkeys     <span class="comment"># generated/vm-age-pubkey</span>             &#9474;
-&#9474;    &#9500;&#9472;&#9472; fetches values from <span class="fn">rbw</span>    <span class="comment"># EU-hosted Bitwarden vault</span>           &#9474;
-&#9474;    &#9492;&#9472;&#9472; encrypts &#8594; secrets.yaml    <span class="comment"># age-encrypted, per-host keys</span>        &#9474;
+&#9474;    &#9500;&#9472;&#9472; reads VM age pubkey       <span class="comment"># ~/.local/share/nix-config-generated</span> &#9474;
+&#9474;    &#9500;&#9472;&#9472; fetches boot secrets      <span class="comment"># rbw / EU-hosted Bitwarden</span>           &#9474;
+&#9474;    &#9492;&#9472;&#9472; writes <span class="fn">secrets.yaml</span>     <span class="comment"># external dataset, outside git</span>       &#9474;
 &#9474;                                                                           &#9474;
 <span class="comment">&#9500;&#9472; Deploy Time &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;</span>
 &#9474;                                                                           &#9474;
-&#9474;  <span class="fn">sops-nix</span> on each host             <span class="comment"># decrypts at activation</span>             &#9474;
-&#9474;    &#9500;&#9472;&#9472; Tailscale auth key          <span class="comment"># /run/secrets/tailscale-auth-key</span>     &#9474;
-&#9474;    &#9500;&#9472;&#9472; Uniclip password            <span class="comment"># injected into systemd unit env</span>      &#9474;
-&#9474;    &#9492;&#9472;&#9472; User password hash          <span class="comment"># hashedPasswordFile</span>                  &#9474;
+&#9474;  <span class="fn">sops-nix</span> on the VM               <span class="comment"># decrypts generated input at activation</span> &#9474;
+&#9474;    &#9500;&#9472;&#9472; Tailscale auth key          <span class="comment"># /run/secrets/tailscale/auth-key</span>     &#9474;
+&#9474;    &#9500;&#9472;&#9472; rbw email + Uniclip         <span class="comment"># rbw/email + uniclip/password</span>       &#9474;
+&#9474;    &#9492;&#9472;&#9472; User password hash          <span class="comment"># /run/secrets/user/hashed-password</span>  &#9474;
 &#9474;                                                                           &#9474;
 <span class="comment">&#9500;&#9472; Runtime &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;</span>
 &#9474;                                                                           &#9474;
 &#9474;  API keys injected <span class="keyword">per-process</span>     <span class="comment"># NEVER as global env vars</span>            &#9474;
-&#9474;    &#9500;&#9472;&#9472; <span class="fn">rbw</span> shell wrappers          <span class="comment"># `with-github-token git push`</span>       &#9474;
-&#9474;    &#9492;&#9472;&#9472; <span class="fn">rbw</span> + <span class="fn">gpg-agent</span>             <span class="comment"># signing commits (key 247AE5FC...)</span>  &#9474;
+&#9474;    &#9500;&#9472;&#9472; <span class="fn">gh()</span> / <span class="fn">claude()</span> / <span class="fn">codex()</span> <span class="comment"># fetch via rbw on demand</span>             &#9474;
+&#9474;    &#9492;&#9472;&#9472; <span class="fn">with-openai</span> / <span class="fn">with-amp</span>  <span class="comment"># one process, one token scope</span>        &#9474;
 &#9474;                                                                           &#9474;
 <span class="comment">&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</span></div>
             </div>
@@ -474,7 +474,7 @@ den/aspects/
             <div class="sec-grid reveal">
                 <div class="sec-item">
                     <h4>Nothing useful in git</h4>
-                    <p>No encrypted blobs, no <code>.env.example</code>, no "just set these env vars" README. The repo contains age-encrypted references that decrypt to nothing without the host's private key. You could publish the whole repo and it wouldn't matter. (It is published. Hi.)</p>
+                    <p>No plaintext secrets, no tracked generated dataset, no <code>.env.example</code>, no "just set these env vars" README. The repo keeps only declarative secret wiring; <code>~/.local/share/nix-config-generated</code> and the VM age private key live outside git. You could publish the whole repo and it wouldn't matter. (It is published. Hi.)</p>
                 </div>
                 <div class="sec-item">
                     <h4>Per-process only</h4>
@@ -549,7 +549,7 @@ macOS (host)                                    NixOS VM (guest)
                                     <tr><td>vm down</td><td>Graceful shutdown</td></tr>
                                     <tr><td>vm ssh [cmd]</td><td>SSH into the VM, or run a remote command</td></tr>
                                     <tr><td>vm ip</td><td>Print the VM's current IP address</td></tr>
-                                    <tr><td>vm refresh-secrets</td><td>Regenerate age keys &amp; re-encrypt all secrets</td></tr>
+                                    <tr><td>vm refresh-secrets</td><td>Refresh the external generated dataset (age pubkey, SSH pubkeys, encrypted secrets)</td></tr>
                                 </tbody>
                             </table>
                         </div>
