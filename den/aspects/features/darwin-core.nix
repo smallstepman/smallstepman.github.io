@@ -94,7 +94,7 @@
           users.users.m = {
             home = "/Users/m";
             openssh.authorizedKeys.keyFiles = [
-              ../../../machines/generated/mac-host-authorized-keys
+              ../../../generated/mac-host-authorized-keys
             ];
           };
 

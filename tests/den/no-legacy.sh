@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "$repo_root"
+
+fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+  exit 1
+}
+
+nix_eval_raw() {
+  nix --extra-experimental-features 'nix-command flakes' eval --impure --raw "$@"
+}
+
+nix_eval_json() {
+  nix --extra-experimental-features 'nix-command flakes' eval --impure --json "$@"
+}
+
+for legacy_path in \
+  den/legacy.nix \
+  lib/mksystem.nix \
+  machines \
+  machines/vm-aarch64.nix \
+  machines/vm-shared.nix \
+  machines/macbook-pro-m1.nix \
+  machines/wsl.nix \
+  users/m \
+  users/m/home-manager.nix \
+  users/m/nixos.nix \
+  users/m/darwin.nix; do
+  if [ -e "$legacy_path" ]; then
+    fail "$legacy_path still exists"
+  fi
+done
+
+for required_dir in \
+  dotfiles/common \
+  dotfiles/by-host/darwin \
+  dotfiles/by-host/vm \
+  dotfiles/by-host/wsl \
+  generated; do
+  if [ ! -d "$required_dir" ]; then
+    fail "$required_dir missing"
+  fi
+done
+
+grep -Fq '../../../generated/secrets.yaml' den/aspects/features/secrets.nix \
+  || fail 'den/aspects/features/secrets.nix must source generated/secrets.yaml'
+grep -Fq '../../../generated/mac-host-authorized-keys' den/aspects/features/darwin-core.nix \
+  || fail 'den/aspects/features/darwin-core.nix must source generated/mac-host-authorized-keys'
+grep -Fq '../../../generated/vm-age-pubkey' den/aspects/hosts/vm-aarch64.nix \
+  || fail 'den/aspects/hosts/vm-aarch64.nix must source generated/vm-age-pubkey'
+grep -Fq '../../../generated/host-authorized-keys' den/aspects/hosts/vm-aarch64.nix \
+  || fail 'den/aspects/hosts/vm-aarch64.nix must source generated/host-authorized-keys'
+
+grep -Fq 'inputs.den.flakeModule' den/default.nix \
+  || fail 'den/default.nix no longer imports inputs.den.flakeModule'
+grep -Fq 'inherit (den.flake) nixosConfigurations darwinConfigurations;' flake.nix \
+  || fail 'flake.nix no longer exports den.flake host outputs'
+if grep -R -Fq --exclude 'no-legacy.sh' 'den/legacy.nix' \
+  flake.nix \
+  den \
+  README.md \
+  AGENTS.md \
+  docs/secrets.md \
+  docs/clipboard-sharing.md; then
+  fail 'repository still references den/legacy.nix after cleanup'
+fi
+if rg -n --glob '!tests/den/no-legacy.sh' \
+  'users/m/|machines/generated|machines/secrets\.yaml|machines/hardware/' \
+  den README.md AGENTS.md docs/*.md docs/*.sh flake.nix >/dev/null; then
+  fail 'repository still references users/m or machines/* runtime paths after layout cleanup'
+fi
+
+vm_hostname=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.networking.hostName)
+[[ "$vm_hostname" == "vm-macbook" ]] || fail "vm-aarch64 hostname is '$vm_hostname', expected vm-macbook"
+
+vm_root_mount=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.disko.devices.disk.main.content.partitions.root.content.mountpoint)
+[[ "$vm_root_mount" == "/" ]] || fail "vm-aarch64 disko root mountpoint is '$vm_root_mount', expected /"
+
+darwin_primary_user=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.system.primaryUser)
+[[ "$darwin_primary_user" == "m" ]] || fail "macbook-pro-m1 primary user is '$darwin_primary_user', expected m"
+
+wsl_enabled=$(nix_eval_json .#nixosConfigurations.wsl.config.wsl.enable)
+[[ "$wsl_enabled" == "true" ]] || fail "wsl.enable is '$wsl_enabled', expected true"
+
+printf 'PASS: legacy composition files are gone and den outputs still evaluate\n'

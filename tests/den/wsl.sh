@@ -37,17 +37,19 @@ fi
 # ---------------------------------------------------------------------------
 
 wsl_machine=machines/wsl.nix
-for item in \
-  'wsl = {' \
-  'defaultUser = currentSystemUser;' \
-  'nix = {' \
-  'system.stateVersion = "23.05";'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$wsl_machine" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $wsl_machine still contains '$item' (should be owned by den WSL wiring)" >&2
-    exit 1
-  fi
-done
+if [ -e "$wsl_machine" ]; then
+  for item in \
+    'wsl = {' \
+    'defaultUser = currentSystemUser;' \
+    'nix = {' \
+    'system.stateVersion = "23.05";'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$wsl_machine" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $wsl_machine still contains '$item' (should be owned by den WSL wiring)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Live nix eval helpers

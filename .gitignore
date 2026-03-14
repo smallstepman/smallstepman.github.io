@@ -5,16 +5,16 @@ iso/nixos.iso
 
 # Encrypted secrets: safe to commit (age-encrypted), but kept out of the
 # public repo as defense-in-depth against future cryptographic breaks.
-# On the VM, Makefile targets `git add -f` this file so the flake can see it.
-machines/secrets.yaml
+# On the VM, helper scripts `git add -f` this file so the flake can see it.
+generated/secrets.yaml
 
 # Generated during bootstrap -- tracked on purpose (public keys only).
 # This negation lets `git add` work without -f.
-!machines/generated/
-machines/generated/*
-!machines/generated/host-authorized-keys
-!machines/generated/mac-host-authorized-keys
-!machines/generated/vm-age-pubkey
+!generated/
+generated/*
+!generated/host-authorized-keys
+!generated/mac-host-authorized-keys
+!generated/vm-age-pubkey
 
 # bv (beads viewer) local config and caches
 .bv/

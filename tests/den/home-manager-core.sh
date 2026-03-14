@@ -8,6 +8,7 @@ cd "$repo_root"
 
 # shell-git feature aspect must exist
 test -f den/aspects/features/shell-git.nix
+test -f den/aspects/features/home-base.nix
 
 # shell-git must set essential HM programs
 grep -Fq 'programs.git = {' den/aspects/features/shell-git.nix
@@ -20,6 +21,13 @@ grep -Fq 'programs.gh = {' den/aspects/features/shell-git.nix
 
 # shell-git must set session variables
 grep -Fq 'EDITOR' den/aspects/features/shell-git.nix
+
+# home-base must own the remaining user-level HM config
+grep -Fq 'programs.rbw = lib.mkIf isLinux' den/aspects/features/home-base.nix
+grep -Fq '"grm/repos.yaml"' den/aspects/features/home-base.nix
+grep -Fq 'ghostty-bin' den/aspects/features/home-base.nix
+grep -Fq '"wezterm/wezterm.lua"' den/aspects/features/home-base.nix
+grep -Fq 'den.aspects.home-base' den/aspects/users/m.nix
 
 # shell-git must reference the git alias for 'g'
 grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell-git.nix
@@ -35,16 +43,33 @@ if printf '%s\n' "$non_comment_shell_git" | grep -Eq 'gitSigningKey|signByDefaul
   exit 1
 fi
 
-# legacy home-manager.nix should no longer own shell/git package entries moved to shell-git
-for legacy_pkg in bat eza fd fnm fzf jq kubecolor kubectl rbw ripgrep tig zoxide; do
-  if grep -Eq "^[[:space:]]*pkgs\\.${legacy_pkg}\\b" users/m/home-manager.nix; then
-    echo "FAIL: users/m/home-manager.nix still owns pkgs.${legacy_pkg}" >&2
+# legacy home-manager.nix should no longer own shell/git or residual HM entries
+if [ -e users/m/home-manager.nix ]; then
+  legacy_home_manager=$(grep -Ev '^[[:space:]]*#' users/m/home-manager.nix || true)
+  for legacy_pkg in bat eza fd fnm fzf jq kubecolor kubectl rbw ripgrep tig zoxide; do
+    if printf '%s\n' "$legacy_home_manager" | grep -Eq "^[[:space:]]*pkgs\\.${legacy_pkg}\\b"; then
+      echo "FAIL: users/m/home-manager.nix still owns pkgs.${legacy_pkg}" >&2
+      exit 1
+    fi
+  done
+  if printf '%s\n' "$legacy_home_manager" | grep -Fq 'writeShellScriptBin "git-credential-github"'; then
+    echo "FAIL: users/m/home-manager.nix still owns git-credential-github" >&2
     exit 1
   fi
-done
-if grep -Fq 'writeShellScriptBin "git-credential-github"' users/m/home-manager.nix; then
-  echo "FAIL: users/m/home-manager.nix still owns git-credential-github" >&2
-  exit 1
+  for item in \
+    '"grm/repos.yaml"' \
+    '"wezterm/wezterm.lua"' \
+    '"activitywatch/scripts"' \
+    '"kanata-tray"' \
+    '"kanata"' \
+    'programs.rbw' \
+    'ghostty-bin' \
+    'sentry-cli'; do
+    if printf '%s\n' "$legacy_home_manager" | grep -Fq "$item"; then
+      echo "FAIL: users/m/home-manager.nix still contains '$item' (should be in den/aspects/features/home-base.nix)" >&2
+      exit 1
+    fi
+  done
 fi
 
 # --- Live nix eval helper (borrowed from identity.sh) ---
@@ -65,8 +90,48 @@ _nix_eval() {
 
 nix_eval_raw()  { _nix_eval --raw  "$1"; }
 nix_eval_json() { _nix_eval --json "$1"; }
+nix_eval_expr_raw() {
+  local expr="$1" out err_file
+  err_file=$(mktemp)
+  if ! out=$(nix eval --impure --raw --expr "$expr" 2>"$err_file"); then
+    echo "FAIL: nix eval expr failed with:" >&2
+    cat "$err_file" >&2
+    rm -f "$err_file"
+    exit 1
+  fi
+  cat "$err_file" >&2
+  rm -f "$err_file"
+  printf '%s' "$out"
+}
 
 # --- Live eval: vm-aarch64 (NixOS/Linux) ---
+
+actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.home-manager.useGlobalPkgs")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: vm-aarch64 home-manager.useGlobalPkgs: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.home-manager.useUserPackages")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: vm-aarch64 home-manager.useUserPackages: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64.config.home-manager.backupFileExtension")
+if [ "$actual" != "backup" ]; then
+  echo "FAIL: vm-aarch64 home-manager.backupFileExtension: expected 'backup', got '$actual'" >&2
+  exit 1
+fi
+
+vm_wayprompt_drv=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.wayprompt.package.drvPath")
+vm_global_wayprompt_drv=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64._module.args.pkgs.wayprompt.drvPath")
+if [ "$vm_wayprompt_drv" != "$vm_global_wayprompt_drv" ]; then
+  echo "FAIL: vm-aarch64 home-manager wayprompt drvPath diverges from host pkgs.wayprompt" >&2
+  echo "home-manager: $vm_wayprompt_drv" >&2
+  echo "host: $vm_global_wayprompt_drv" >&2
+  exit 1
+fi
 
 actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.git.enable")
 if [ "$actual" != "true" ]; then
@@ -110,6 +175,18 @@ if [ "$actual" != "true" ]; then
   exit 1
 fi
 
+actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.enable")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: vm-aarch64 programs.rbw.enable: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in toString flake.nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry')
+if [[ "$actual" != *pinentry-wayprompt* ]]; then
+  echo "FAIL: vm-aarch64 rbw pinentry: expected pinentry-wayprompt, got '$actual'" >&2
+  exit 1
+fi
+
 # Check the 'g = "git"' alias is present
 actual=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases.g")
 if [ "$actual" != "git" ]; then
@@ -139,6 +216,24 @@ fi
 # vm_packages check removed; covered by darwin check below.
 
 # --- Live eval: macbook-pro-m1 (Darwin) ---
+
+actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.home-manager.useGlobalPkgs")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: macbook-pro-m1 home-manager.useGlobalPkgs: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.home-manager.useUserPackages")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: macbook-pro-m1 home-manager.useUserPackages: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_raw ".#darwinConfigurations.macbook-pro-m1.config.home-manager.backupFileExtension")
+if [ "$actual" != "backup" ]; then
+  echo "FAIL: macbook-pro-m1 home-manager.backupFileExtension: expected 'backup', got '$actual'" >&2
+  exit 1
+fi
 
 actual=$(nix_eval_json ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.git.enable")
 if [ "$actual" != "true" ]; then
@@ -211,7 +306,61 @@ if printf '%s' "$darwin_packages" | grep -q -- '-git-credential-github'; then
   exit 1
 fi
 
+actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile ? "grm/repos.yaml" then "true" else "false"')
+if [ "$actual" != "true" ]; then
+  echo "FAIL: macbook-pro-m1 missing xdg.configFile.\"grm/repos.yaml\"" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in toString flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile."grm/repos.yaml".source')
+if [[ "$actual" != *dotfiles/common/grm-repos.yaml ]]; then
+  echo "FAIL: macbook-pro-m1 grm/repos.yaml source unexpected: '$actual'" >&2
+  exit 1
+fi
+
+for key in \
+  'wezterm/wezterm.lua' \
+  'activitywatch/scripts' \
+  'kanata-tray' \
+  'kanata'; do
+  actual=$(nix_eval_expr_raw "let flake = builtins.getFlake (toString ./.); in if flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile ? \"${key}\" then \"true\" else \"false\"")
+  if [ "$actual" != "true" ]; then
+    echo "FAIL: macbook-pro-m1 missing xdg.configFile.\"${key}\"" >&2
+    exit 1
+  fi
+done
+
+actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); pkgs = flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages; in if builtins.any (pkg: builtins.match ".*ghostty.*" (pkg.name or "") != null) pkgs then "true" else "false"')
+if [ "$actual" != "true" ]; then
+  echo "FAIL: macbook-pro-m1 home.packages missing ghostty" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); pkgs = flake.darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages; in if builtins.any (pkg: builtins.match ".*sentry-cli.*" (pkg.name or "") != null) pkgs then "true" else "false"')
+if [ "$actual" != "true" ]; then
+  echo "FAIL: macbook-pro-m1 home.packages missing sentry-cli" >&2
+  exit 1
+fi
+
 # --- Live eval: wsl (NixOS Linux, WSL) ---
+
+actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.useGlobalPkgs")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: wsl home-manager.useGlobalPkgs: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.useUserPackages")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: wsl home-manager.useUserPackages: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_raw ".#nixosConfigurations.wsl.config.home-manager.backupFileExtension")
+if [ "$actual" != "backup" ]; then
+  echo "FAIL: wsl home-manager.backupFileExtension: expected 'backup', got '$actual'" >&2
+  exit 1
+fi
 
 actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.users.m.programs.git.enable")
 if [ "$actual" != "true" ]; then
@@ -236,6 +385,18 @@ fi
 actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.users.m.programs.gh.gitCredentialHelper.enable")
 if [ "$actual" != "false" ]; then
   echo "FAIL: wsl programs.gh.gitCredentialHelper.enable: expected 'false', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_json ".#nixosConfigurations.wsl.config.home-manager.users.m.programs.rbw.enable")
+if [ "$actual" != "true" ]; then
+  echo "FAIL: wsl programs.rbw.enable: expected 'true', got '$actual'" >&2
+  exit 1
+fi
+
+actual=$(nix_eval_expr_raw 'let flake = builtins.getFlake (toString ./.); in toString flake.nixosConfigurations.wsl.config.home-manager.users.m.programs.rbw.settings.pinentry')
+if [[ "$actual" != *pinentry-tty* ]]; then
+  echo "FAIL: wsl rbw pinentry: expected pinentry-tty, got '$actual'" >&2
   exit 1
 fi
 

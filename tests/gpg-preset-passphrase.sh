@@ -60,17 +60,19 @@ grep -Fq 'Restart = "on-failure";' "$source_file" || fail 'systemd user service 
 grep -Fq 'RestartSec = 30;' "$source_file" || fail 'systemd user service is missing retry delay'
 
 # --- Legacy home-manager.nix must no longer own GPG/signing config ---
-if grep -Fq 'services.gpg-agent' users/m/home-manager.nix; then
-  fail 'users/m/home-manager.nix still owns services.gpg-agent — must be in den gpg aspect'
-fi
-if grep -Fq 'signByDefault' users/m/home-manager.nix; then
-  fail 'users/m/home-manager.nix still owns signByDefault — must be in den gpg aspect'
-fi
-if grep -Fq 'signing.key' users/m/home-manager.nix; then
-  fail 'users/m/home-manager.nix still owns git signing.key — must be in den gpg aspect'
-fi
-if grep -Fq 'gpgPresetPassphraseLogin' users/m/home-manager.nix; then
-  fail 'users/m/home-manager.nix still references gpgPresetPassphraseLogin — must be in den gpg aspect'
+if [ -e users/m/home-manager.nix ]; then
+  if grep -Fq 'services.gpg-agent' users/m/home-manager.nix; then
+    fail 'users/m/home-manager.nix still owns services.gpg-agent — must be in den gpg aspect'
+  fi
+  if grep -Fq 'signByDefault' users/m/home-manager.nix; then
+    fail 'users/m/home-manager.nix still owns signByDefault — must be in den gpg aspect'
+  fi
+  if grep -Fq 'signing.key' users/m/home-manager.nix; then
+    fail 'users/m/home-manager.nix still owns git signing.key — must be in den gpg aspect'
+  fi
+  if grep -Fq 'gpgPresetPassphraseLogin' users/m/home-manager.nix; then
+    fail 'users/m/home-manager.nix still references gpgPresetPassphraseLogin — must be in den gpg aspect'
+  fi
 fi
 
 # --- Live nix eval: gpg-agent behavior ---

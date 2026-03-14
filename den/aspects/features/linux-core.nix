@@ -2,7 +2,7 @@
 #
 # Core Linux system configuration aspect.
 #
-# Migrated from machines/vm-shared.nix and users/m/nixos.nix (Task 7 of den migration).
+# Migrated from the legacy VM shared and Linux user entrypoints (Task 7 of den migration).
 # Covers: boot/kernel/Nix settings, networking, sudo, OpenSSH, flatpak/snap, firewall,
 #         fonts, locale, nix-ld, zsh, localBinInPath, and common system packages.
 #
@@ -136,7 +136,7 @@
           ];
 
           # ---------------------------------------------------------------
-          # Shell / environment (from users/m/nixos.nix)
+          # Shell / environment (from the legacy Linux user entrypoint)
           # ---------------------------------------------------------------
 
           # https://github.com/nix-community/home-manager/pull/2408

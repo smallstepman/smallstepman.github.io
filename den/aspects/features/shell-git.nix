@@ -2,7 +2,7 @@
 #
 # Shell and git configuration slice for user m.
 #
-# Migrated from users/m/home-manager.nix (Task 4 of den migration).
+# Migrated from the legacy Home Manager entrypoint (Task 4 of den migration).
 # Covers: zsh, bash, inputrc, session variables, session path, manpager,
 #         direnv, zoxide, atuin, oh-my-posh, gh CLI, git (non-signing),
 #         packages: tig, git-credential-github (Linux non-WSL),
@@ -92,7 +92,7 @@
               # ---------------------------------------------------------------
               # Dotfiles
               # ---------------------------------------------------------------
-              home.file.".inputrc".source = ../../../users/m/inputrc;
+              home.file.".inputrc".source = ../../../dotfiles/common/inputrc;
 
               # ---------------------------------------------------------------
               # Session variables
@@ -169,7 +169,7 @@
                   # fnm (Node version manager)
                   eval "$(fnm env --use-on-cd)"
                   bindkey -v
-                  source ${../../../users/m/zsh-manydot.sh}
+                  source ${../../../dotfiles/common/zsh-manydot.sh}
 
                   # Doom-like leader key in zsh vi normal mode when running inside tmux.
                   tmux-leader-menu() {
@@ -227,7 +227,7 @@
                 enable = true;
                 shellOptions = [];
                 historyControl = [ "ignoredups" "ignorespace" ];
-                initExtra = builtins.readFile ../../../users/m/bashrc;
+                initExtra = builtins.readFile ../../../dotfiles/common/bashrc;
                 shellAliases = shellAliases;
               };
 
@@ -268,7 +268,7 @@
               # ---------------------------------------------------------------
               programs.oh-my-posh = {
                 enable = true;
-                settings = builtins.fromJSON (builtins.readFile ../../../users/m/oh-my-posh.json);
+                settings = builtins.fromJSON (builtins.readFile ../../../dotfiles/common/oh-my-posh.json);
               };
 
               # ---------------------------------------------------------------

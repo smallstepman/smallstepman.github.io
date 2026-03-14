@@ -85,57 +85,59 @@ done
 
 hm=users/m/home-manager.nix
 
-# Packages fully owned by editors-devtools
-for pkg in nerd-fonts.symbols-only emacs-all-the-icons-fonts devenv websocat bats bws fluxcd kubernetes-helm terragrunt gnumake nodejs_22 gopls; do
-  if grep -Eq "^[[:space:]]*pkgs\\.${pkg}\\b" "$hm"; then
-    echo "FAIL: $hm still owns pkgs.${pkg}" >&2
+if [ -e "$hm" ]; then
+  # Packages fully owned by editors-devtools
+  for pkg in nerd-fonts.symbols-only emacs-all-the-icons-fonts devenv websocat bats bws fluxcd kubernetes-helm terragrunt gnumake nodejs_22 gopls; do
+    if grep -Eq "^[[:space:]]*pkgs\\.${pkg}\\b" "$hm"; then
+      echo "FAIL: $hm still owns pkgs.${pkg}" >&2
+      exit 1
+    fi
+  done
+
+  # programs fully owned by new aspects
+  for prog in doom-emacs lazyvim; do
+    if grep -Eq "^[[:space:]]*(programs\\.${prog}|programs\\.${prog} =)" "$hm"; then
+      echo "FAIL: $hm still owns top-level programs.${prog} block" >&2
+      exit 1
+    fi
+  done
+
+  # opencode program block
+  if grep -Eq '^[[:space:]]*programs\.opencode = \{' "$hm"; then
+    echo "FAIL: $hm still owns programs.opencode block" >&2
     exit 1
   fi
-done
 
-# programs fully owned by new aspects
-for prog in doom-emacs lazyvim; do
-  if grep -Eq "^[[:space:]]*(programs\\.${prog}|programs\\.${prog} =)" "$hm"; then
-    echo "FAIL: $hm still owns top-level programs.${prog} block" >&2
+  # opencodeAwesome let binding
+  if grep -Fq 'opencodeAwesome = import' "$hm"; then
+    echo "FAIL: $hm still owns opencodeAwesome let binding" >&2
     exit 1
   fi
-done
 
-# opencode program block
-if grep -Eq '^[[:space:]]*programs\.opencode = \{' "$hm"; then
-  echo "FAIL: $hm still owns programs.opencode block" >&2
-  exit 1
-fi
+  # AI agent packages
+  for pkg in agent-of-empires gastown dotagents; do
+    if grep -Eq "^[[:space:]]*pkgs\\.${pkg}\\b" "$hm"; then
+      echo "FAIL: $hm still owns pkgs.${pkg}" >&2
+      exit 1
+    fi
+  done
 
-# opencodeAwesome let binding
-if grep -Fq 'opencodeAwesome = import' "$hm"; then
-  echo "FAIL: $hm still owns opencodeAwesome let binding" >&2
-  exit 1
-fi
-
-# AI agent packages
-for pkg in agent-of-empires gastown dotagents; do
-  if grep -Eq "^[[:space:]]*pkgs\\.${pkg}\\b" "$hm"; then
-    echo "FAIL: $hm still owns pkgs.${pkg}" >&2
+  if grep -Eq '^[[:space:]]*pkgs\.llm-agents\.' "$hm"; then
+    echo "FAIL: $hm still owns pkgs.llm-agents.* entries" >&2
     exit 1
   fi
-done
 
-if grep -Eq '^[[:space:]]*pkgs\.llm-agents\.' "$hm"; then
-  echo "FAIL: $hm still owns pkgs.llm-agents.* entries" >&2
-  exit 1
-fi
+  # installWritableTmuxMenus activation
+  if grep -Fq 'installWritableTmuxMenus' "$hm"; then
+    echo "FAIL: $hm still owns installWritableTmuxMenus" >&2
+    exit 1
+  fi
 
-# installWritableTmuxMenus activation
-if grep -Fq 'installWritableTmuxMenus' "$hm"; then
-  echo "FAIL: $hm still owns installWritableTmuxMenus" >&2
-  exit 1
-fi
-
-# ensureOpencodePackageJsonWritable activation
-if grep -Fq 'ensureOpencodePackageJsonWritable' "$hm"; then
-  echo "FAIL: $hm still owns ensureOpencodePackageJsonWritable" >&2
-  exit 1
+  # ensureOpencodePackageJsonWritable activation
+  if grep -Fq 'ensureOpencodePackageJsonWritable' "$hm"; then
+    echo "FAIL: $hm still owns ensureOpencodePackageJsonWritable" >&2
+    exit 1
+  fi
 fi
 
 # ---------------------------------------------------------------------------

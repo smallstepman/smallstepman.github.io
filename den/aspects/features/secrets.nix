@@ -2,7 +2,7 @@
 #
 # Secret-backed and sops system configuration aspect for user m.
 #
-# Migrated from machines/vm-shared.nix and users/m/nixos.nix (Task 7 of den migration).
+# Migrated from the legacy VM shared and Linux user entrypoints (Task 7 of den migration).
 # Covers: default secrets file, age/gnupg config, sops secrets, Tailscale auth
 #         from secret, mutableUsers=false, hashedPasswordFile, and the rbw-config
 #         systemd user service.
@@ -24,7 +24,7 @@
             # sops-nix: default secrets file
             # ---------------------------------------------------------------
 
-            sops.defaultSopsFile = ../../../machines/secrets.yaml;
+            sops.defaultSopsFile = ../../../generated/secrets.yaml;
 
             # ---------------------------------------------------------------
             # sops-nix: age + gnupg key paths

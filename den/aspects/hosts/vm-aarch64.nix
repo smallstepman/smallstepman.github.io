@@ -30,46 +30,85 @@
       den.provides.hostname
 
       # Host-specific NixOS configuration that does not belong in a shared aspect.
-      ({ host, ... }: {
-        nixos = { config, pkgs, lib, ... }: {
+        ({ host, ... }: {
+          nixos = { config, pkgs, lib, ... }: {
+            # Copied from the old nixos-generate-config output so the VM keeps the
+            # same initrd driver set after the legacy hardware file removal.
+            boot.initrd.availableKernelModules = [ "uhci_hcd" "ahci" "xhci_pci" "nvme" "usbhid" "sr_mod" ];
+            boot.initrd.kernelModules = [ ];
+            boot.kernelModules = [ ];
+            boot.extraModulePackages = [ ];
+            swapDevices = [ ];
 
-          # Setup qemu so this aarch64 VM can run x86_64 binaries.
-          boot.binfmt.emulatedSystems = [ "x86_64-linux" ];
+            # Copied from the former disko file so the VM disk layout remains
+            # den-owned while still producing the same /boot and / filesystem setup.
+            disko.devices = {
+              disk.main = {
+                device = lib.mkDefault "/dev/nvme0n1";
+                type = "disk";
+                content = {
+                  type = "gpt";
+                  partitions = {
+                    ESP = {
+                      size = "500M";
+                      type = "EF00";
+                      content = {
+                        type = "filesystem";
+                        format = "vfat";
+                        mountpoint = "/boot";
+                        mountOptions = [ "umask=0077" ];
+                      };
+                    };
+                    root = {
+                      size = "100%";
+                      content = {
+                        type = "filesystem";
+                        format = "ext4";
+                        mountpoint = "/";
+                      };
+                    };
+                  };
+                };
+              };
+            };
 
-          # Let NetworkManager use DHCP on VMware NAT; VMware's DHCP reservation
-          # keeps this guest pinned to 192.168.130.3.
-          networking.interfaces.enp2s0.useDHCP = true;
+            # Setup qemu so this aarch64 VM can run x86_64 binaries.
+            boot.binfmt.emulatedSystems = [ "x86_64-linux" ];
 
-          # Host-specific sops age public key used by secret collection.
-          sops.hostPubKey = lib.removeSuffix "\n"
-            (builtins.readFile ../../../machines/generated/vm-age-pubkey);
+            # Let NetworkManager use DHCP on VMware NAT; VMware's DHCP reservation
+            # keeps this guest pinned to 192.168.130.3.
+            networking.interfaces.enp2s0.useDHCP = true;
 
-          # Ensure vm-macbook resolves locally regardless of DNS state.
-          networking.hosts."127.0.0.1" = [ "vm-macbook" "localhost" ];
+            # Host-specific sops age public key used by secret collection.
+            sops.hostPubKey = lib.removeSuffix "\n"
+              (builtins.readFile ../../../generated/vm-age-pubkey);
 
-          # Expose a tunneled Open WebUI instance on localhost:80.
-          systemd.services.openwebui-local-proxy = {
-            description = "Expose tunneled Open WebUI on localhost:80";
-            wantedBy = [ "multi-user.target" ];
-            after = [ "network.target" ];
-            serviceConfig = {
-              ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:127.0.0.1:18080";
-              Restart = "always";
-              RestartSec = 1;
+            # Ensure vm-macbook resolves locally regardless of DNS state.
+            networking.hosts."127.0.0.1" = [ "vm-macbook" "localhost" ];
+
+            # Expose a tunneled Open WebUI instance on localhost:80.
+            systemd.services.openwebui-local-proxy = {
+              description = "Expose tunneled Open WebUI on localhost:80";
+              wantedBy = [ "multi-user.target" ];
+              after = [ "network.target" ];
+              serviceConfig = {
+                ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:127.0.0.1:18080";
+                Restart = "always";
+                RestartSec = 1;
+              };
+            };
+
+            # User m: host-specific group membership and SSH authorized keys.
+            # Note: wheel and networkmanager are already added by den.provides.primary-user;
+            # only add the vm-aarch64-specific lxd group here to avoid duplicates.
+            users.users.m = {
+              extraGroups = [ "lxd" ];
+              openssh.authorizedKeys.keyFiles = [
+                ../../../generated/host-authorized-keys
+              ];
             };
           };
-
-          # User m: host-specific group membership and SSH authorized keys.
-          # Note: wheel and networkmanager are already added by den.provides.primary-user;
-          # only add the vm-aarch64-specific lxd group here to avoid duplicates.
-          users.users.m = {
-            extraGroups = [ "lxd" ];
-            openssh.authorizedKeys.keyFiles = [
-              ../../../machines/generated/host-authorized-keys
-            ];
-          };
-        };
-      })
+        })
     ];
   };
 }

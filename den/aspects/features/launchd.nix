@@ -2,10 +2,9 @@
 #
 # Darwin launchd slice for macbook-pro-m1.
 #
-# Migrated from users/m/darwin.nix (Task 9 of den migration).
-# Covers the custom launchd user agents for host/guest services and local
-# automation, but intentionally leaves the imported opencode launchd module in
-# users/m/darwin.nix for a later cleanup slice.
+# Migrated from the legacy Darwin entrypoint (Task 9 of den migration).
+# Covers the custom launchd user agents for host/guest services, local
+# automation, and the opencode darwin launchd module.
 { den, inputs, ... }: {
   den.aspects.launchd = {
     includes = [
@@ -22,6 +21,8 @@
             vmStaticIp = "192.168.130.3";
             openWebUiStateDir = "${homeDir}/.local/state/open-webui";
           in {
+            imports = [ ../../../dotfiles/common/opencode/modules/darwin.nix ];
+
             # Uniclip: encrypted clipboard sharing between macOS and NixOS VM.
             # Server binds to VM network interface; VM connects directly (no SSH tunnel).
             launchd.user.agents.uniclip = {

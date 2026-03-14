@@ -2,7 +2,7 @@
 #
 # VMware guest integration and VM-specific host-bridge behavior for user m.
 #
-# Migrated from machines/vm-aarch64.nix and users/m/home-manager.nix (Task 8
+# Migrated from the legacy vm-aarch64 and Home Manager entrypoints (Task 8
 # of den migration).
 #
 # NixOS scope:
@@ -176,8 +176,8 @@
                 matchBlocks."mac-host-docker" = {
                   hostname = "192.168.130.1";
                   user = "m";
-                  # This key is provisioned into the VM by `make vm/secrets`, which
-                  # rsyncs ~/.ssh/ from the macOS host.
+                  # This expects the matching private key to be available in the VM
+                  # at ~/.ssh/id_ed25519.
                   identityFile = "~/.ssh/id_ed25519";
                   controlMaster = "auto";
                   controlPersist = "10m";

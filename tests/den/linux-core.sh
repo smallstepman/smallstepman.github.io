@@ -83,22 +83,26 @@ fi
 
 nixos_file=users/m/nixos.nix
 
-for item in 'environment.localBinInPath' 'programs.zsh.enable' 'programs.nix-ld'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$nixos_file" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $nixos_file still contains '$item' (should be in linux-core.nix)" >&2
-    exit 1
-  fi
-done
+if [ -e "$nixos_file" ]; then
+  for item in 'environment.localBinInPath' 'programs.zsh.enable' 'programs.nix-ld'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$nixos_file" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $nixos_file still contains '$item' (should be in linux-core.nix)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # sops secrets and tailscale should be in secrets.nix, not nixos.nix
-for item in 'sops.secrets' 'services.tailscale'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$nixos_file" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $nixos_file still contains '$item' (should be in secrets.nix)" >&2
-    exit 1
-  fi
-done
+if [ -e "$nixos_file" ]; then
+  for item in 'sops.secrets' 'services.tailscale'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$nixos_file" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $nixos_file still contains '$item' (should be in secrets.nix)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Guard: migrated items must no longer remain in machines/vm-shared.nix
@@ -106,16 +110,18 @@ done
 
 vmshared=machines/vm-shared.nix
 
-for item in 'services.openssh.enable' 'networking.networkmanager.enable' \
-             'sops.defaultSopsFile' 'services.tailscale.enable' \
-             'sops.hostPubKey' 'boot.kernelPackages' 'environment.localBinInPath' \
-             'programs.nix-ld' 'programs.zsh.enable'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$vmshared" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $vmshared still contains '$item' (should be in aspect)" >&2
-    exit 1
-  fi
-done
+if [ -e "$vmshared" ]; then
+  for item in 'services.openssh.enable' 'networking.networkmanager.enable' \
+               'sops.defaultSopsFile' 'services.tailscale.enable' \
+               'sops.hostPubKey' 'boot.kernelPackages' 'environment.localBinInPath' \
+               'programs.nix-ld' 'programs.zsh.enable'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$vmshared" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $vmshared still contains '$item' (should be in aspect)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Live nix eval helper
@@ -199,14 +205,14 @@ printf '%s' "$actual" | grep -q '"lxd"' \
   || { echo "FAIL: extraGroups missing lxd, got '$actual'" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Live eval: sops defaultSopsFile must point to machines/secrets.yaml
+# Live eval: sops defaultSopsFile must point to generated/secrets.yaml
 # ---------------------------------------------------------------------------
 
 actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.sops.defaultSopsFile")
 printf '%s' "$actual" | grep -q 'secrets.yaml' \
   || { echo "FAIL: sops.defaultSopsFile does not mention secrets.yaml, got '$actual'" >&2; exit 1; }
-# Verify it's the repo's secrets.yaml (store path ends with machines/secrets.yaml)
-printf '%s' "$actual" | grep -q 'machines/secrets.yaml' \
+# Verify it's the repo's secrets.yaml (store path ends with generated/secrets.yaml)
+printf '%s' "$actual" | grep -q 'generated/secrets.yaml' \
   || { echo "FAIL: sops.defaultSopsFile path unexpected, got '$actual'" >&2; exit 1; }
 
 echo "All linux-core checks passed."

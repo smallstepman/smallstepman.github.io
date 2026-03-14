@@ -2,7 +2,7 @@
 #
 # AI tooling and coding-agent configuration aspect for user m.
 #
-# Migrated from users/m/home-manager.nix (Task 6 of den migration).
+# Migrated from the legacy Home Manager entrypoint (Task 6 of den migration).
 # Covers: llm-agents package set, opencode HM module, opencodeAwesome config,
 #         opencode XDG config files, ensureOpencodePackageJsonWritable activation,
 #         and programs.opencode.
@@ -19,10 +19,10 @@
         in {
           homeManager = { pkgs, lib, ... }:
             let
-              opencodeAwesome = import ../../../users/m/opencode/awesome.nix { inherit pkgs lib; };
+              opencodeAwesome = import ../../../dotfiles/common/opencode/awesome.nix { inherit pkgs lib; };
             in {
               imports = [
-                (import ../../../users/m/opencode/modules/home-manager.nix { inherit isWSL; })
+                (import ../../../dotfiles/common/opencode/modules/home-manager.nix { inherit isWSL; })
               ];
 
               # ---------------------------------------------------------------
@@ -82,7 +82,7 @@
                   if [ -L "$packageJson" ]; then
                     run rm -f "$packageJson"
                   fi
-                  run cp ${../../../users/m/opencode/package.json} "$packageJson"
+                  run cp ${../../../dotfiles/common/opencode/package.json} "$packageJson"
                   run chmod u+w "$packageJson"
                 '';
 
@@ -92,7 +92,7 @@
               programs.opencode = {
                 enable = true;
                 package = pkgs.llm-agents.opencode;
-                settings = builtins.fromJSON (builtins.readFile ../../../users/m/opencode/settings.json);
+                settings = builtins.fromJSON (builtins.readFile ../../../dotfiles/common/opencode/settings.json);
                 agents = opencodeAwesome.agents;
                 commands = opencodeAwesome.commands;
                 themes = opencodeAwesome.themes;

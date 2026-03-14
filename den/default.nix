@@ -4,9 +4,10 @@
   # -------------------------------------------------------------------------
   # Host/system den wiring.
   #
-  # lib/mksystem.nix used to inject overlays globally before evaluating either
-  # NixOS or nix-darwin modules. den-built hosts need the same host-level
-  # overlay wiring so system modules can reference custom packages like uniclip.
+  # lib/mksystem.nix used to inject overlays and the core home-manager wiring
+  # before evaluating either NixOS or nix-darwin modules. den-built hosts need
+  # the same host-level wiring so system modules can reference custom packages
+  # like uniclip and home-manager continues to reuse the host package set.
   #
   # The Linux-specific special-flake modules (sops-nix, nix-snapd, niri, etc.)
   # also used to be injected directly by lib/mksystem.nix. Now that den
@@ -18,6 +19,10 @@
       let
         systemModule = { ... }: {
           nixpkgs.overlays = overlays;
+          nixpkgs.config.allowUnfree = true;
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.backupFileExtension = "backup";
         };
       in
       (lib.optionalAttrs (host.class == "nixos") {
@@ -40,15 +45,6 @@
           inputs.nixos-wsl.nixosModules.wsl
         ];
       })
-  ];
-
-  den.ctx.user.includes = [
-    ({ ... }: {
-      homeManager = { ... }: {
-        nixpkgs.overlays = overlays;
-        nixpkgs.config.allowUnfree = true;
-      };
-    })
   ];
 
   den.schema.user = { ... }: {

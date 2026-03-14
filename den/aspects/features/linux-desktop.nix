@@ -2,7 +2,7 @@
 #
 # Linux graphical desktop stack aspect for user m's VM host.
 #
-# Migrated from machines/vm-shared.nix and users/m/home-manager.nix (Task 8
+# Migrated from the legacy VM shared and Home Manager entrypoints (Task 8
 # of den migration).
 #
 # NixOS scope:
@@ -187,20 +187,20 @@
             # ---------------------------------------------------------------
 
             xdg.configFile = lib.mkIf isGraphical {
-              "wezterm/wezterm.lua".text = builtins.readFile ../../../users/m/wezterm.vm.lua;
+              "wezterm/wezterm.lua".text = builtins.readFile ../../../dotfiles/by-host/vm/wezterm.lua;
 
               # Prevent home-manager from managing rbw config as a read-only store symlink;
               # the rbw-config systemd service writes the real config with sops email.
               "rbw/config.json".enable = lib.mkForce false;
 
               # wlr-which-key configuration
-              "wlr-which-key/config.yaml".text = builtins.readFile ../../../users/m/wlr-which-key-config.yaml;
+              "wlr-which-key/config.yaml".text = builtins.readFile ../../../dotfiles/by-host/vm/wlr-which-key-config.yaml;
 
               # Noctalia user templates and theme template inputs
-              "noctalia/user-templates.toml".source = ../../../users/m/noctalia-user-templates.toml;
-              "noctalia/emacs-template.el".source = ../../../users/m/doom/themes/noctalia-template.el;
-              "noctalia/wezterm-colors-template.lua".source = ../../../users/m/wezterm-colors-template.lua;
-              "nvim/lua/matugen-template.lua".source = ../../../users/m/lazyvim/lua/matugen-template.lua;
+              "noctalia/user-templates.toml".source = ../../../dotfiles/by-host/vm/noctalia-user-templates.toml;
+              "noctalia/emacs-template.el".source = ../../../dotfiles/common/doom/themes/noctalia-template.el;
+              "noctalia/wezterm-colors-template.lua".source = ../../../dotfiles/by-host/vm/wezterm-colors-template.lua;
+              "nvim/lua/matugen-template.lua".source = ../../../dotfiles/common/lazyvim/lua/matugen-template.lua;
             };
 
             # ---------------------------------------------------------------
@@ -236,7 +236,7 @@
 
             wayland.windowManager.mango = lib.mkIf isGraphical {
               enable = true;
-              settings = builtins.readFile ../../../users/m/mangowc.cfg;
+              settings = builtins.readFile ../../../dotfiles/by-host/vm/mangowc.cfg;
               autostart_sh = ''
                 mako &
               '';
@@ -244,7 +244,7 @@
 
             programs.noctalia-shell = lib.mkIf isGraphical {
               enable = true;
-              settings = ../../../users/m/noctalia.json;
+              settings = ../../../dotfiles/by-host/vm/noctalia.json;
             };
 
             programs.librewolf = lib.mkIf isGraphical {

@@ -21,7 +21,7 @@ INSTALL_SSH_PASSWORD="${INSTALL_SSH_PASSWORD:-root}"
 export DISPLAY=
 
 HOST_SSH_PUBKEY_FILE="${HOST_SSH_PUBKEY_FILE:-$HOME/.ssh/id_ed25519.pub}"
-GENERATED_DIR="$NIX_CONFIG_DIR/machines/generated"
+GENERATED_DIR="$NIX_CONFIG_DIR/generated"
 
 VM_BASE_DIR="$HOME/Virtual Machines.localized"
 HOST_PROJECTS_DIR="${HOST_PROJECTS_DIR:-$HOME/Projects}"
@@ -415,10 +415,10 @@ vm_prepare_sops_age_key() {
 # ─── Collect Secrets ────────────────────────────────────────────────────────
 
 vm_collect_secrets() {
-    touch "$NIX_CONFIG_DIR/machines/secrets.yaml"
-    git -C "$NIX_CONFIG_DIR" add -f machines/secrets.yaml
+    touch "$NIX_CONFIG_DIR/generated/secrets.yaml"
+    git -C "$NIX_CONFIG_DIR" add -f generated/secrets.yaml
     (cd "$NIX_CONFIG_DIR" && nix --extra-experimental-features 'nix-command flakes' run "$NIX_CONFIG_DIR#collect-secrets")
-    git -C "$NIX_CONFIG_DIR" reset -q -- machines/secrets.yaml
+    git -C "$NIX_CONFIG_DIR" reset -q -- generated/secrets.yaml
 }
 
 # ─── VM Install ─────────────────────────────────────────────────────────────
@@ -426,7 +426,7 @@ vm_collect_secrets() {
 vm_install() {
     vm_prepare_host_authorized_keys
     vm_prepare_sops_age_key
-    git -C "$NIX_CONFIG_DIR" add machines/generated/vm-age-pubkey machines/generated/host-authorized-keys machines/generated/mac-host-authorized-keys
+    git -C "$NIX_CONFIG_DIR" add generated/vm-age-pubkey generated/host-authorized-keys generated/mac-host-authorized-keys
     vm_collect_secrets
 
     sshpass -p "$INSTALL_SSH_PASSWORD" ssh $BOOTSTRAP_SSH_OPTIONS -p"$NIXPORT" "${NIXINSTALLUSER}@${NIXADDR}" "$REMOTE_FIX_INTERNET && $REMOTE_MOUNT_SHARED"' &&
@@ -438,7 +438,7 @@ vm_install() {
         sudo nix --experimental-features "nix-command flakes" run \
             github:nix-community/disko -- \
             --mode disko \
-            '"$VM_SHARED_NIX_CONFIG_DIR"'/machines/hardware/disko-vm.nix &&
+            --flake '"$VM_SHARED_NIX_CONFIG_DIR"'#'"$NIXNAME"' &&
         sudo mkdir -p /mnt/var/lib/sops-nix &&
         sudo cp /var/lib/sops-nix/key.txt /mnt/var/lib/sops-nix/key.txt &&
         sudo chmod 700 /mnt/var/lib/sops-nix &&
@@ -586,7 +586,7 @@ cmd_refresh_secrets() {
     fi
 
     vm_prepare_host_authorized_keys
-    git -C "$NIX_CONFIG_DIR" add machines/generated/vm-age-pubkey machines/generated/host-authorized-keys machines/generated/mac-host-authorized-keys
+    git -C "$NIX_CONFIG_DIR" add generated/vm-age-pubkey generated/host-authorized-keys generated/mac-host-authorized-keys
     vm_collect_secrets
     echo "Secrets refreshed. Run 'vm switch' to apply."
 }

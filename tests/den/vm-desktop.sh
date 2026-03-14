@@ -63,6 +63,10 @@ grep -Fq 'den.aspects.linux-desktop'          den/aspects/hosts/vm-aarch64.nix
 grep -Fq 'den.aspects.vmware'                 den/aspects/hosts/vm-aarch64.nix
 grep -Fq 'boot.binfmt.emulatedSystems'        den/aspects/hosts/vm-aarch64.nix
 grep -Fq 'networking.interfaces.enp2s0.useDHCP' den/aspects/hosts/vm-aarch64.nix
+if grep -Fq '../../../machines/hardware/' den/aspects/hosts/vm-aarch64.nix; then
+  echo "FAIL: den/aspects/hosts/vm-aarch64.nix still imports machines/hardware/*" >&2
+  exit 1
+fi
 
 # Scope guard: these are vm-aarch64 host specifics, not VMware-generic settings.
 if grep -Ev '^[[:space:]]*#' den/aspects/features/vmware.nix | grep -Eq 'boot\.binfmt\.emulatedSystems|networking\.interfaces\.enp2s0\.useDHCP'; then
@@ -75,79 +79,89 @@ fi
 # ---------------------------------------------------------------------------
 
 vmshared=machines/vm-shared.nix
-for item in \
-  'programs.niri.enable' \
-  'services.noctalia-shell.enable' \
-  'services.greetd' \
-  'programs.mango.enable' \
-  'hardware.bluetooth.enable' \
-  'services.keyd'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$vmshared" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $vmshared still contains '$item' (should be in linux-desktop.nix)" >&2
-    exit 1
-  fi
-done
+if [ -e "$vmshared" ]; then
+  for item in \
+    'programs.niri.enable' \
+    'services.noctalia-shell.enable' \
+    'services.greetd' \
+    'programs.mango.enable' \
+    'hardware.bluetooth.enable' \
+    'services.keyd'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$vmshared" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $vmshared still contains '$item' (should be in linux-desktop.nix)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Guard: migrated VMware items must no longer remain in machines/vm-aarch64.nix
 # ---------------------------------------------------------------------------
 
 vmaarch64=machines/vm-aarch64.nix
-for item in \
-  'virtualisation.vmware.guest.enable' \
-  '.host:/Projects' \
-  '.host:/nixos-config'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$vmaarch64" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $vmaarch64 still contains '$item' (should be in vmware.nix)" >&2
-    exit 1
-  fi
-done
+if [ -e "$vmaarch64" ]; then
+  for item in \
+    'virtualisation.vmware.guest.enable' \
+    '.host:/Projects' \
+    '.host:/nixos-config'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$vmaarch64" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $vmaarch64 still contains '$item' (should be in vmware.nix)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Guard: migrated vm-aarch64 host-specific items must no longer remain in
 # machines/vm-aarch64.nix
 # ---------------------------------------------------------------------------
 
-for item in \
-  'boot.binfmt.emulatedSystems' \
-  'networking.interfaces.enp2s0.useDHCP'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$vmaarch64" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $vmaarch64 still contains '$item' (should be in den/aspects/hosts/vm-aarch64.nix)" >&2
-    exit 1
-  fi
-done
+if [ -e "$vmaarch64" ]; then
+  for item in \
+    'boot.binfmt.emulatedSystems' \
+    'networking.interfaces.enp2s0.useDHCP' \
+    './hardware/vm-aarch64.nix' \
+    './hardware/disko-vm.nix'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$vmaarch64" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $vmaarch64 still contains '$item' (should be in den/aspects/hosts/vm-aarch64.nix)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Guard: migrated HM items must no longer remain in users/m/home-manager.nix
 # ---------------------------------------------------------------------------
 
 hm=users/m/home-manager.nix
-for item in \
-  'programs.kitty' \
-  'programs.ssh' \
-  'programs.niri.settings' \
-  'programs.wayprompt' \
-  'wayland.windowManager.mango' \
-  'programs.noctalia-shell' \
-  'programs.librewolf' \
-  'mozilla.librewolfNativeMessagingHosts' \
-  'home.pointerCursor' \
-  'createNoctaliaThemeDirs' \
-  'ensureHostDockerContext' \
-  'activitywatch-watcher-afk' \
-  'systemd.user.services.uniclip' \
-  'systemd.user.services.pywalfox-boot' \
-  'niriDeepZellijBreakPlugin' \
-  'DOCKER_CONTEXT'; do
-  non_comment=$(grep -Ev '^[[:space:]]*#' "$hm" || true)
-  if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
-    echo "FAIL: $hm still contains '$item' (should be in aspect)" >&2
-    exit 1
-  fi
-done
+if [ -e "$hm" ]; then
+  for item in \
+    'programs.kitty' \
+    'programs.ssh' \
+    'programs.niri.settings' \
+    'programs.wayprompt' \
+    'wayland.windowManager.mango' \
+    'programs.noctalia-shell' \
+    'programs.librewolf' \
+    'mozilla.librewolfNativeMessagingHosts' \
+    'home.pointerCursor' \
+    'createNoctaliaThemeDirs' \
+    'ensureHostDockerContext' \
+    'activitywatch-watcher-afk' \
+    'systemd.user.services.uniclip' \
+    'systemd.user.services.pywalfox-boot' \
+    'niriDeepZellijBreakPlugin' \
+    'DOCKER_CONTEXT'; do
+    non_comment=$(grep -Ev '^[[:space:]]*#' "$hm" || true)
+    if printf '%s\n' "$non_comment" | grep -Fq "$item"; then
+      echo "FAIL: $hm still contains '$item' (should be in aspect)" >&2
+      exit 1
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Live nix eval helper
@@ -197,6 +211,14 @@ printf '%s' "$actual" | grep -q '.host:/Projects' \
 actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.boot.binfmt.emulatedSystems")
 printf '%s' "$actual" | grep -q '"x86_64-linux"' \
   || { echo "FAIL: boot.binfmt.emulatedSystems missing x86_64-linux, got '$actual'" >&2; exit 1; }
+
+actual=$(nix_eval_json ".#nixosConfigurations.vm-aarch64.config.boot.initrd.availableKernelModules")
+printf '%s' "$actual" | grep -q '"nvme"' \
+  || { echo "FAIL: boot.initrd.availableKernelModules missing nvme, got '$actual'" >&2; exit 1; }
+
+actual=$(nix_eval_raw ".#nixosConfigurations.vm-aarch64.config.disko.devices.disk.main.content.partitions.root.content.mountpoint")
+[ "$actual" = "/" ] \
+  || { echo "FAIL: vm-aarch64 disko root mountpoint: expected '/', got '$actual'" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Live eval: home-manager settings

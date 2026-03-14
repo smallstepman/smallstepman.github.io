@@ -2,7 +2,7 @@
 #
 # Editors, developer tools, and terminal environment aspect for user m.
 #
-# Migrated from users/m/home-manager.nix (Task 6 of den migration).
+# Migrated from the legacy Home Manager entrypoint (Task 6 of den migration).
 # Covers: developer package set, Doom Emacs, tmux, zellij (enable+force-close),
 #         VSCode, Go, LazyVim, Starship, gdbinit, tmux menus, and the
 #         installWritableTmuxMenus activation hook.
@@ -85,13 +85,13 @@
             # -----------------------------------------------------------------
             # Dotfiles
             # -----------------------------------------------------------------
-            home.file.".gdbinit".source = ../../../users/m/gdbinit;
+            home.file.".gdbinit".source = ../../../dotfiles/common/gdbinit;
 
             # -----------------------------------------------------------------
             # XDG config files
             # -----------------------------------------------------------------
             xdg.configFile."tmux/menus/doomux.sh" = {
-              source = ../../../users/m/tmux/doomux.sh;
+              source = ../../../dotfiles/common/tmux/doomux.sh;
               executable = true;
             };
 
@@ -114,7 +114,7 @@
             # -----------------------------------------------------------------
             programs.doom-emacs = {
               enable = true;
-              doomDir = ../../../users/m/doom;
+              doomDir = ../../../dotfiles/common/doom;
               emacs = pkgs.emacs-pgtk;
             };
 
@@ -163,9 +163,9 @@
               enable = true;
               profiles = {
                 default = {
-                  extensions = import ../../../users/m/vscode/extensions.nix { inherit pkgs; };
-                  keybindings = builtins.fromJSON (builtins.readFile ../../../users/m/vscode/keybindings.json);
-                  userSettings = builtins.fromJSON (builtins.readFile ../../../users/m/vscode/settings.json);
+                  extensions = import ../../../dotfiles/common/vscode/extensions.nix { inherit pkgs; };
+                  keybindings = builtins.fromJSON (builtins.readFile ../../../dotfiles/common/vscode/keybindings.json);
+                  userSettings = builtins.fromJSON (builtins.readFile ../../../dotfiles/common/vscode/settings.json);
                 };
               };
             };
@@ -186,7 +186,7 @@
             # -----------------------------------------------------------------
             programs.lazyvim = {
               enable = true;
-              configFiles = ../../../users/m/lazyvim;
+              configFiles = ../../../dotfiles/common/lazyvim;
 
               extras = {
                 lang.nix.enable = true;
@@ -227,7 +227,7 @@
             # -----------------------------------------------------------------
             programs.starship = {
               enable = false;
-              settings = builtins.fromTOML (builtins.readFile ../../../users/m/starship.toml);
+              settings = builtins.fromTOML (builtins.readFile ../../../dotfiles/common/starship.toml);
             };
 
           };

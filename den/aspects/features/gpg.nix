@@ -2,7 +2,7 @@
 #
 # GPG agent, git signing, and login passphrase preset aspect for user m.
 #
-# Migrated from users/m/home-manager.nix (Task 5 of den migration).
+# Migrated from the legacy Home Manager entrypoint (Task 5 of den migration).
 # Covers: programs.gpg, services.gpg-agent, programs.git.signing,
 #         gpgPresetPassphraseLogin helper script (vm-aarch64 only), and the
 #         systemd login service that presets the signing passphrase (vm only).
