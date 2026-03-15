@@ -31,6 +31,7 @@
 
             programs.lazyvim = {
               enable = true;
+              pluginSource = "nixpkgs";
               configFiles = ../../../dotfiles/common/lazyvim;
 
               extras = {

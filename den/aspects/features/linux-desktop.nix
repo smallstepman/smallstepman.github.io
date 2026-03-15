@@ -311,7 +311,6 @@
           dwindle = {
             pseudotile        = true;
             preserve_split    = true;
-            always_center_new = true;
           };
 
           misc = {

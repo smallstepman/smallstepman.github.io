@@ -12,11 +12,32 @@ let
 
     # Build non-flake packages from source
     (final: prev: {
-      opencode = inputs.opencode.packages.${prev.stdenv.hostPlatform.system}.default;
-      agent-of-empires = inputs.agent-of-empires-src.packages.${prev.stdenv.hostPlatform.system}.default;
-      gastown = inputs.gastown.packages.${prev.stdenv.hostPlatform.system}.gt.overrideAttrs (old: {
-        vendorHash = "sha256-fZucwy6omCXV5/ebOzcqOgJ4SfouCHasmstEX2na5SQ=";
-      });
+        opencode = inputs.opencode.packages.${prev.stdenv.hostPlatform.system}.default;
+        agent-of-empires = inputs.agent-of-empires-src.packages.${prev.stdenv.hostPlatform.system}.default;
+        gastown = inputs.gastown.packages.${prev.stdenv.hostPlatform.system}.gt.overrideAttrs (old: {
+          proxyVendor = true;
+          vendorHash = "sha256-lct4BRPRh8nfNHE2p0SU0ZgItA8AbWU/AQPz+HbiPaI=";
+        });
+
+      llm-agents = prev.llm-agents // {
+        beads-rust = prev.callPackage "${inputs.llm-agents.outPath}/packages/beads-rust/package.nix" {
+          flake = inputs.llm-agents;
+          rustPlatform = prev.rustPlatform // {
+            buildRustPackage = args:
+              prev.rustPlatform.buildRustPackage (
+                args
+                // {
+                  # Vendor staging does not receive arbitrary attrs like
+                  # `frankensqlite`, so interpolate its store path eagerly.
+                  postUnpack = builtins.replaceStrings
+                    [ "$frankensqlite" ]
+                    [ "${args.frankensqlite}" ]
+                    (args.postUnpack or "");
+                }
+              );
+          };
+        };
+      };
 
       apm =
         let
@@ -138,13 +159,8 @@ PYEOF
           config.allowUnfree = true;
         };
       in rec {
-      # gh CLI on stable has bugs.
-      # gh = pkgs-unstable.gh;
-
       # Want the latest version of these
-      # claude-code = pkgs-unstable.claude-code;
       wezterm = pkgs-unstable.wezterm;
-
     })
   ];
 

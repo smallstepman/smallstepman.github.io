@@ -52,17 +52,18 @@ mk_wrapper_flake() {
   cat >"$wrapper_dir/flake.nix" <<EOF
 {
   inputs.config.url = "path:$repo_root";
-  inputs.generated = {
-    url = "path:$generated_dir";
-    flake = false;
-  };
-
-  outputs = { config, generated, ... }@inputs:
-    config.lib.mkOutputs {
-      inherit generated;
-    };
+  inputs.generated = { url = "path:$generated_dir"; flake = false; };
+  outputs = { config, generated, ... }@inputs: config.lib.mkOutputs { inherit generated; };
 }
 EOF
+
+  local lock_stderr="$wrapper_dir/.flake-lock.stderr"
+  if ! (cd "$wrapper_dir" >/dev/null 2>&1 && nix flake lock >/dev/null 2>"$lock_stderr"); then
+    cat "$lock_stderr" >&2
+    rm -f "$lock_stderr"
+    return 1
+  fi
+  rm -f "$lock_stderr"
 
   _nix_wrapper_dir="$wrapper_dir"
   printf '%s\n' "$wrapper_dir"
