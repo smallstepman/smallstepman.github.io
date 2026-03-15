@@ -41,3 +41,7 @@ apm_modules/
 .github/agents/*-apm.agent.md
 .github/agents/*-apm.chatmode.md
 .worktrees/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db

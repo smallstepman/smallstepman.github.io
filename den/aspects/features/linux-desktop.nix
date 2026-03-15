@@ -67,7 +67,7 @@
 
     homeManager = { pkgs, lib, config, ... }:
       let
-        yny      = "/Projects/m/yeet-and-yoink/target/release/yny";
+        yny      = "/Users/m/Projects/yeet-and-yoink/target/release/yny";
         ynyFlags = [ "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append" ];
         ynyArgv  = args: [ yny ] ++ ynyFlags ++ args;                  # for niri (argv list)
         ynyDbg   = lib.concatStringsSep " " ([ yny ] ++ ynyFlags);    # for mango/hyprland (shell string)

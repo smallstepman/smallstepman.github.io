@@ -94,19 +94,6 @@ setup_file() {
   _nix_wrapper_dir=$(mk_wrapper_flake)
 }
 
-run_manydots_rewrite() {
-  local buffer="$1"
-  local cwd="${2:-$REPO_ROOT}"
-
-  run env MANYDOTS_BUFFER="$buffer" MANYDOTS_CWD="$cwd" MANYDOTS_REPO_ROOT="$REPO_ROOT" zsh -fc '
-    cd "$MANYDOTS_CWD" || exit 1
-    source "$MANYDOTS_REPO_ROOT/dotfiles/common/zsh-manydot.sh"
-    BUFFER="$MANYDOTS_BUFFER"
-    manydots-magic.rewrite-buffer
-    print -r -- "$BUFFER"
-  '
-}
-
 
 # ===========================================================================
 # no-legacy — legacy composition files are removed; structure is modernised
@@ -497,46 +484,18 @@ PYEOF
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: zsh manydots rewrites bare .. to cd .." {
-  run_manydots_rewrite ".."
+@test "home-manager-core: macbook-pro-m1 enables zsh AUTO_CD for bare-path enter" {
+  actual=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.zsh.autocd)
 
-  assert_success
-  assert_output "cd .."
+  [ "$actual" = "true" ] \
+    || fail "macbook-pro-m1 should enable zsh autocd; got: $actual"
 }
 
 # bats test_tags=home-manager-core
-@test "home-manager-core: zsh manydots rewrites bare relative directory paths to cd" {
-  local tmpdir
-  tmpdir=$(mktemp -d)
-  mkdir -p "$tmpdir/project/subdir"
-
-  run_manydots_rewrite "project/subdir" "$tmpdir"
-
-  assert_success
-  assert_output "cd -- project/subdir"
-}
-
-# bats test_tags=home-manager-core
-@test "home-manager-core: zsh manydots rewrites bare absolute directory paths to cd" {
-  local tmpdir
-  tmpdir=$(mktemp -d)
-  mkdir -p "$tmpdir/absolute-target"
-
-  run_manydots_rewrite "$tmpdir/absolute-target" "$tmpdir"
-
-  assert_success
-  assert_output "cd -- $tmpdir/absolute-target"
-}
-
-# bats test_tags=home-manager-core
-@test "home-manager-core: zsh manydots leaves prefixed and suffixed commands unchanged" {
-  run_manydots_rewrite "echo .."
-  assert_success
-  assert_output "echo .."
-
-  run_manydots_rewrite "../tmp trailing"
-  assert_success
-  assert_output "../tmp trailing"
+@test "home-manager-core: zsh manydots does not wrap accept-line" {
+  if grep -Eq 'manydots-magic\.(rewrite-buffer|accept-line)|manydots-magic\.orig\.accept-line' dotfiles/common/zsh-manydot.sh; then
+    fail "zsh-manydot.sh should not implement custom accept-line/autocd rewriting"
+  fi
 }
 
 # bats test_tags=home-manager-core
@@ -626,6 +585,22 @@ PYEOF
   zsh_aliases=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases)
   printf '%s' "$zsh_aliases" | grep -q '"pbcopy"' \
     || fail "vm-aarch64 zsh shellAliases missing Linux 'pbcopy'; got: $zsh_aliases"
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: vm-aarch64 has noctalia-diff-apply alias" {
+  local zsh_aliases
+  zsh_aliases=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases)
+  printf '%s' "$zsh_aliases" | grep -q '"noctalia-diff-apply"' \
+    || fail "vm-aarch64 zsh shellAliases missing 'noctalia-diff-apply'; got: $zsh_aliases"
+  printf '%s' "$zsh_aliases" | grep -Fq '/bin/noctalia-diff-apply' \
+    || fail "vm-aarch64 noctalia-diff-apply alias should point at the generated helper command; got: $zsh_aliases"
+  grep -Fq 'writeShellScriptBin "noctalia-diff-apply"' den/aspects/features/shell.nix \
+    || fail 'shell.nix should build a dedicated noctalia-diff-apply helper'
+  grep -Fq "p||/^[[:space:]]*[{]/{p=1;print}" den/aspects/features/shell.nix \
+    || fail 'shell.nix should strip any non-JSON prelude before jq in the noctalia helpers'
+  grep -Fq '/nixos-config/dotfiles/by-host/vm/noctalia.json' den/aspects/features/shell.nix \
+    || fail 'shell.nix should keep noctalia-diff-apply writing to the tracked noctalia.json file'
 }
 
 # bats test_tags=home-manager-core
