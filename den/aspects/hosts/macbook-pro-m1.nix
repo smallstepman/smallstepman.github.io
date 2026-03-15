@@ -3,8 +3,6 @@
     includes = [
       den.aspects.darwin-core
       den.aspects.darwin-desktop
-      den.aspects.homebrew
-      den.aspects.launchd
 
       {
         homeManager = { ... }: {

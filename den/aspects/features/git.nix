@@ -80,10 +80,8 @@
               defaultCacheTtl = lib.mkDefault 31536000;
               maxCacheTtl = lib.mkDefault 31536000;
             };
-
           };
         })
     ];
   };
-
 }

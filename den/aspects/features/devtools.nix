@@ -51,6 +51,8 @@
 
       home.file.".gdbinit".source = ../../../dotfiles/common/gdbinit;
 
+      home.file.".cargo/config.toml".text = "[build]\n" + "target-dir = \"" + config.home.homeDirectory + "/.cargo/target\"\n";
+
       xdg.configFile."tmux/menus/doomux.sh" = {
         source = ../../../dotfiles/common/tmux/doomux.sh;
         executable = true;
