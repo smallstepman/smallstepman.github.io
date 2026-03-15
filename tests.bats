@@ -94,6 +94,19 @@ setup_file() {
   _nix_wrapper_dir=$(mk_wrapper_flake)
 }
 
+run_manydots_rewrite() {
+  local buffer="$1"
+  local cwd="${2:-$REPO_ROOT}"
+
+  run env MANYDOTS_BUFFER="$buffer" MANYDOTS_CWD="$cwd" MANYDOTS_REPO_ROOT="$REPO_ROOT" zsh -fc '
+    cd "$MANYDOTS_CWD" || exit 1
+    source "$MANYDOTS_REPO_ROOT/dotfiles/common/zsh-manydot.sh"
+    BUFFER="$MANYDOTS_BUFFER"
+    manydots-magic.rewrite-buffer
+    print -r -- "$BUFFER"
+  '
+}
+
 
 # ===========================================================================
 # no-legacy — legacy composition files are removed; structure is modernised
@@ -481,6 +494,49 @@ PYEOF
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git includes g = git alias" {
   grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell.nix
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: zsh manydots rewrites bare .. to cd .." {
+  run_manydots_rewrite ".."
+
+  assert_success
+  assert_output "cd .."
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: zsh manydots rewrites bare relative directory paths to cd" {
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  mkdir -p "$tmpdir/project/subdir"
+
+  run_manydots_rewrite "project/subdir" "$tmpdir"
+
+  assert_success
+  assert_output "cd -- project/subdir"
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: zsh manydots rewrites bare absolute directory paths to cd" {
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  mkdir -p "$tmpdir/absolute-target"
+
+  run_manydots_rewrite "$tmpdir/absolute-target" "$tmpdir"
+
+  assert_success
+  assert_output "cd -- $tmpdir/absolute-target"
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: zsh manydots leaves prefixed and suffixed commands unchanged" {
+  run_manydots_rewrite "echo .."
+  assert_success
+  assert_output "echo .."
+
+  run_manydots_rewrite "../tmp trailing"
+  assert_success
+  assert_output "../tmp trailing"
 }
 
 # bats test_tags=home-manager-core

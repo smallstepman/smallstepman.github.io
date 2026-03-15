@@ -90,6 +90,35 @@ manydots-magic.backward-delete-char() {
     zle "$backward_delete_char_function"
 }
 
+manydots-magic.rewrite-buffer() {
+    emulate -L zsh
+    local -a words
+    local path
+
+    [[ -n "$BUFFER" && "$BUFFER" != [[:space:]]* && "$BUFFER" != *[[:space:]] ]] ||
+        return 0
+
+    words=("${(@Q)${(z)BUFFER}}")
+    (( ${#words} == 1 )) || return 0
+
+    path="$words[1]"
+
+    if [[ "$path" == .. ]]; then
+        BUFFER='cd ..'
+    elif [[ -d "$path" ]]; then
+        BUFFER="cd -- $BUFFER"
+    fi
+}
+
+manydots-magic.accept-line() {
+    emulate -L zsh
+    local accept_line_function
+    zstyle -s ':manydots-magic' accept-line-function accept_line_function
+
+    manydots-magic.rewrite-buffer
+    zle "$accept_line_function"
+}
+
 manydots-magic.on() {
     emulate -L zsh
     local self_insert_function="${$(zle -lL | awk \
@@ -120,6 +149,21 @@ manydots-magic.on() {
 
     zle -A manydots-magic.backward-delete-char backward-delete-char
 
+    local accept_line_function="$(zle -lL | awk \
+        '$1=="zle"&&$2=="-N"&&$3=="accept-line"{print $4;exit}')"
+
+    if [[ -n "$accept_line_function" ]]
+    then
+        zle -la "$accept_line_function" || zle -N "$accept_line_function"
+    else
+        zle -A accept-line manydots-magic.orig.accept-line
+        accept_line_function=manydots-magic.orig.accept-line
+    fi
+
+    zstyle ':manydots-magic' accept-line-function "$accept_line_function"
+
+    zle -A manydots-magic.accept-line accept-line
+
     zstyle ':manydots-magic' magic-count 0
 
     return 0
@@ -127,7 +171,7 @@ manydots-magic.on() {
 
 manydots-magic.off() {
     emulate -L zsh
-    local self_insert_function backward_delete_char_function
+    local self_insert_function backward_delete_char_function accept_line_function
     zstyle -s ':manydots-magic' self-insert-function self_insert_function
 
     [[ -n "$self_insert_function" ]] &&
@@ -138,6 +182,11 @@ manydots-magic.off() {
     [[ -n "$backward_delete_char_function" ]] &&
         zle -A "$backward_delete_char_function" backward-delete-char
 
+    zstyle -s ':manydots-magic' accept-line-function accept_line_function
+
+    [[ -n "$accept_line_function" ]] &&
+        zle -A "$accept_line_function" accept-line
+
     zstyle ':manydots-magic' magic-count 0
 
     return 0
@@ -145,6 +194,7 @@ manydots-magic.off() {
 
 zle -N manydots-magic.self-insert
 zle -N manydots-magic.backward-delete-char
+zle -N manydots-magic.accept-line
 zle -N manydots-magic.on
 zle -N manydots-magic.off
 
