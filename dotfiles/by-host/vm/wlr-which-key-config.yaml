@@ -12,46 +12,46 @@ margin_bottom: 200
 
 menu:
   # Applications
+  # Quick actions
+  - key: .
+    desc: Spotlight
+    cmd: noctalia-shell ipc call launcher toggle
   - key: " "
     desc: Spotlight
     cmd: noctalia-shell ipc call launcher toggle
+
+  - key: t
+    desc: Terminal
+    cmd: wezterm
+
+  - key: s
+    desc: Browser
+    cmd: librewolf
+
+  - key: e
+    desc: Browser
+    cmd: emacsclient
+
   - key: a
     desc: AI
     submenu:
-      - key: t
-        desc: Terminal
-        cmd: foot
-      - key: b
-        desc: Browser
-        cmd: firefox
       - key: f
         desc: Files
         cmd: nautilus
-      - key: e
-        desc: Editor
-        cmd: nvim
 
   # Window management
-  - key: w
-    desc: Window
+  - key: n
+    desc: Niri
     submenu:
-      - key: f
-        desc: Fullscreen
-        cmd: mmsg togglefullscreen
       - key: v
         desc: Float
-        cmd: mmsg togglefloating
-      - key: q
-        desc: Close
-        cmd: mmsg killclient
+        cmd: niri msg action toggle-window-floating
+
 
   # Power menu
-  - key: p
+  - key: q
     desc: Power
     submenu:
-      - key: l
-        desc: Lock
-        cmd: swaylock
       - key: s
         desc: Suspend
         cmd: systemctl suspend
@@ -66,6 +66,9 @@ menu:
   - key: s
     desc: Screenshot
     submenu:
+      - key: y
+        desc: Full screen
+        cmd: grim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
       - key: s
         desc: Full screen
         cmd: grim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
@@ -76,10 +79,6 @@ menu:
         desc: Window
         cmd: grim -g "$(slurp -o)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
 
-  # Quick actions
-  - key: .
-    desc: Spotlight
-    cmd: noctalia-shell ipc call launcher toggle
 
   - key: c
     desc: Clipboard
