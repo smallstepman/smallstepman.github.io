@@ -190,17 +190,19 @@
             "Mod+W".action.toggle-column-tabbed-display = {};
             "Mod+Slash".action.toggle-overview = {};
 
+            "Mod+H".action.focus-column-left-or-last = {};
             "Mod+N".action.spawn = ynyArgv [ "focus" "west" ];
             "Mod+E".action.spawn = ynyArgv [ "focus" "south" ];
             "Mod+I".action.spawn = ynyArgv [ "focus" "north" ];
             "Mod+O".action.spawn = ynyArgv [ "focus" "east" ];
+            "Mod+Return".action.focus-column-right-or-first = {};
 
-            "Mod+H".action.consume-or-expel-window-left = {};
+            "Mod+J".action.consume-or-expel-window-left = {};
             "Mod+L".action.spawn = ynyArgv [ "move" "west" ];
             "Mod+U".action.spawn = ynyArgv [ "move" "south" ];
             "Mod+Y".action.spawn = ynyArgv [ "move" "north" ];
             "Mod+Semicolon".action.spawn = ynyArgv [ "move" "east" ];
-            "Mod+Return".action.consume-or-expel-window-right = {};
+            "Mod+Backslash".action.consume-or-expel-window-right = {};
 
             "Mod+f1".action.focus-workspace = 1;
             "Mod+f2".action.focus-workspace = 2;
