@@ -151,6 +151,58 @@
               done
             '';
 
+            repairSharedGitFileMode = pkgs.writeShellScriptBin "repair-shared-git-filemode" ''
+              set -euo pipefail
+
+              git_bin=${pkgs.git}/bin/git
+              dirname_bin=${pkgs.coreutils}/bin/dirname
+              find_bin=${pkgs.findutils}/bin/find
+              projects_root=/Users/m/Projects
+
+              repair_repo() {
+                local root="$1"
+
+                case "$root" in
+                  /nixos-config|/Users/m/Projects/*) ;;
+                  *) return 0 ;;
+                esac
+
+                "$git_bin" -C "$root" rev-parse --show-toplevel >/dev/null 2>&1 || return 0
+                "$git_bin" -C "$root" config core.fileMode false
+                "$git_bin" -C "$root" submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null || true
+              }
+
+              repair_default_roots() {
+                local git_entry
+                declare -A seen_roots=()
+
+                seen_roots[/nixos-config]=1
+
+                if [ -d "$projects_root" ]; then
+                  while IFS= read -r git_entry; do
+                    seen_roots[$("$dirname_bin" "$git_entry")]=1
+                  done < <(
+                    "$find_bin" "$projects_root" \
+                      '(' -type d -name .git -print -prune ')' -o \
+                      '(' -type f -name .git -print ')'
+                  )
+                fi
+
+                for root in "''${!seen_roots[@]}"; do
+                  repair_repo "$root"
+                done
+              }
+
+              if [ "$#" -eq 0 ]; then
+                repair_default_roots
+                exit 0
+              fi
+
+              for repo in "$@"; do
+                repair_repo "$repo"
+              done
+            '';
+
             opencode = import ../../../dotfiles/common/opencode/modules/common.nix;
           in {
             home.packages = [
@@ -170,28 +222,6 @@
 
             services.gpg-agent.pinentry.package = pkgs.pinentry-tty;
             services.gpg-agent.extraConfig = "allow-preset-passphrase";
-
-            programs.zsh.initContent = lib.mkAfter ''
-
-              # VMware HGFS reports regular files as executable, so shared repos
-              # cloned on macOS need their repo-local fileMode setting repaired on
-              # the VM side as well.
-              typeset -gA _git_filemode_fixed
-              _fix_git_filemode() {
-                local root
-                root=$(git rev-parse --show-toplevel 2>/dev/null) || return
-                case "$root" in
-                  (/nixos-config|/Users/m/Projects/*) ;;
-                  (*) return ;;
-                esac
-                [[ -n "''${_git_filemode_fixed[$root]:-}" ]] && return
-                git -C "$root" config core.fileMode false 2>/dev/null
-                git -C "$root" submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null
-                _git_filemode_fixed[$root]=1
-              }
-              add-zsh-hook chpwd _fix_git_filemode
-              _fix_git_filemode
-            '';
 
             programs.ssh = {
               enable = true;
@@ -217,11 +247,20 @@
 
             home.activation.ensureSharedGitFileMode =
               lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-                if [ -e /nixos-config/.git ]; then
-                  run ${pkgs.git}/bin/git -C /nixos-config config core.fileMode false
-                  ${pkgs.git}/bin/git -C /nixos-config submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null || true
-                fi
+                run ${repairSharedGitFileMode}/bin/repair-shared-git-filemode
               '';
+
+            systemd.user.services."repair-shared-git-filemode" = {
+              Unit = {
+                Description = "Repair Git fileMode for HGFS-backed shared repos";
+                After = [ "default.target" ];
+              };
+              Service = {
+                Type = "oneshot";
+                ExecStart = "${repairSharedGitFileMode}/bin/repair-shared-git-filemode";
+              };
+              Install.WantedBy = [ "default.target" ];
+            };
 
             systemd.user.services.gpg-preset-passphrase-login = {
               Unit = {

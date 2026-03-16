@@ -1167,13 +1167,16 @@ PYEOF
 
 # bats test_tags=vm-desktop
 @test "vm-desktop: vm-aarch64 self-heals git fileMode for shared repos" {
+  grep -Fq 'repairSharedGitFileMode = pkgs.writeShellScriptBin "repair-shared-git-filemode"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'projects_root=/Users/m/Projects' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '"$find_bin" "$projects_root"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'systemd.user.services."repair-shared-git-filemode"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'ExecStart = "${repairSharedGitFileMode}/bin/repair-shared-git-filemode";' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'home.activation.ensureSharedGitFileMode' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'git rev-parse --show-toplevel 2>/dev/null' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '/nixos-config|/Users/m/Projects/*' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq -- '-C /nixos-config config core.fileMode false' den/aspects/hosts/vm-aarch64.nix
 
-  if grep -Fq '[[ "$PWD" == /Users/m/Projects/* ]] && [[ -d .git ]]' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'vm-aarch64.nix fileMode repair must key off repo root, not PWD/.git checks'
+  if grep -Fq 'programs.zsh.initContent' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix should not depend on a zsh hook for shared git fileMode repair'
   fi
 }
 

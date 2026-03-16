@@ -80,7 +80,7 @@
         inputs.yeetnyoink.homeManagerModules.default
       ];
 
-      programs.yeetnyoink.enable = true;
+      programs.yeet-and-yoink.enable = true;
 
       programs.niri.settings = {
         hotkey-overlay = {
