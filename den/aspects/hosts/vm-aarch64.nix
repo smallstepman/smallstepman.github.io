@@ -173,18 +173,21 @@
 
             programs.zsh.initContent = lib.mkAfter ''
 
-              # Auto-fix fileMode for git repos on VMware shared folders
-              # (macOS reports all files as 755; git sees mode changes vs index)
+              # VMware HGFS reports regular files as executable, so shared repos
+              # cloned on macOS need their repo-local fileMode setting repaired on
+              # the VM side as well.
               typeset -gA _git_filemode_fixed
               _fix_git_filemode() {
-                if [[ "$PWD" == /Users/m/Projects/* ]] && [[ -d .git ]]; then
-                  local root=$(git rev-parse --show-toplevel 2>/dev/null)
-                  [[ -z "$root" ]] && return
-                  [[ -n "''${_git_filemode_fixed[$root]}" ]] && return
-                  git config core.fileMode false 2>/dev/null
-                  git submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null
-                  _git_filemode_fixed[$root]=1
-                fi
+                local root
+                root=$(git rev-parse --show-toplevel 2>/dev/null) || return
+                case "$root" in
+                  (/nixos-config|/Users/m/Projects/*) ;;
+                  (*) return ;;
+                esac
+                [[ -n "''${_git_filemode_fixed[$root]:-}" ]] && return
+                git -C "$root" config core.fileMode false 2>/dev/null
+                git -C "$root" submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null
+                _git_filemode_fixed[$root]=1
               }
               add-zsh-hook chpwd _fix_git_filemode
               _fix_git_filemode
@@ -209,6 +212,14 @@
                 if ! ${pkgs.docker-client}/bin/docker context inspect host-mac >/dev/null 2>&1; then
                   run ${pkgs.docker-client}/bin/docker context create host-mac \
                     --docker "host=ssh://m@mac-host-docker"
+                fi
+              '';
+
+            home.activation.ensureSharedGitFileMode =
+              lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+                if [ -e /nixos-config/.git ]; then
+                  run ${pkgs.git}/bin/git -C /nixos-config config core.fileMode false
+                  ${pkgs.git}/bin/git -C /nixos-config submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null || true
                 fi
               '';
 

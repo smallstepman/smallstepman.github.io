@@ -1166,6 +1166,18 @@ PYEOF
 }
 
 # bats test_tags=vm-desktop
+@test "vm-desktop: vm-aarch64 self-heals git fileMode for shared repos" {
+  grep -Fq 'home.activation.ensureSharedGitFileMode' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'git rev-parse --show-toplevel 2>/dev/null' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '/nixos-config|/Users/m/Projects/*' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq -- '-C /nixos-config config core.fileMode false' den/aspects/hosts/vm-aarch64.nix
+
+  if grep -Fq '[[ "$PWD" == /Users/m/Projects/* ]] && [[ -d .git ]]' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix fileMode repair must key off repo root, not PWD/.git checks'
+  fi
+}
+
+# bats test_tags=vm-desktop
 @test "vm-desktop: vmware.nix does not own vm-aarch64-specific binfmt/DHCP settings" {
   if grep -Ev '^[[:space:]]*#' den/aspects/features/vmware.nix | grep -Eq 'boot\.binfmt\.emulatedSystems|networking\.interfaces\.enp2s0\.useDHCP'; then
     fail 'den/aspects/features/vmware.nix should not own vm-aarch64-specific binfmt/DHCP settings'
