@@ -3,27 +3,32 @@
   hrm-hold-timeout    150
   ;; If a key was pressed within this time, output plain letter (fast typing)
   hrm-streak-time     150
-  hrm-streak-count    1
+  hrm-streak-count    2        ;; covers 2-mod chords (Ctrl+Shift etc.)
 )
 
+;; Regular HRM: streak-guarded, resolves on next keypress
 (deftemplate hrm (char mod)
-  ;; Home row mods using key-timing: if typed recently → plain letter, otherwise → tap-hold
-  (switch 
+  (switch
     ((key-timing $hrm-streak-count less-than $hrm-streak-time)) $char break
-   ;; () (tap-hold-release-timeout $tap-timeout $hold-timeout $char $mod $char reset-timeout-on-press) break
-    () (tap-hold $hrm-tap-timeout $hrm-hold-timeout $char $mod) break
+    () (tap-hold-release-timeout $hrm-tap-timeout $hrm-hold-timeout $char $mod $char reset-timeout-on-press) break
   )
+)
+
+;; Shift HRM: no streak guard — shift is needed mid-typing constantly,
+;; suppressing it causes the most chord friction
+(deftemplate hrm-shift (char mod)
+  (tap-hold-release-timeout $hrm-tap-timeout $hrm-hold-timeout $char $mod $char reset-timeout-on-press)
 )
 
 (defalias
   ;; Left hand (Colemak: A R S T)
   LM (t! hrm a lmet)
-  LC (t! hrm r lctl)  
+  LC (t! hrm r lctl)
   LA (t! hrm s lalt)
-  LS (t! hrm t lsft)
+  LS (t! hrm-shift t lsft)
 
   ;; Right hand (Colemak: N E I O)
-  RS (t! hrm n rsft)
+  RS (t! hrm-shift n rsft)
   RA (t! hrm e ralt)
   RC (t! hrm i rctl)
   RM (t! hrm o rmet)
