@@ -11,4 +11,4 @@ post_hook = 'pkill -SIGUSR1 nvim'
 [templates.wezterm-colors]
 input_path = "~/.config/noctalia/wezterm-colors-template.lua"
 output_path = "~/.local/share/noctalia/wezterm-colors.lua"
-post_hook = 'wezterm cli reload-configuration'
+# WezTerm watches the generated colors file directly from wezterm.lua.

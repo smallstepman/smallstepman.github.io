@@ -68,7 +68,7 @@
     homeManager = { pkgs, lib, config, ... }:
       let
         yny      = "/Users/m/Projects/yeet-and-yoink/target/release/yny";
-        ynyFlags = [ "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append" ];
+        ynyFlags = [ "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append" "--config=/home/m/.config/yeet-and-yoink/config-dev.toml" ];
         ynyArgv  = args: [ yny ] ++ ynyFlags ++ args;                  # for niri (argv list)
         ynyDbg   = lib.concatStringsSep " " ([ yny ] ++ ynyFlags);    # for mango/hyprland (shell string)
       in
@@ -115,7 +115,7 @@
 
         layout = {
           always-center-single-column = true;
-          gaps = 16;
+          gaps = 8;
           center-focused-column = "never";
           preset-column-widths = [
             { proportion = 1.0 / 3.0; }
@@ -134,9 +134,7 @@
           { command = [ "mako" ]; }
         ];
 
-        workspaces = {
-          "stash" = { };
-        };
+        workspaces = { };
 
         environment = {
           NIXOS_OZONE_WL = "1";
@@ -156,8 +154,8 @@
             "Mod+Q".action.close-window = {};
 
             "Mod+R".action.switch-preset-column-width = {};
-            "Mod+F".action.maximize-column = {};
-            "Mod+Shift+F".action.fullscreen-window = {};
+            "Mod+Shift+F".action.maximize-column = {};
+            "Mod+F".action.fullscreen-window = {};
             "Mod+Minus".action.set-column-width = "-10%";
             "Mod+Equal".action.set-column-width = "+10%";
             "Mod+W".action.toggle-column-tabbed-display = {};
@@ -577,6 +575,10 @@
             };
             "{446900e4-71c2-419f-a6a7-df9c091e268b}" = {
               install_url = "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi";
+              installation_mode = "force_installed";
+            };
+            "browser-bridge@yeet-and-yoink" = {
+              install_url = "https://addons.mozilla.org/firefox/downloads/latest/yeet-and-yoink-browser-bridge/latest.xpi";
               installation_mode = "force_installed";
             };
           };

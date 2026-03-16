@@ -18,11 +18,31 @@
   den.ctx.hm-host.includes = [
     ({ host, ... }:
       let
-        systemModule = { ... }: {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.backupFileExtension = "backup";
-        };
+        systemModule = { pkgs, ... }:
+          let
+            homeManagerRotateBackup = pkgs.writeShellScript "home-manager-rotate-backup" ''
+              set -eu
+
+              target_path="$1"
+              backup_ext="''${HOME_MANAGER_BACKUP_EXT:-backup}"
+              backup_path="$target_path.$backup_ext"
+              candidate="$backup_path"
+              suffix=1
+
+              while [[ -e "$candidate" || -L "$candidate" ]]; do
+                candidate="$backup_path.$suffix"
+                suffix=$((suffix + 1))
+              done
+
+              exec ${pkgs.coreutils}/bin/mv "$target_path" "$candidate"
+            '';
+          in {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.backupFileExtension = "backup";
+            # Rotate stale *.backup files so repeated activations stay idempotent.
+            home-manager.backupCommand = homeManagerRotateBackup;
+          };
       in
       (lib.optionalAttrs (host.class == "nixos") {
         nixos = systemModule;

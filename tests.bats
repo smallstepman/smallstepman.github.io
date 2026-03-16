@@ -522,6 +522,42 @@ PYEOF
 
   actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.backupFileExtension)
   assert_equal "$actual" "backup"
+
+  actual=$(nix_eval_apply_raw .#nixosConfigurations.vm-aarch64.config.home-manager.backupCommand 'cmd: toString cmd')
+  [[ "$actual" == *home-manager-rotate-backup ]] \
+    || fail "vm-aarch64 backupCommand unexpected: '$actual'"
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: backup command rotates stale backups" {
+  local backup_cmd tmpdir target
+
+  run nix_generated_build --quiet --no-link .#nixosConfigurations.vm-aarch64.config.home-manager.backupCommand
+  assert_success
+  backup_cmd=$(nix_eval_apply_raw .#nixosConfigurations.vm-aarch64.config.home-manager.backupCommand 'cmd: toString cmd')
+  [[ "$backup_cmd" == *home-manager-rotate-backup ]] \
+    || fail "vm-aarch64 backupCommand unexpected: '$backup_cmd'"
+
+  tmpdir=$(mktemp -d)
+  target="$tmpdir/wezterm.lua"
+
+  printf 'first\n' > "$target"
+  run env HOME_MANAGER_BACKUP_EXT=backup "$backup_cmd" "$target"
+  assert_success
+  assert_file_not_exists "$target"
+  assert_file_exists "$target.backup"
+  assert_file_contains "$target.backup" "first"
+
+  printf 'stale\n' > "$target.backup"
+  printf 'second\n' > "$target"
+  run env HOME_MANAGER_BACKUP_EXT=backup "$backup_cmd" "$target"
+  assert_success
+  assert_file_not_exists "$target"
+  assert_file_contains "$target.backup" "stale"
+  assert_file_exists "$target.backup.1"
+  assert_file_contains "$target.backup.1" "second"
+
+  rm -rf "$tmpdir"
 }
 
 # bats test_tags=home-manager-core
@@ -615,6 +651,10 @@ PYEOF
 
   actual=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.backupFileExtension)
   assert_equal "$actual" "backup"
+
+  actual=$(nix_eval_apply_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.backupCommand 'cmd: toString cmd')
+  [[ "$actual" == *home-manager-rotate-backup ]] \
+    || fail "macbook-pro-m1 backupCommand unexpected: '$actual'"
 }
 
 # bats test_tags=home-manager-core
@@ -722,6 +762,10 @@ PYEOF
 
   actual=$(nix_eval_raw .#nixosConfigurations.wsl.config.home-manager.backupFileExtension)
   assert_equal "$actual" "backup"
+
+  actual=$(nix_eval_apply_raw .#nixosConfigurations.wsl.config.home-manager.backupCommand 'cmd: toString cmd')
+  [[ "$actual" == *home-manager-rotate-backup ]] \
+    || fail "wsl backupCommand unexpected: '$actual'"
 }
 
 # bats test_tags=home-manager-core
