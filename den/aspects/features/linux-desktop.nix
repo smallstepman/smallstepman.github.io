@@ -67,6 +67,7 @@
 
     homeManager = { pkgs, lib, config, ... }:
       let
+        librewolfProfile = "default-release";
         yny      = "/Users/m/Projects/yeet-and-yoink/target/release/yny";
         ynyFlags = [ "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append" "--config=/home/m/.config/yeet-and-yoink/config-dev.toml" ];
         ynyArgv  = args: [ yny ] ++ ynyFlags ++ args;                  # for niri (argv list)
@@ -108,6 +109,34 @@
           }
           {
             clip-to-geometry = true;
+          }
+          {
+            matches = [
+              { app-id = "^librewolf$"; }
+            ];
+            draw-border-with-background = false;
+            opacity = 0.85;
+          }
+          {
+            matches = [
+              { app-id = "^(brave|brave-browser|com\\.brave\\.Browser)$"; }
+            ];
+            draw-border-with-background = false;
+            opacity = 0.85;
+          }
+          {
+            matches = [
+              { app-id = "^(code|Code|code-url-handler)$"; }
+            ];
+            draw-border-with-background = false;
+            opacity = 0.85;
+          }
+          {
+            matches = [
+              { app-id = "^(emacs|Emacs|emacsclient|org\\.gnu\\.Emacs)$"; }
+            ];
+            draw-border-with-background = false;
+            opacity = 0.85;
           }
         ];
 
@@ -519,8 +548,20 @@
       };
 
       programs.librewolf = {
-        enable = false;
-        package = pkgs.librewolf;
+        enable = true;
+        # Keep the actual browser package in home.packages; HM is only used
+        # for profile generation because the wrapped package path is broken here.
+        package = null;
+        profiles.${librewolfProfile} = {
+          id = 0;
+          isDefault = true;
+          settings = {
+            "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+            "sidebar.verticalTabs" = false;
+            "sidebar.revamp" = false;
+          };
+          userChrome = builtins.readFile ../../../dotfiles/by-host/vm/librewolf/userChrome.css;
+        };
         policies = {
           AppAutoUpdate                 = false;
           BackgroundAppUpdate           = false;
@@ -559,6 +600,10 @@
           ExtensionSettings = {
             "pywalfox@frewacom.org" = {
               install_url = "https://addons.mozilla.org/firefox/downloads/latest/pywalfox/latest.xpi";
+              installation_mode = "force_installed";
+            };
+            "{3c078156-979c-498b-8990-85f7987dd929}" = {
+              install_url = "https://addons.mozilla.org/firefox/downloads/latest/sidebery/latest.xpi";
               installation_mode = "force_installed";
             };
             "uBlock0@raymondhill.net" = {
@@ -604,6 +649,9 @@
           };
         };
       };
+
+      home.file.".librewolf/${librewolfProfile}/chrome/autohide.css".source =
+        ../../../dotfiles/by-host/vm/librewolf/autohide.css;
 
       mozilla.librewolfNativeMessagingHosts = [ pkgs.pywalfox-native ];
 

@@ -90,6 +90,9 @@
         enable = true;
         settings = {
           on_force_close = "quit";
+          load_plugins = {
+            "https://github.com/smallstepman/yeet-and-yoink/releases/download/zellij-plugin-latest/yeet-and-yoink-zellij-break.wasm" = {};
+          };
         };
       };
 
