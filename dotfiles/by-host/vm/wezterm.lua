@@ -1,7 +1,7 @@
 local wezterm = require 'wezterm'
 local mux = wezterm.mux
 local config = wezterm.config_builder()
--- local yny = wezterm.plugin.require('file:///Users/m/Projects/yeet-and-yoink/plugins/wezterm')
+-- local yny = wezterm.plugin.require('file:///Users/m/Projects/yeetnyoink/plugins/wezterm')
 -- yny.apply_to_config(config)
 local colors_file = wezterm.home_dir .. '/.local/share/noctalia/wezterm-colors.lua'
 local scheme_file = wezterm.home_dir .. '/.config/wezterm/colors/Noctalia.toml'

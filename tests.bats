@@ -25,7 +25,7 @@ REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
 . "$REPO_ROOT/scripts/external-input-flake.sh"
 
 # Wrapper around `nix eval / build / run` that injects the generated and
-# yeet-and-yoink inputs via a temporary wrapper flake.
+# yeetnyoink inputs via a temporary wrapper flake.
 _nix_with_wrapper() {
   local cmd="$1"; shift
   local wrapper_dir
@@ -1120,7 +1120,7 @@ PYEOF
   grep -Fq 'external-input-flake.sh' docs/vm.sh
   grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
   if grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh; then
-    fail 'scripts/external-input-flake.sh must not contain yeet-and-yoink git+file wrapper'
+    fail 'scripts/external-input-flake.sh must not contain yeetnyoink git+file wrapper'
   fi
   if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell.nix; then
     fail 'shell.nix must not reference YEET_AND_YOINK_INPUT_DIR'
@@ -1148,8 +1148,8 @@ PYEOF
   grep -Fq '.host:/Projects' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '.host:/nixos-config' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '.host:/nixos-generated' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'inputs.yeet-and-yoink.homeManagerModules.default' den/aspects/features/linux-desktop.nix
-  grep -Fq 'pkgs.yeet-and-yoink' den/aspects/features/linux-desktop.nix
+  grep -Fq 'inputs.yeetnyoink.homeManagerModules.default' den/aspects/features/linux-desktop.nix
+  grep -Fq 'pkgs.yeetnyoink' den/aspects/features/linux-desktop.nix
   grep -Fq 'programs.ssh' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'programs.niri.settings' den/aspects/features/linux-desktop.nix
   grep -Fq 'DOCKER_CONTEXT' den/aspects/hosts/vm-aarch64.nix
@@ -1158,7 +1158,7 @@ PYEOF
   grep -Fq 'systemd.user.services.uniclip' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'pkgs.docker-client' den/aspects/hosts/vm-aarch64.nix
   if grep -Fq 'yeetAndYoink.requirePath' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'vm-aarch64.nix still uses yeetAndYoink.requirePath — replace with pkgs.yeet-and-yoink'
+    fail 'vm-aarch64.nix still uses yeetAndYoink.requirePath — replace with pkgs.yeetnyoink'
   fi
   if grep -Fq 'load_plugins' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64.nix still configures load_plugins (Zellij plugin removed)'
@@ -1651,7 +1651,7 @@ PYEOF
   if grep -Fq 'inputs.yeetAndYoink = {' flake.nix; then
     fail 'flake.nix must not contain a sentinel yeetAndYoink input declaration'
   fi
-  grep -Fq 'yeet-and-yoink.url' flake.nix
+  grep -Fq 'yeetnyoink.url' flake.nix
 }
 
 # bats test_tags=generated-input
@@ -1671,12 +1671,12 @@ PYEOF
 }
 
 # bats test_tags=generated-input
-@test "generated-input: tests.bats does not hardcode the home-m yeet-and-yoink fallback" {
+@test "generated-input: tests.bats does not hardcode the home-m yeetnyoink fallback" {
   # Split the path so the literal string doesn't appear in this test body
   # and cause a false self-match.
   local bad_pfx bad_sfx
   bad_pfx='/home/m'
-  bad_sfx='/Projects/yeet-and-yoink'
+  bad_sfx='/Projects/yeetnyoink'
   if rg -n "${bad_pfx}${bad_sfx}" tests.bats >/dev/null; then
     fail "tests.bats must not fall back to ${bad_pfx}${bad_sfx}"
   fi

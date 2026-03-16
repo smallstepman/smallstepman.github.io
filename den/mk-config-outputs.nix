@@ -8,7 +8,7 @@ let
     inputs.niri.overlays.niri
     inputs.llm-agents.overlays.default
     inputs.git-repo-manager.overlays.git-repo-manager
-    inputs.yeet-and-yoink.overlays.default
+    inputs.yeetnyoink.overlays.default
 
     # Build non-flake packages from source
     (final: prev: {

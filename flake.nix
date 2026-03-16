@@ -79,8 +79,8 @@
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
 
-    # yeet-and-yoink - window/app focus orchestrator for niri
-    yeet-and-yoink.url = "github:smallstepman/yeet-and-yoink";
+    # yeetnyoink - window/app focus orchestrator for niri
+    yeetnyoink.url = "github:smallstepman/yeetnyoink";
 
     # Mango window control for Wayland
     mangowc = {

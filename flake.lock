@@ -1068,7 +1068,7 @@
         "tmux-menus-src": "tmux-menus-src",
         "uniclip-src": "uniclip-src",
         "uv2nix": "uv2nix",
-        "yeet-and-yoink": "yeet-and-yoink"
+        "yeetnyoink": "yeetnyoink"
       }
     },
     "rust-overlay": {
@@ -1357,7 +1357,7 @@
         "type": "github"
       }
     },
-    "yeet-and-yoink": {
+    "yeetnyoink": {
       "inputs": {
         "nixpkgs": "nixpkgs_8"
       },
@@ -1365,13 +1365,13 @@
         "lastModified": 1773528849,
         "narHash": "sha256-YPpaSMXuurqufD5Wy2beEJ2DTdMK8ZK+NFISUf5913I=",
         "owner": "smallstepman",
-        "repo": "yeet-and-yoink",
+        "repo": "yeetnyoink",
         "rev": "3064621088cece0def3da7b56730606fb629bf5e",
         "type": "github"
       },
       "original": {
         "owner": "smallstepman",
-        "repo": "yeet-and-yoink",
+        "repo": "yeetnyoink",
         "type": "github"
       }
     }

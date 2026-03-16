@@ -68,8 +68,8 @@
     homeManager = { pkgs, lib, config, ... }:
       let
         librewolfProfile = "default-release";
-        yny      = "/Users/m/Projects/yeet-and-yoink/target/release/yny";
-        ynyFlags = [ "--log-file=/tmp/yeet-and-yoink/debug.log" "--profile" "--log-append" "--config=/home/m/.config/yeet-and-yoink/config-dev.toml" ];
+        yny      = "/Users/m/Projects/yeetnyoink/target/release/yny";
+        ynyFlags = [ "--log-file=/tmp/yeetnyoink/debug.log" "--profile" "--log-append" "--config=/home/m/.config/yeetnyoink/config-dev.toml" ];
         ynyArgv  = args: [ yny ] ++ ynyFlags ++ args;                  # for niri (argv list)
         ynyDbg   = lib.concatStringsSep " " ([ yny ] ++ ynyFlags);    # for mango/hyprland (shell string)
       in
@@ -77,10 +77,10 @@
       imports = [
         inputs.noctalia.homeModules.default
         inputs.mangowc.hmModules.mango
-        inputs.yeet-and-yoink.homeManagerModules.default
+        inputs.yeetnyoink.homeManagerModules.default
       ];
 
-      programs.yeet-and-yoink.enable = true;
+      programs.yeetnyoink.enable = true;
 
       programs.niri.settings = {
         hotkey-overlay = {
@@ -624,8 +624,8 @@
               install_url = "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi";
               installation_mode = "force_installed";
             };
-            "browser-bridge@yeet-and-yoink" = {
-              install_url = "https://addons.mozilla.org/firefox/downloads/latest/yeet-and-yoink-browser-bridge/latest.xpi";
+            "browser-bridge@yeetnyoink" = {
+              install_url = "https://addons.mozilla.org/firefox/downloads/latest/yeetnyoink-browser-bridge/latest.xpi";
               installation_mode = "force_installed";
             };
           };

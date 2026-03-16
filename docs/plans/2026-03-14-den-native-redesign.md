@@ -244,7 +244,7 @@ Move the following into `den/aspects/hosts/vm-aarch64.nix`:
 - HGFS mounts
 - `nixpkgs.config.allowUnsupportedSystem = true`
 - `/Users/m/Projects` first-switch fallback logic
-- yeet-and-yoink plugin build
+- yeetnyoink plugin build
 - `DOCKER_CONTEXT`
 - `programs.ssh.matchBlocks."mac-host-docker"`
 - `programs.niri.settings`
@@ -423,7 +423,7 @@ generatedDirSetup = ''
   generated_dir="''${GENERATED_INPUT_DIR-$HOME/.local/share/nix-config-generated}"
 '';
 yeetAndYoinkDirSetup = ''
-  yeet_and_yoink_dir="''${YEET_AND_YOINK_INPUT_DIR-$HOME/Projects/yeet-and-yoink}"
+  yeet_and_yoink_dir="''${YEET_AND_YOINK_INPUT_DIR-$HOME/Projects/yeetnyoink}"
 '';
 ```
 

@@ -63,7 +63,7 @@ through sops; otherwise it is fetched live from Bitwarden.
 |------|------|
 | `flake.nix` | Declares shared inputs and exports `lib.mkOutputs` for wrapper flakes |
 | `den/mk-config-outputs.nix` | Builds system outputs plus the `collect-secrets` package once external inputs are provided |
-| `scripts/external-input-flake.sh` | Creates a temporary wrapper flake with the live generated / yeet-and-yoink inputs |
+| `scripts/external-input-flake.sh` | Creates a temporary wrapper flake with the live generated / yeetnyoink inputs |
 | `den/aspects/features/secrets.nix` | Owns secret declarations, Tailscale auth, hashed password wiring, `rbw-config`, and `generated.requireFile "secrets.yaml"` |
 | `den/aspects/features/git.nix` | Owns Linux `programs.rbw` settings and GitHub credential-helper wiring |
 | `den/aspects/features/shell.nix` | Owns runtime rbw-backed shell helpers (`gh`, `claude`, `codex`, `with-openai`, `with-amp`) |
