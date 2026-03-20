@@ -1,27 +1,16 @@
 {
   "small_model": "github-copilot/gpt-5-mini",
-  "agent": {
-    "general": {
-      "model": "github-copilot/gpt-5-mini"
-    },
-    "explore": {
-      "model": "github-copilot/gpt-5-mini"
-    },
-    "compaction": {
-      "model": "github-copilot/gpt-5-mini"
-    }
-  },
   "autoupdate": false,
   "plugin": [
     "opencode-copilot-auth@latest",
     "@bastiangx/opencode-unmoji@0.3.11",
     "@openspoon/subtask2@0.3.9",
-    "@plannotator/opencode@0.6.3",
+    "@plannotator/opencode@0.14.2",
     "@ramtinj95/opencode-tokenscope@1.5.2",
     "@slkiser/opencode-quota@1.1.2",
     "@tarquinen/opencode-smart-title@0.1.7",
     "opencode-beads@0.5.5",
-    "superpowers@git+https://github.com/obra/superpowers.git"
+    "superpowers@git+https://github.com/obra/superpowers.git#v5.0.3"
   ],
   "mcp": {},
   "provider": {

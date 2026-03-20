@@ -132,6 +132,9 @@
     # import-tree - import Nix modules by directory tree (required by den)
     import-tree.url = "github:vic/import-tree";
 
+    # sonar - CLI to manage processes running on localhost ports
+    sonar.url = "github:smallstepman/sonar";
+
   };
 
   # Den - aspect-oriented context-driven Nix configurations (top-level dotted path

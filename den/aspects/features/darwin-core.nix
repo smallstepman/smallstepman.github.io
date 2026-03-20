@@ -3,7 +3,32 @@
     includes = [
       ({ host, ... }:
         lib.optionalAttrs (host.class == "darwin") {
-        darwin = { pkgs, ... }: {
+        darwin = { pkgs, ... }:
+          let
+            kubeconfigGeneratedDir = "/Users/m/.local/share/nix-config-generated";
+            kubeconfigSource = "/Users/m/.kube/config";
+            kubeconfigTarget = "${kubeconfigGeneratedDir}/kubeconfig";
+
+            orbstackKubeconfigSync = pkgs.writeShellApplication {
+              name = "orbstack-kubeconfig-sync";
+              runtimeInputs = [ pkgs.coreutils ];
+              text = ''
+                set -euo pipefail
+
+                mkdir -p ${kubeconfigGeneratedDir}
+                if [ -f ${kubeconfigSource} ]; then
+                  tmp_kubeconfig=$(mktemp ${kubeconfigTarget}.XXXXXX)
+                  trap 'rm -f "$tmp_kubeconfig"' EXIT
+                  cp ${kubeconfigSource} "$tmp_kubeconfig"
+                  chmod 600 "$tmp_kubeconfig"
+                  mv "$tmp_kubeconfig" ${kubeconfigTarget}
+                  trap - EXIT
+                else
+                  rm -f ${kubeconfigTarget}
+                fi
+              '';
+            };
+          in {
           imports = [ ../../../dotfiles/common/opencode/modules/darwin.nix ];
 
           system.stateVersion = 5;
@@ -151,6 +176,18 @@
               KeepAlive = true;
               StandardOutPath = "/tmp/uniclip-server.log";
               StandardErrorPath = "/tmp/uniclip-server.log";
+            };
+          };
+
+          launchd.user.agents.orbstack-kubeconfig-sync = {
+            serviceConfig = {
+              ProgramArguments = [
+                "${orbstackKubeconfigSync}/bin/orbstack-kubeconfig-sync"
+              ];
+              RunAtLoad = true;
+              WatchPaths = [ "/Users/m/.kube/config" ];
+              StandardOutPath = "/tmp/orbstack-kubeconfig-sync.log";
+              StandardErrorPath = "/tmp/orbstack-kubeconfig-sync.log";
             };
           };
 

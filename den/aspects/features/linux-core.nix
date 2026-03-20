@@ -125,6 +125,7 @@
             gnumake
             git
             killall
+            inputs.sonar.packages.${pkgs.stdenv.system}.default
           ];
 
           # ---------------------------------------------------------------

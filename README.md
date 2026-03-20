@@ -4,6 +4,18 @@
 
 Visit https://smallstepman.github.io/
 
+## sonar
+
+[sonar](https://github.com/smallstepman/sonar) - know what's running on your machine. CLI to manage processes on localhost ports.
+
+```bash
+# One-time run (no install):
+nix run github:smallstepman/sonar
+
+# Install permanently (adds to system packages via this flake):
+nix run .#vm-aarch64.config.system.build.toplevel
+```
+
 ## Acknoledgment
 
 I forked it from here: https://github.com/mitchellh/nixos-config, I'm forever grateful.

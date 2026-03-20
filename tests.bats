@@ -1285,6 +1285,35 @@ PYEOF
 
 
 # ===========================================================================
+# kube-passthrough — hardened OrbStack access from the VM
+# ===========================================================================
+
+# bats test_tags=kube-passthrough
+@test "kube-passthrough: macOS auto-syncs kubeconfig into the generated dataset" {
+  grep -Fq 'launchd.user.agents.orbstack-kubeconfig-sync' den/aspects/features/darwin-core.nix
+  grep -Fq 'WatchPaths = [ "/Users/m/.kube/config" ];' den/aspects/features/darwin-core.nix
+  grep -Fq 'refresh-kubeconfig' docs/vm.sh
+  if grep -Fq 'kubectl config use-context orbstack' den/aspects/features/darwin-core.nix; then
+    fail 'macOS kubeconfig sync should not force the orbstack context'
+  fi
+}
+
+# bats test_tags=kube-passthrough
+@test "kube-passthrough: vm broker rewrites kubeconfig and removes the fixed 26443 tunnel" {
+  grep -Fq 'systemd.user.services.kubectl-passthrough' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'config set-cluster' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '127.0.0.1' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'config view --raw -o jsonpath' den/aspects/hosts/vm-aarch64.nix
+  if grep -Fq 'kubectl-orbstack-tunnel' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should not keep the fixed kubectl-orbstack-tunnel service'
+  fi
+  if grep -Fq -- '-L 26443:localhost:26443' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should not hardcode a single 26443 tunnel'
+  fi
+}
+
+
+# ===========================================================================
 # darwin — darwin-core, darwin-desktop, homebrew, and launchd aspects
 # ===========================================================================
 
