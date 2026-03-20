@@ -467,6 +467,17 @@ vm_prepare_host_authorized_keys() {
     cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-authorized-keys"
 }
 
+vm_prepare_kubeconfig() {
+    ensure_generated_dir
+    # kubeconfig → kubectl config for OrbStack K8s API on macOS
+    if [ -f "$HOME/.kube/config" ]; then
+        cp "$HOME/.kube/config" "$GENERATED_DIR/kubeconfig"
+        echo "Kubeconfig copied to $GENERATED_DIR/kubeconfig"
+    else
+        echo "Warning: No kubeconfig found at ~/.kube/config, skipping"
+    fi
+}
+
 # ─── Prepare SOPS Age Key ──────────────────────────────────────────────────
 
 vm_prepare_sops_age_key() {
@@ -484,6 +495,10 @@ vm_prepare_sops_age_key() {
     if ! grep -q '^age1' "$GENERATED_DIR/vm-age-pubkey"; then
         die "Failed to fetch VM sops age public key"
     fi
+}
+
+cmd_refresh_kubeconfig() {
+    vm_prepare_kubeconfig
 }
 
 # ─── Collect Secrets ────────────────────────────────────────────────────────
@@ -682,6 +697,7 @@ cmd_refresh_secrets() {
     fi
 
     vm_prepare_host_authorized_keys
+    vm_prepare_kubeconfig
     vm_collect_secrets
     echo "Secrets refreshed. Run 'vm switch' to apply."
 }
@@ -730,6 +746,7 @@ case "$cmd" in
     bootstrap)         cmd_bootstrap "$@" ;;
     switch)            cmd_switch ;;
     refresh-secrets)   cmd_refresh_secrets ;;
+    refresh-kubeconfig) cmd_refresh_kubeconfig ;;
     up)                cmd_up ;;
     down)              cmd_down ;;
     ip)                cmd_ip ;;

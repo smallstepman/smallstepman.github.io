@@ -115,6 +115,8 @@
           homebrew.casks = [
             "activitywatch"
             "launchcontrol"
+            # Nix-provided s3fs on Darwin links against the macFUSE runtime.
+            "macfuse"
             "mullvad-vpn"
             "orbstack"
           ];

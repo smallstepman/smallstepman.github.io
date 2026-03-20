@@ -43,6 +43,8 @@
 
         pkgs.nodejs_22
 
+        pkgs.s3fs
+
         pkgs.zellij
         pkgs.kitty
         pkgs.alacritty

@@ -202,6 +202,7 @@ if scheme_colors then
   }
 end
 
+config.window_decorations = "NONE"
 config.status_update_interval = 250
 config.mouse_bindings = {
   {

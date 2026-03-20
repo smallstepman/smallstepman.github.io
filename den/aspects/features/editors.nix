@@ -24,7 +24,7 @@
               emacs = pkgs.emacs-pgtk;
             };
 
-            services.emacs = lib.mkIf isLinux {
+            services.emacs = {
               enable = true;
               defaultEditor = false;
             };

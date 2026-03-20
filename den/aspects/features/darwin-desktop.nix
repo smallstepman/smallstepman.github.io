@@ -15,6 +15,7 @@
               "loop"
               "spotify"
               "swiftbar"
+              "wezterm@nightly"
             ];
             homebrew.brews = [
               "kanata"

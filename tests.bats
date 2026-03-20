@@ -841,9 +841,28 @@ PYEOF
 
 # bats test_tags=devtools
 @test "devtools: ai-tools.nix owns AI package and program entries" {
+  grep -Fq 'pkgs.claude-code-acp'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.copilot-cli'             den/aspects/features/ai-tools.nix
   grep -Fq 'programs.opencode'                        den/aspects/features/ai-tools.nix
   grep -Fq 'package = pkgs.opencode;'                 den/aspects/features/ai-tools.nix
+  grep -Fq 'agent-shell-copilot-acp'                 den/aspects/features/ai-tools.nix
+  grep -Fq 'agent-shell-claude-code-acp'             den/aspects/features/ai-tools.nix
+  grep -Fq 'agent-shell-opencode-acp'                den/aspects/features/ai-tools.nix
+  grep -Fq 'opencode-auth-refresh'                   den/aspects/features/ai-tools.nix
+  grep -Fq '.local/share/opencode'                   den/aspects/features/ai-tools.nix
+  grep -Fq 'ensureOpencodeAuthJson'                  den/aspects/features/ai-tools.nix
+  grep -Fq 'opencode-auth-bailian-coding-plan'       den/aspects/features/ai-tools.nix
+  grep -Fq 'opencode-auth-github-copilot'            den/aspects/features/ai-tools.nix
+  grep -Fq 'opencode-auth-opencode-go'               den/aspects/features/ai-tools.nix
+  grep -Fq 'export PATH=${pkgs.rbw}/bin:/opt/homebrew/bin:$PATH' den/aspects/features/ai-tools.nix
+  grep -Fq 'bailian-coding-plan'                     den/aspects/features/ai-tools.nix
+  grep -Fq 'github-copilot'                          den/aspects/features/ai-tools.nix
+  grep -Fq 'opencode-go'                             den/aspects/features/ai-tools.nix
+  if grep -Fq 'cp "$authJson" "$tmpJson"' den/aspects/features/ai-tools.nix; then
+    fail 'opencode auth generation must overwrite from rbw, not merge existing auth.json'
+  fi
+  grep -Fq 'rbw stop-agent || true'                  den/aspects/features/ai-tools.nix
+  grep -Fq 'export XDG_CONFIG_HOME="$HOME/.config"' den/aspects/features/ai-tools.nix
   grep -Fq 'opencodeAwesome'                          den/aspects/features/ai-tools.nix
   grep -Fq 'ensureOpencodePackageJsonWritable'        den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.dotagents'                           den/aspects/features/ai-tools.nix
@@ -866,6 +885,15 @@ PYEOF
   fi
   grep -Fq 'opencode-serve' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'opencode-web'   den/aspects/hosts/vm-aarch64.nix
+}
+
+# bats test_tags=devtools
+@test "devtools: doom config wires agent-shell ACP commands" {
+  grep -Fq 'exec-path-from-shell-initialize'                            dotfiles/common/doom/config.el
+  grep -Fq 'agent-shell-copilot-acp'                                    dotfiles/common/doom/config.el
+  grep -Fq 'agent-shell-claude-code-acp'                                dotfiles/common/doom/config.el
+  grep -Fq 'agent-shell-opencode-acp'                                   dotfiles/common/doom/config.el
+  grep -Fq 'agent-shell-opencode-make-authentication :none t'           dotfiles/common/doom/config.el
 }
 
 # bats test_tags=devtools
@@ -929,6 +957,8 @@ PYEOF
   mac_packages=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.packages)
   printf '%s' "$mac_packages" | grep -q 'copilot' \
     || fail "macbook-pro-m1 home.packages missing copilot-cli"
+  printf '%s' "$mac_packages" | grep -q 'claude-code-acp' \
+    || fail "macbook-pro-m1 home.packages missing claude-code-acp"
   printf '%s' "$mac_packages" | grep -qE '\-go-[0-9]' \
     || fail "macbook-pro-m1 home.packages missing go"
 }
@@ -1168,15 +1198,18 @@ PYEOF
 # bats test_tags=vm-desktop
 @test "vm-desktop: vm-aarch64 self-heals git fileMode for shared repos" {
   grep -Fq 'repairSharedGitFileMode = pkgs.writeShellScriptBin "repair-shared-git-filemode"' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'projects_root=/Users/m/Projects' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq '"$find_bin" "$projects_root"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'repairingGit = pkgs.writeShellScriptBin "git"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'programs.git.package = repairingGit;' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'root=$("$git_bin" -C "$workdir" rev-parse --show-toplevel 2>/dev/null)' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '"$repair_bin" "$root"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq -- '--work-tree' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'systemd.user.services."repair-shared-git-filemode"' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'ExecStart = "${repairSharedGitFileMode}/bin/repair-shared-git-filemode";' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'home.activation.ensureSharedGitFileMode' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq '/nixos-config|/Users/m/Projects/*' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq '/nixos-config|/Users/m/Projects|/Users/m/Projects/*' den/aspects/hosts/vm-aarch64.nix
 
-  if grep -Fq 'programs.zsh.initContent' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'vm-aarch64.nix should not depend on a zsh hook for shared git fileMode repair'
+  if grep -Fq '"$find_bin"' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64.nix should not scan /Users/m/Projects during activation-time repair'
   fi
 }
 
@@ -1317,6 +1350,15 @@ PYEOF
 
   actual=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.services.skhd.enable)
   assert_equal "$actual" "true"
+}
+
+# bats test_tags=darwin
+@test "darwin: macbook-pro-m1 homebrew casks include macfuse for s3fs" {
+  local casks
+
+  casks=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.homebrew.casks)
+  printf '%s' "$casks" | grep -Fq '"macfuse"' \
+    || fail "macbook-pro-m1 homebrew.casks missing macfuse required by s3fs on Darwin"
 }
 
 # bats test_tags=darwin

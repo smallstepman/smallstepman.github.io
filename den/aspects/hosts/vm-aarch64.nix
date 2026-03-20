@@ -155,15 +155,12 @@
               set -euo pipefail
 
               git_bin=${pkgs.git}/bin/git
-              dirname_bin=${pkgs.coreutils}/bin/dirname
-              find_bin=${pkgs.findutils}/bin/find
-              projects_root=/Users/m/Projects
 
               repair_repo() {
                 local root="$1"
 
                 case "$root" in
-                  /nixos-config|/Users/m/Projects/*) ;;
+                  /nixos-config|/Users/m/Projects|/Users/m/Projects/*) ;;
                   *) return 0 ;;
                 esac
 
@@ -172,35 +169,97 @@
                 "$git_bin" -C "$root" submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null || true
               }
 
-              repair_default_roots() {
-                local git_entry
-                declare -A seen_roots=()
-
-                seen_roots[/nixos-config]=1
-
-                if [ -d "$projects_root" ]; then
-                  while IFS= read -r git_entry; do
-                    seen_roots[$("$dirname_bin" "$git_entry")]=1
-                  done < <(
-                    "$find_bin" "$projects_root" \
-                      '(' -type d -name .git -print -prune ')' -o \
-                      '(' -type f -name .git -print ')'
-                  )
-                fi
-
-                for root in "''${!seen_roots[@]}"; do
-                  repair_repo "$root"
-                done
-              }
-
               if [ "$#" -eq 0 ]; then
-                repair_default_roots
+                repair_repo /nixos-config
                 exit 0
               fi
 
               for repo in "$@"; do
                 repair_repo "$repo"
               done
+            '';
+
+            repairingGit = pkgs.writeShellScriptBin "git" ''
+              set -euo pipefail
+
+              git_bin=${pkgs.git}/bin/git
+              realpath_bin=${pkgs.coreutils}/bin/realpath
+              repair_bin=${repairSharedGitFileMode}/bin/repair-shared-git-filemode
+
+              resolve_workdir() {
+                local dir="$PWD"
+                local work_tree=""
+                local git_dir_only=0
+
+                while [ "$#" -gt 0 ]; do
+                  case "$1" in
+                    -C)
+                      [ "$#" -ge 2 ] || break
+                      case "$2" in
+                        /*) dir=$("$realpath_bin" -m "$2") ;;
+                        *) dir=$("$realpath_bin" -m "$dir/$2") ;;
+                      esac
+                      shift 2
+                      ;;
+                    --work-tree)
+                      [ "$#" -ge 2 ] || break
+                      case "$2" in
+                        /*) work_tree=$("$realpath_bin" -m "$2") ;;
+                        *) work_tree=$("$realpath_bin" -m "$dir/$2") ;;
+                      esac
+                      shift 2
+                      ;;
+                    --work-tree=*)
+                      case "''${1#*=}" in
+                        /*) work_tree=$("$realpath_bin" -m "''${1#*=}") ;;
+                        *) work_tree=$("$realpath_bin" -m "$dir/''${1#*=}") ;;
+                      esac
+                      shift
+                      ;;
+                    --git-dir)
+                      [ "$#" -ge 2 ] || break
+                      git_dir_only=1
+                      shift 2
+                      ;;
+                    --git-dir=*)
+                      git_dir_only=1
+                      shift
+                      ;;
+                    --)
+                      break
+                      ;;
+                    -c|--exec-path|--namespace|--super-prefix|--config-env)
+                      [ "$#" -ge 2 ] || break
+                      shift 2
+                      ;;
+                    --exec-path=*|--namespace=*|--super-prefix=*|--config-env=*)
+                      shift
+                      ;;
+                    -*)
+                      shift
+                      ;;
+                    *)
+                      break
+                      ;;
+                  esac
+                done
+
+                if [ -n "$work_tree" ]; then
+                  dir="$work_tree"
+                elif [ "$git_dir_only" -eq 1 ]; then
+                  return 1
+                fi
+
+                printf '%s\n' "$dir"
+              }
+
+              if workdir=$(resolve_workdir "$@"); then
+                if root=$("$git_bin" -C "$workdir" rev-parse --show-toplevel 2>/dev/null); then
+                  "$repair_bin" "$root"
+                fi
+              fi
+
+              exec "$git_bin" "$@"
             '';
 
             opencode = import ../../../dotfiles/common/opencode/modules/common.nix;
@@ -219,6 +278,7 @@
 
             programs.git.signing.key = vmGitSigningKey;
             programs.git.settings.gpg.program = "${pkgs.gnupg}/bin/gpg";
+            programs.git.package = repairingGit;
 
             services.gpg-agent.pinentry.package = pkgs.pinentry-tty;
             services.gpg-agent.extraConfig = "allow-preset-passphrase";
@@ -247,7 +307,19 @@
 
             home.activation.ensureSharedGitFileMode =
               lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-                run ${repairSharedGitFileMode}/bin/repair-shared-git-filemode
+                run ${repairSharedGitFileMode}/bin/repair-shared-git-filemode /nixos-config
+              '';
+
+            home.activation.ensureKubeconfig =
+              lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+                if [ -f /nixos-generated/kubeconfig ]; then
+                  mkdir -p "$HOME/.kube"
+                  cp /nixos-generated/kubeconfig "$HOME/.kube/config"
+                  chmod 600 "$HOME/.kube/config"
+                  if ${pkgs.kubectl}/bin/kubectl config get-contexts orbstack >/dev/null 2>&1; then
+                    ${pkgs.kubectl}/bin/kubectl config use-context orbstack
+                  fi
+                fi
               '';
 
             systemd.user.services."repair-shared-git-filemode" = {
@@ -342,6 +414,27 @@
                 RestartSec = 5;
               };
               Install.WantedBy = [ "graphical-session.target" ];
+            };
+
+            systemd.user.services.kubectl-orbstack-tunnel = {
+              Unit = {
+                Description = "SSH tunnel to macOS for OrbStack K8s API (port 26443)";
+                After = [ "network.target" ];
+              };
+              Service = {
+                Type = "simple";
+                ExecStart = "${pkgs.writeShellScript "kubectl-tunnel" ''
+                  set -euo pipefail
+                  KUBECTL_TUNNEL_SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ControlMaster=auto -o ControlPath=$HOME/.ssh/control-k8s-%h-%p-%r -o ControlPersist=10m"
+                  while true; do
+                    /run/current-system/sw/bin/ssh -N -T $KUBECTL_TUNNEL_SSH_OPTS -L 26443:localhost:26443 m@192.168.130.1
+                    sleep 5
+                  done
+                ''}";
+                Restart = "always";
+                RestartSec = 5;
+              };
+              Install.WantedBy = [ "default.target" ];
             };
           };
       })
