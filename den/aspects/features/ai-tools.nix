@@ -104,13 +104,6 @@ PY
           agentShellOpencodeAcp
         ];
 
-        xdg.configFile."opencode/plugins/superpowers.js".source =
-          opencodeAwesome.superpowersPlugin;
-        xdg.configFile."opencode/skills/superpowers" = {
-          source = opencodeAwesome.superpowersSkillsDir;
-          recursive = true;
-        };
-
         home.activation.ensureOpencodePackageJsonWritable =
           lib.hm.dag.entryAfter [ "writeBoundary" ] ''
             run mkdir -p "$HOME/.config/opencode"

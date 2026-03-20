@@ -117,12 +117,14 @@
             "launchcontrol"
             # Nix-provided s3fs on Darwin links against the macFUSE runtime.
             "macfuse"
+
             "mullvad-vpn"
             "orbstack"
           ];
           homebrew.brews = [
             "gnupg"
             "pinentry-touchid"
+            "gromgit/fuse/s3fs-mac"
           ];
           homebrew.masApps = {
             "Tailscale" = 1475387142;
