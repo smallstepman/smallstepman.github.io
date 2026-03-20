@@ -416,6 +416,12 @@
               Install.WantedBy = [ "graphical-session.target" ];
             };
 
+            # NOTE: OrbStack K8s API port (26443) may change after macOS reboot.
+            # The kubeconfig copied from macOS will have the correct port, but this
+            # tunnel is hardcoded to 26443. If K8s stops working after reboot,
+            # check: kubectl config view -o jsonpath='{.clusters[?(@.name=="orbstack")].cluster.server}'
+            # If port differs, update the -L 26443:localhost:26443 tunnel argument.
+            # TODO: Extract port dynamically from ~/.kube/config instead of hardcoding.
             systemd.user.services.kubectl-orbstack-tunnel = {
               Unit = {
                 Description = "SSH tunnel to macOS for OrbStack K8s API (port 26443)";

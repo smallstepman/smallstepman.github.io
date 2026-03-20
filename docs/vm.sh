@@ -470,6 +470,9 @@ vm_prepare_host_authorized_keys() {
 vm_prepare_kubeconfig() {
     ensure_generated_dir
     # kubeconfig → kubectl config for OrbStack K8s API on macOS
+    # NOTE: The K8s API port in kubeconfig may change after macOS reboot.
+    # After reboot, run: bash ~/vm.sh refresh-kubeconfig
+    # to update the copied kubeconfig in the generated dataset.
     if [ -f "$HOME/.kube/config" ]; then
         cp "$HOME/.kube/config" "$GENERATED_DIR/kubeconfig"
         echo "Kubeconfig copied to $GENERATED_DIR/kubeconfig"
