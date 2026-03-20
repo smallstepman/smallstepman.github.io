@@ -123,6 +123,220 @@
           let
             vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";
 
+            kubeconfigManager = pkgs.writeShellApplication {
+              name = "kubeconfig-manager";
+              runtimeInputs = [
+                pkgs.coreutils
+                pkgs.fzf
+                pkgs.jq
+                pkgs.kubectl
+              ];
+              text = ''
+                set -euo pipefail
+                umask 077
+
+                source_dir="$HOME/.local/share/nix-config-generated/kubeconfigs"
+                state_dir="$HOME/.local/state/kubeconfig-manager"
+                active_source="$state_dir/active-source"
+                manifest_file="$source_dir/index.tsv"
+                kuberc_file="$HOME/.kube/kuberc"
+                if [ -n "''${KUBERC-}" ]; then
+                  kuberc_file="$KUBERC"
+                fi
+
+                mkdir -p "$state_dir" "$HOME/.kube"
+
+                log() {
+                  printf 'kubeconfig-manager: %s\n' "$*" >&2
+                }
+
+                profile_source_file() {
+                  printf '%s/%s.yaml\n' "$source_dir" "$1"
+                }
+
+                current_source_file() {
+                  if [ -L "$active_source" ] && [ -e "$active_source" ]; then
+                    readlink -f "$active_source"
+                  else
+                    return 1
+                  fi
+                }
+
+                current_profile_name() {
+                  local source_file
+
+                  if ! source_file=$(current_source_file); then
+                    return 1
+                  fi
+
+                  basename "$source_file" .yaml
+                }
+
+                write_kuberc() {
+                  local source_file="$1"
+                  local kuberc_dir
+                  local tmp_kuberc
+                  local -a commands=()
+
+                  kuberc_dir=$(dirname "$kuberc_file")
+                  mkdir -p "$kuberc_dir"
+
+                  mapfile -t commands < <(
+                    kubectl --kubeconfig "$source_file" config view --raw -o json \
+                      | jq -r '.users[]?.user.exec?.command? // empty' \
+                      | awk 'NF && !seen[$0]++ { print }'
+                  )
+
+                  tmp_kuberc=$(mktemp "''${kuberc_file}.XXXXXX")
+                  {
+                    printf 'apiVersion: kubectl.config.k8s.io/v1beta1\n'
+                    printf 'kind: Preference\n'
+                    if [ "''${#commands[@]}" -gt 0 ]; then
+                      printf 'credentialPluginPolicy: Allowlist\n'
+                      printf 'credentialPluginAllowlist:\n'
+                      for command in "''${commands[@]}"; do
+                        printf '  - %s\n' "$command"
+                      done
+                    else
+                      printf 'credentialPluginPolicy: DenyAll\n'
+                    fi
+                  } > "$tmp_kuberc"
+                  chmod 600 "$tmp_kuberc"
+                  mv "$tmp_kuberc" "$kuberc_file"
+                }
+
+                select_profile() {
+                  local profile="$1"
+                  local source_file
+
+                  source_file=$(profile_source_file "$profile")
+                  if [ ! -f "$source_file" ]; then
+                    log "profile not found: $profile"
+                    exit 1
+                  fi
+
+                  ln -sfn "$source_file" "$active_source"
+                  write_kuberc "$source_file"
+                  printf '%s\n' "$profile"
+                }
+
+                ensure_default_profile() {
+                  local preferred_profile=""
+                  local maybe_source
+                  local maybe_profile
+
+                  if [ "$#" -gt 0 ]; then
+                    preferred_profile="$1"
+                  fi
+
+                  if maybe_source=$(current_source_file); then
+                    write_kuberc "$maybe_source"
+                    return 0
+                  fi
+
+                  if [ -n "$preferred_profile" ] && [ -f "$(profile_source_file "$preferred_profile")" ]; then
+                    select_profile "$preferred_profile"
+                    return 0
+                  fi
+
+                  if [ ! -f "$manifest_file" ]; then
+                    log "no kubeconfig manifest found at $manifest_file"
+                    exit 1
+                  fi
+
+                  maybe_profile=$(awk -F '\t' 'NF >= 1 { print $1; exit }' "$manifest_file" || true)
+                  if [ -z "$maybe_profile" ]; then
+                    log "no kubeconfig profiles available in $manifest_file"
+                    exit 1
+                  fi
+
+                  select_profile "$maybe_profile"
+                }
+
+                list_profiles() {
+                  if [ -f "$manifest_file" ]; then
+                    cat "$manifest_file"
+                  fi
+                }
+
+                pick_profile() {
+                  local selection
+
+                  if [ ! -f "$manifest_file" ]; then
+                    log "no kubeconfig manifest found at $manifest_file"
+                    exit 1
+                  fi
+
+                  selection=$(
+                    awk -F '\t' 'NF >= 2 { printf "%s\t%s\n", $1, $2 }' "$manifest_file" \
+                      | fzf --delimiter=$'\t' --with-nth=1,2 --prompt='kube> '
+                  )
+                  [ -n "$selection" ] || exit 1
+                  select_profile "$(printf '%s' "$selection" | cut -f1)"
+                }
+
+                write_kuberc_from_source() {
+                  local source_file="$1"
+
+                  if [ ! -f "$source_file" ]; then
+                    log "source kubeconfig not found: $source_file"
+                    exit 1
+                  fi
+
+                  write_kuberc "$source_file"
+                }
+
+                command=""
+                if [ "$#" -gt 0 ]; then
+                  command="$1"
+                fi
+
+                case "$command" in
+                  ""|pick)
+                    pick_profile
+                    ;;
+                  list)
+                    list_profiles
+                    ;;
+                  current)
+                    if source_file=$(current_source_file); then
+                      printf '%s\t%s\n' "$(current_profile_name)" "$source_file"
+                    else
+                      exit 1
+                    fi
+                    ;;
+                  use)
+                    if [ "$#" -lt 2 ]; then
+                      log "usage: kubeconfig-manager use <profile>"
+                      exit 1
+                    fi
+                    select_profile "$2"
+                    ;;
+                  default)
+                    shift || true
+                    ensure_default_profile "$@"
+                    ;;
+                  kuberc)
+                    shift || true
+                    if [ "$#" -gt 0 ]; then
+                      write_kuberc_from_source "$1"
+                    else
+                      if source_file=$(current_source_file); then
+                        write_kuberc "$source_file"
+                      else
+                        log "no active kubeconfig source selected"
+                        exit 1
+                      fi
+                    fi
+                    ;;
+                  *)
+                    log "unknown command: $command"
+                    exit 1
+                    ;;
+                esac
+              '';
+            };
+
             kubePassthroughBroker = pkgs.writeShellApplication {
               name = "kubectl-passthrough-broker";
               runtimeInputs = [
@@ -133,7 +347,7 @@
               text = ''
                 set -euo pipefail
 
-                source_kubeconfig="/nixos-generated/kubeconfig"
+                source_kubeconfig="$HOME/.local/state/kubeconfig-manager/active-source"
                 local_kubeconfig="$HOME/.kube/config"
                 state_dir="$HOME/.local/state/kubectl-passthrough"
                 ports_file="$state_dir/ports.tsv"
@@ -251,6 +465,12 @@
                   done <<EOF
 $cluster_rows
 EOF
+
+                  if ! ${kubeconfigManager}/bin/kubeconfig-manager kuberc "$source_kubeconfig"; then
+                    log "failed to regenerate kuberc from $source_kubeconfig"
+                    rm -f "$tmp_kubeconfig"
+                    return 1
+                  fi
 
                   chmod 600 "$tmp_kubeconfig"
                   mv "$tmp_kubeconfig" "$local_kubeconfig"
@@ -470,11 +690,14 @@ EOF
             home.packages = [
               pkgs.docker-client
               gpgPresetPassphraseLogin
+              kubeconfigManager
             ];
 
             home.sessionVariables = {
               GENERATED_INPUT_DIR = "/nixos-generated";
               DOCKER_CONTEXT = "host-mac";
+              KUBERC = "/home/m/.kube/kuberc";
+              KUBECTL_KUBERC = "true";
             };
 
             programs.rbw.settings.pinentry = pkgs.wayprompt;
@@ -536,6 +759,20 @@ EOF
                 ExecStart = "${gpgPresetPassphraseLogin}/bin/gpg-preset-passphrase-login";
                 Restart = "on-failure";
                 RestartSec = 30;
+              };
+              Install.WantedBy = [ "default.target" ];
+            };
+
+            systemd.user.services.kubeconfig-manager-default = {
+              Unit = {
+                Description = "Select the default kubeconfig profile";
+                After = [ "default.target" ];
+              };
+              Service = {
+                Type = "oneshot";
+                ExecStart = "${kubeconfigManager}/bin/kubeconfig-manager default orbstack";
+                Restart = "on-failure";
+                RestartSec = 5;
               };
               Install.WantedBy = [ "default.target" ];
             };
@@ -610,7 +847,8 @@ EOF
             systemd.user.services.kubectl-passthrough = {
               Unit = {
                 Description = "Broker OrbStack Kubernetes tunnels through stable localhost ports";
-                After = [ "default.target" ];
+                After = [ "default.target" "kubeconfig-manager-default.service" ];
+                Wants = [ "kubeconfig-manager-default.service" ];
               };
               Service = {
                 Type = "simple";

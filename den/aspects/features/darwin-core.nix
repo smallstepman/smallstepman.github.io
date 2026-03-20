@@ -6,8 +6,20 @@
         darwin = { pkgs, ... }:
           let
             kubeconfigGeneratedDir = "/Users/m/.local/share/nix-config-generated";
-            kubeconfigBitwardenItem = "orbstack-kubeconfig";
-            kubeconfigTarget = "${kubeconfigGeneratedDir}/kubeconfig";
+            kubeconfigProfilesDir = "${kubeconfigGeneratedDir}/kubeconfigs";
+            kubeconfigManifestFile = "${kubeconfigProfilesDir}/index.tsv";
+            kubeconfigProfiles = [
+              {
+                name = "orbstack";
+                source = "rbw";
+                reference = "orbstack-kubeconfig";
+                description = "OrbStack local cluster";
+              }
+            ];
+            kubeconfigProfileEntries = lib.concatStringsSep "\n" (map
+              (profile:
+                "  sync_profile ${lib.escapeShellArg profile.name} ${lib.escapeShellArg profile.source} ${lib.escapeShellArg profile.reference} ${lib.escapeShellArg profile.description}")
+              kubeconfigProfiles);
 
             orbstackKubeconfigSync = pkgs.writeShellApplication {
               name = "orbstack-kubeconfig-sync";
@@ -16,23 +28,86 @@
                 set -euo pipefail
                 umask 077
 
-                mkdir -p ${kubeconfigGeneratedDir}
-                tmp_kubeconfig=$(mktemp ${kubeconfigTarget}.XXXXXX)
-                trap 'rm -f "$tmp_kubeconfig"' EXIT
+                mkdir -p ${kubeconfigProfilesDir}
+                tmp_manifest=$(mktemp ${kubeconfigManifestFile}.XXXXXX)
+                trap 'rm -f "$tmp_manifest"' EXIT
 
-                if ! rbw get ${kubeconfigBitwardenItem} > "$tmp_kubeconfig"; then
-                  echo "orbstack-kubeconfig-sync: failed to fetch ${kubeconfigBitwardenItem} from Bitwarden" >&2
+                declare -A synced_profiles=()
+                materialized_count=0
+                failed_count=0
+
+                sync_profile() {
+                  local name="$1"
+                  local source="$2"
+                  local reference="$3"
+                  local description="$4"
+                  local target="$kubeconfigProfilesDir/$name.yaml"
+                  local tmp_profile
+
+                  tmp_profile=$(mktemp "''${target}.XXXXXX")
+
+                  case "$source" in
+                    rbw)
+                      if ! rbw get "$reference" > "$tmp_profile"; then
+                        echo "orbstack-kubeconfig-sync: failed to fetch profile $name from Bitwarden item $reference" >&2
+                        rm -f "$tmp_profile"
+                        failed_count=$((failed_count + 1))
+                        return 0
+                      fi
+                      ;;
+                    file)
+                      if ! cp "$reference" "$tmp_profile"; then
+                        echo "orbstack-kubeconfig-sync: failed to copy kubeconfig file for profile $name from $reference" >&2
+                        rm -f "$tmp_profile"
+                        failed_count=$((failed_count + 1))
+                        return 0
+                      fi
+                      ;;
+                    *)
+                      echo "orbstack-kubeconfig-sync: unsupported source '$source' for profile $name" >&2
+                      rm -f "$tmp_profile"
+                      failed_count=$((failed_count + 1))
+                      return 0
+                      ;;
+                  esac
+
+                  if [ ! -s "$tmp_profile" ]; then
+                    echo "orbstack-kubeconfig-sync: profile $name produced an empty kubeconfig" >&2
+                    rm -f "$tmp_profile"
+                    failed_count=$((failed_count + 1))
+                    return 0
+                  fi
+
+                  chmod 600 "$tmp_profile"
+                  mv "$tmp_profile" "$target"
+                  printf '%s\t%s\n' "$name" "$description" >> "$tmp_manifest"
+                  synced_profiles["$name"]=1
+                  materialized_count=$((materialized_count + 1))
+                }
+
+${kubeconfigProfileEntries}
+
+                shopt -s nullglob
+                for target in ${kubeconfigProfilesDir}/*.yaml; do
+                  [ -e "$target" ] || continue
+                  profile_name=$(basename "$target" .yaml)
+                  if [ -z "''${synced_profiles[$profile_name]+x}" ]; then
+                    rm -f "$target"
+                  fi
+                done
+                shopt -u nullglob
+
+                mv "$tmp_manifest" "$kubeconfigManifestFile"
+
+                if [ "$materialized_count" -eq 0 ]; then
+                  echo "orbstack-kubeconfig-sync: no kubeconfig profiles were materialized" >&2
                   exit 1
                 fi
 
-                if [ ! -s "$tmp_kubeconfig" ]; then
-                  echo "orbstack-kubeconfig-sync: empty kubeconfig from Bitwarden item ${kubeconfigBitwardenItem}" >&2
-                  exit 1
-                fi
-
-                chmod 600 "$tmp_kubeconfig"
-                if ! cmp -s "$tmp_kubeconfig" ${kubeconfigTarget} 2>/dev/null; then
-                  mv "$tmp_kubeconfig" ${kubeconfigTarget}
+                if [ "$failed_count" -gt 0 ]; then
+                  echo "orbstack-kubeconfig-sync: refreshed $materialized_count profile(s) with $failed_count failure(s)" >&2
+                else
+                  echo "orbstack-kubeconfig-sync: refreshed $materialized_count profile(s)" >&2
                 fi
               '';
             };
@@ -111,6 +186,7 @@
           environment.shells = with pkgs; [ bashInteractive zsh fish ];
           environment.systemPackages = with pkgs; [
             cachix
+            orbstackKubeconfigSync
           ];
 
           # The user already exists via den identity, but nix-darwin still needs

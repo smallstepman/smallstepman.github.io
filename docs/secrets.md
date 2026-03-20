@@ -53,7 +53,9 @@ NixOS VM
 | `claude-oauth-token` | rbw → shell function | Injected only for `claude`. |
 | `openai-api-key` | rbw → shell functions | Used by `codex` and `with-openai`. |
 | `amp-api-key` | rbw → shell function | Used by `with-amp`. |
-| `orbstack-kubeconfig` | rbw → launchd sync / `refresh-kubeconfig` | Keeps the host kubeconfig and embedded key material out of the repo; the VM broker reads the generated copy. |
+| `orbstack-kubeconfig` | rbw → launchd sync / `refresh-kubeconfig` | Keeps the host kubeconfig and embedded key material out of the repo; the macOS sync helper materializes it into the generated dataset. |
+| `kubeconfigs/<name>.yaml` | macOS sync → VM broker / manager | Materialized kubeconfig profiles selected by the VM-side `kubeconfig-manager`. |
+| `kubeconfigs/index.tsv` | macOS sync → VM manager | Manifest of available profiles used by the interactive picker and default selector. |
 
 Rule of thumb: if the secret is needed during boot or activation, it goes
 through sops; otherwise it is fetched live from Bitwarden and materialized on
@@ -134,9 +136,13 @@ echo "new-value" | rbw add github-token
 # No rebuild needed; next helper invocation fetches the new value.
 ```
 
-### Managing the kubeconfig blob
+### Managing kubeconfig profiles
 
-Store the full kubeconfig in Bitwarden as `orbstack-kubeconfig`.
+Store each kubeconfig profile in Bitwarden as a self-contained blob. The
+current local profile uses the item name `orbstack-kubeconfig`, but the macOS
+sync helper is now driven by an explicit profile list so additional profiles can
+be added without changing the VM flow.
+
 If the kubeconfig references external files, inline the client certificate and
 client key data before storing it so the Bitwarden item stays self-contained.
 
@@ -144,8 +150,25 @@ client key data before storing it so the Bitwarden item stays self-contained.
 rbw add orbstack-kubeconfig < ~/.kube/config
 ```
 
-The macOS launchd sync and `docs/vm.sh refresh-kubeconfig` both fetch this item
-and write it to `~/.local/share/nix-config-generated/kubeconfig`.
+The macOS launchd sync and `docs/vm.sh refresh-kubeconfig` both invoke the same
+`orbstack-kubeconfig-sync` helper. That helper materializes profiles into
+`~/.local/share/nix-config-generated/kubeconfigs/<name>.yaml` and writes the
+`index.tsv` manifest used by the VM.
+
+On the VM, `kubeconfig-manager` handles profile selection and kuberc
+generation:
+
+```bash
+kube list
+kube use orbstack
+kube pick
+kube current
+```
+
+`kubeconfig-manager` updates `~/.local/state/kubeconfig-manager/active-source`
+to point at the selected generated kubeconfig, then regenerates
+`~/.kube/kuberc`. The broker keeps `~/.kube/config` rewritten to stable local
+`127.0.0.1` ports, so client traffic still stays inside the guest.
 
 ### Adding a new boot-time secret
 

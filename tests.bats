@@ -1289,15 +1289,20 @@ PYEOF
 # ===========================================================================
 
 # bats test_tags=kube-passthrough
-@test "kube-passthrough: macOS syncs kubeconfig from Bitwarden into the generated dataset" {
+@test "kube-passthrough: macOS syncs multiple kubeconfig profiles into the generated dataset" {
+  grep -Fq 'kubeconfigProfiles = [' den/aspects/features/darwin-core.nix
+  grep -Fq 'name = "orbstack";' den/aspects/features/darwin-core.nix
+  grep -Fq 'source = "rbw";' den/aspects/features/darwin-core.nix
+  grep -Fq 'reference = "orbstack-kubeconfig";' den/aspects/features/darwin-core.nix
+  grep -Fq 'kubeconfigProfilesDir = "${kubeconfigGeneratedDir}/kubeconfigs";' den/aspects/features/darwin-core.nix
   grep -Fq 'launchd.user.agents.orbstack-kubeconfig-sync' den/aspects/features/darwin-core.nix
-  grep -Fq 'kubeconfigBitwardenItem = "orbstack-kubeconfig";' den/aspects/features/darwin-core.nix
-  grep -Fq 'rbw get ${kubeconfigBitwardenItem}' den/aspects/features/darwin-core.nix
+  grep -Fq 'orbstackKubeconfigSync' den/aspects/features/darwin-core.nix
   grep -Fq 'StartInterval = 300;' den/aspects/features/darwin-core.nix
-  grep -Fq 'refresh-kubeconfig' docs/vm.sh
-  grep -Fq 'RBW_BIN' docs/vm.sh
-  grep -Fq 'orbstack-kubeconfig' docs/secrets.md
-  grep -Fq 'rbw add orbstack-kubeconfig' docs/secrets.md
+  grep -Fq 'orbstack-kubeconfig-sync' docs/vm.sh
+  grep -Fq 'kubeconfigs/index.tsv' docs/secrets.md
+  if grep -Fq 'RBW_BIN' docs/vm.sh; then
+    fail 'docs/vm.sh should delegate to the installed sync helper instead of calling rbw directly'
+  fi
   if grep -Fq 'WatchPaths' den/aspects/features/darwin-core.nix; then
     fail 'macOS kubeconfig sync should poll Bitwarden instead of watching ~/.kube/config'
   fi
@@ -1307,17 +1312,41 @@ PYEOF
 }
 
 # bats test_tags=kube-passthrough
-@test "kube-passthrough: vm broker rewrites kubeconfig and removes the fixed 26443 tunnel" {
+@test "kube-passthrough: vm broker rewrites the selected kubeconfig and wires kuberc" {
+  grep -Fq 'kubeconfigManager = pkgs.writeShellApplication' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'systemd.user.services.kubeconfig-manager-default' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'kubeconfig-manager default orbstack' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'kubeconfig-manager kuberc' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'source_kubeconfig="$HOME/.local/state/kubeconfig-manager/active-source"' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'KUBERC = "/home/m/.kube/kuberc";' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'KUBECTL_KUBERC = "true";' den/aspects/hosts/vm-aarch64.nix
+  grep -Fq 'kube    = "kubeconfig-manager";' den/aspects/features/shell.nix
+  grep -Fq 'credentialPluginAllowlist' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'systemd.user.services.kubectl-passthrough' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'config set-cluster' den/aspects/hosts/vm-aarch64.nix
   grep -Fq '127.0.0.1' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'config view --raw -o jsonpath' den/aspects/hosts/vm-aarch64.nix
+  if grep -Fq '/nixos-generated/kubeconfig' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should read the selected active-source symlink instead of the old single kubeconfig file'
+  fi
   if grep -Fq 'kubectl-orbstack-tunnel' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64 should not keep the fixed kubectl-orbstack-tunnel service'
   fi
   if grep -Fq -- '-L 26443:localhost:26443' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64 should not hardcode a single 26443 tunnel'
   fi
+}
+
+# bats test_tags=kube-passthrough
+@test "kube-passthrough: docs describe the multi-profile manager flow" {
+  grep -Fq 'orbstack-kubeconfig-sync' docs/secrets.md
+  grep -Fq 'kubeconfigs/<name>.yaml' docs/secrets.md
+  grep -Fq 'kubeconfigs/index.tsv' docs/secrets.md
+  grep -Fq 'kubeconfig-manager' docs/secrets.md
+  grep -Fq 'kube list' docs/secrets.md
+  grep -Fq 'kube use orbstack' docs/secrets.md
+  grep -Fq 'kube pick' docs/secrets.md
+  grep -Fq '~/.kube/kuberc' docs/secrets.md
 }
 
 

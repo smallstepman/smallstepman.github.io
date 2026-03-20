@@ -40,6 +40,7 @@
 
                 rs      = "cargo";
                 kubectl = "kubecolor";
+                kube    = "kubeconfig-manager";
 
                 nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
               } // (lib.optionalAttrs isLinux {
