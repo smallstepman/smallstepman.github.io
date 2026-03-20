@@ -53,9 +53,11 @@ NixOS VM
 | `claude-oauth-token` | rbw → shell function | Injected only for `claude`. |
 | `openai-api-key` | rbw → shell functions | Used by `codex` and `with-openai`. |
 | `amp-api-key` | rbw → shell function | Used by `with-amp`. |
+| `orbstack-kubeconfig` | rbw → launchd sync / `refresh-kubeconfig` | Keeps the host kubeconfig and embedded key material out of the repo; the VM broker reads the generated copy. |
 
 Rule of thumb: if the secret is needed during boot or activation, it goes
-through sops; otherwise it is fetched live from Bitwarden.
+through sops; otherwise it is fetched live from Bitwarden and materialized on
+demand. Self-contained kubeconfig blobs follow the same rule.
 
 ## Where the configuration lives
 
@@ -87,6 +89,7 @@ These Bitwarden item names are consumed directly by the current config:
 | `claude-oauth-token` | `claude()` wrapper | rbw |
 | `openai-api-key` | `codex()` and `with-openai()` | rbw |
 | `amp-api-key` | `with-amp()` | rbw |
+| `orbstack-kubeconfig` | `docs/vm.sh refresh-kubeconfig` / `launchd.user.agents.orbstack-kubeconfig-sync` | rbw |
 
 ## Common workflows
 
@@ -130,6 +133,19 @@ echo "new-value" | rbw add github-token
 
 # No rebuild needed; next helper invocation fetches the new value.
 ```
+
+### Managing the kubeconfig blob
+
+Store the full kubeconfig in Bitwarden as `orbstack-kubeconfig`.
+If the kubeconfig references external files, inline the client certificate and
+client key data before storing it so the Bitwarden item stays self-contained.
+
+```bash
+rbw add orbstack-kubeconfig < ~/.kube/config
+```
+
+The macOS launchd sync and `docs/vm.sh refresh-kubeconfig` both fetch this item
+and write it to `~/.local/share/nix-config-generated/kubeconfig`.
 
 ### Adding a new boot-time secret
 

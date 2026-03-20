@@ -1289,12 +1289,20 @@ PYEOF
 # ===========================================================================
 
 # bats test_tags=kube-passthrough
-@test "kube-passthrough: macOS auto-syncs kubeconfig into the generated dataset" {
+@test "kube-passthrough: macOS syncs kubeconfig from Bitwarden into the generated dataset" {
   grep -Fq 'launchd.user.agents.orbstack-kubeconfig-sync' den/aspects/features/darwin-core.nix
-  grep -Fq 'WatchPaths = [ "/Users/m/.kube/config" ];' den/aspects/features/darwin-core.nix
+  grep -Fq 'kubeconfigBitwardenItem = "orbstack-kubeconfig";' den/aspects/features/darwin-core.nix
+  grep -Fq 'rbw get ${kubeconfigBitwardenItem}' den/aspects/features/darwin-core.nix
+  grep -Fq 'StartInterval = 300;' den/aspects/features/darwin-core.nix
   grep -Fq 'refresh-kubeconfig' docs/vm.sh
-  if grep -Fq 'kubectl config use-context orbstack' den/aspects/features/darwin-core.nix; then
-    fail 'macOS kubeconfig sync should not force the orbstack context'
+  grep -Fq 'RBW_BIN' docs/vm.sh
+  grep -Fq 'orbstack-kubeconfig' docs/secrets.md
+  grep -Fq 'rbw add orbstack-kubeconfig' docs/secrets.md
+  if grep -Fq 'WatchPaths' den/aspects/features/darwin-core.nix; then
+    fail 'macOS kubeconfig sync should poll Bitwarden instead of watching ~/.kube/config'
+  fi
+  if grep -Fq '/Users/m/.kube/config' den/aspects/features/darwin-core.nix; then
+    fail 'macOS kubeconfig sync should not read from the local kubeconfig file'
   fi
 }
 

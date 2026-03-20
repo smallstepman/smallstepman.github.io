@@ -470,18 +470,33 @@ vm_prepare_host_authorized_keys() {
 vm_prepare_kubeconfig() {
     ensure_generated_dir
     # kubeconfig → kubectl config for OrbStack K8s API on macOS.
-    # launchd keeps this synced automatically; use refresh-kubeconfig as a
-    # manual fallback when you want to force a fresh copy.
-    if [ -f "$HOME/.kube/config" ]; then
-        local tmp_kubeconfig
-        tmp_kubeconfig=$(mktemp "$GENERATED_DIR/kubeconfig.XXXXXX")
-        cp "$HOME/.kube/config" "$tmp_kubeconfig"
-        chmod 600 "$tmp_kubeconfig"
-        mv "$tmp_kubeconfig" "$GENERATED_DIR/kubeconfig"
-        echo "Kubeconfig copied to $GENERATED_DIR/kubeconfig"
-    else
-        echo "Warning: No kubeconfig found at ~/.kube/config, skipping"
+    # launchd keeps this synced automatically from Bitwarden; use
+    # refresh-kubeconfig as a manual fallback when you want to force a fresh copy.
+    local rbw_bin tmp_kubeconfig
+
+    rbw_bin="${RBW_BIN:-rbw}"
+    command -v "$rbw_bin" >/dev/null 2>&1 || die "rbw not found in PATH (set RBW_BIN to override)"
+
+    tmp_kubeconfig=$(mktemp "$GENERATED_DIR/kubeconfig.XXXXXX")
+
+    if ! "$rbw_bin" get orbstack-kubeconfig > "$tmp_kubeconfig"; then
+        rm -f "$tmp_kubeconfig"
+        die "Failed to fetch kubeconfig from Bitwarden item 'orbstack-kubeconfig'"
     fi
+
+    if [ ! -s "$tmp_kubeconfig" ]; then
+        rm -f "$tmp_kubeconfig"
+        die "Bitwarden item 'orbstack-kubeconfig' returned an empty kubeconfig"
+    fi
+
+    chmod 600 "$tmp_kubeconfig"
+    if ! cmp -s "$tmp_kubeconfig" "$GENERATED_DIR/kubeconfig" 2>/dev/null; then
+        mv "$tmp_kubeconfig" "$GENERATED_DIR/kubeconfig"
+    else
+        rm -f "$tmp_kubeconfig"
+    fi
+
+    echo "Kubeconfig synced to $GENERATED_DIR/kubeconfig"
 }
 
 # ─── Prepare SOPS Age Key ──────────────────────────────────────────────────
@@ -504,6 +519,7 @@ vm_prepare_sops_age_key() {
 }
 
 cmd_refresh_kubeconfig() {
+    echo "Refreshing kubeconfig from Bitwarden..."
     vm_prepare_kubeconfig
 }
 
@@ -579,6 +595,7 @@ Commands:
   bootstrap [--redo] Full setup: install VMware Fusion, create VM, wait for
                     SSH, install NixOS. --redo destroys existing VM first
   switch            Run nixos-rebuild switch on the VM via shared folder
+  refresh-kubeconfig Refresh the Bitwarden-backed kubeconfig cache
   refresh-secrets   Regenerate sops keys and re-encrypt secrets
   up                Start the VM
   down              Stop the VM (graceful shutdown)
@@ -705,7 +722,7 @@ cmd_refresh_secrets() {
     vm_prepare_host_authorized_keys
     vm_prepare_kubeconfig
     vm_collect_secrets
-    echo "Secrets refreshed. Run 'vm switch' to apply."
+    echo "Secrets and kubeconfig refreshed. Run 'vm switch' to apply."
 }
 
 # ─── Standalone install ─────────────────────────────────────────────────────
@@ -724,7 +741,7 @@ cmd_standalone_install() {
     fi
     chmod +x "$dest"
     echo "Installed: $dest"
-    echo "Usage: ~/vm.sh {help|bootstrap|switch|refresh-secrets|up|down|ip|ssh}"
+    echo "Usage: ~/vm.sh {help|bootstrap|switch|refresh-kubeconfig|refresh-secrets|up|down|ip|ssh}"
 
     if vm_find_vmx >/dev/null 2>&1; then
         echo ""

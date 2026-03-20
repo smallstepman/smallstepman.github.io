@@ -478,7 +478,7 @@ sudo nixos-rebuild switch --flake "path:$WRAPPER#vm-aarch64" --specialisation gn
 - **Languages:** Rust (latest stable via overlay, with rust-src + rust-analyzer), Go, Python 3.12 + uv, Node.js 22 + fnm
 - **VCS:** Git (with GPG signing, key `247AE5FC6A838272`, user `smallstepman`), programs.gh
 - **AI Tools:** claude-code, codex, 70+ agents from llm-agents.nix (amp, crush, droid, forge, gemini-cli, opencode, etc.)
-- **Secrets:** rbw (Bitwarden) on Linux, 1password-cli on macOS
+- **Secrets:** rbw (Bitwarden) on Linux and macOS
 
 ## Doom Emacs Configuration (`dotfiles/common/doom/`)
 
