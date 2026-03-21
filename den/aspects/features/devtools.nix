@@ -21,6 +21,7 @@
         pkgs.fluxcd
         pkgs.kubernetes-helm
         pkgs.terragrunt
+        pkgs.kubecm
 
         pkgs.parallel
         (pkgs.bats.withLibraries (libs: [

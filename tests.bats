@@ -1253,6 +1253,21 @@ PYEOF
 }
 
 # bats test_tags=vm-desktop
+@test "vm-desktop: vm-aarch64 greetd exposes hyprland and i3 sessions" {
+  local actual
+
+  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.services.displayManager.sessionPackages)
+  printf '%s' "$actual" | grep -q 'hyprland' \
+    || fail "sessionPackages missing hyprland; got '$actual'"
+  printf '%s' "$actual" | grep -q 'i3' \
+    || fail "sessionPackages missing i3; got '$actual'"
+
+  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.services.greetd.settings.default_session.command)
+  printf '%s' "$actual" | grep -q -- '--xsessions' \
+    || fail "greetd command missing --xsessions; got '$actual'"
+}
+
+# bats test_tags=vm-desktop
 @test "vm-desktop: vm-aarch64 HM desktop settings evaluate correctly" {
   local actual
 

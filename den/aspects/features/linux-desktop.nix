@@ -32,15 +32,19 @@
       programs.niri.enable = true;
       programs.niri.package = pkgs.niri-unstable;
 
+      programs.hyprland.enable = true;
+
       services.noctalia-shell.enable = true;
 
       programs.mango.enable = true;
+
+      services.xserver.windowManager.i3.enable = true;
 
       services.greetd = {
         enable = true;
         settings = {
           default_session = {
-            command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions";
+            command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions --xsessions ${config.services.displayManager.sessionData.desktops}/share/xsessions";
             user = "greeter";
           };
         };

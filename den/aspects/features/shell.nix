@@ -88,6 +88,8 @@
 
               home.packages = [
                 pkgs.bat
+                pkgs.dua
+                pkgs.dust
                 pkgs.eza
                 pkgs.fd
                 pkgs.fnm
@@ -97,6 +99,7 @@
                 pkgs.kubectl
                 pkgs.rbw
                 pkgs.ripgrep
+                pkgs.basalt
                 manpager
               ];
 
