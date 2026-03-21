@@ -1,6 +1,6 @@
 diff --git a/assets/man/zellij.1 b/assets/man/zellij.1
 new file mode 100644
-index 0000000..7a3febd
+index 0000000..0ceb84b
 --- /dev/null
 +++ b/assets/man/zellij.1
 @@ -0,0 +1,552 @@
@@ -324,11 +324,11 @@ index 0000000..7a3febd
 +.El
 +.Bl
 +.IP \(bu 4
-+\fBBreakPaneToNewTab: { pane_id: <ID>, tab_name: <Name> }\fP \- breaks a pane out into a new
-+tab\. `\f[CR]pane_id\fP` is optional; when omitted, the invoking client's currently focused pane is used\.
-+`\f[CR]tab_name\fP` is optional; when omitted, the new tab has no name\. `\f[CR]<ID\>\fP` can be a bare integer
++\fBbreak-pane [\-\-pane-id <ID>] [\-\-name <NAME>]\fP \- breaks a pane out into a new tab\.
++When `\f[CR]\-\-pane\-id\fP` is omitted, the invoking client's currently focused pane is used\.
++When `\f[CR]\-\-name\fP` is omitted, the new tab has no name\. `\f[CR]<ID\>\fP` can be a bare integer
 +(eg\. 1), a terminal pane id (eg\. terminal_1) or a plugin pane id (eg\. plugin_1)\.
-+CLI usage: `\f[CR]zellij action break\-pane [\-\-pane\-id <ID\>] [\-\-name <tab\-name\>]\fP`
++CLI usage: `\f[CR]zellij action break\-pane [\-\-pane\-id <ID\>] [\-\-name <NAME\>]\fP`
 +.El
 +.RE
 +
@@ -558,18 +558,18 @@ index 0000000..7a3febd
 +https://zellij\.dev/documentation
 \ No newline at end of file
 diff --git a/docs/MANPAGE.md b/docs/MANPAGE.md
-index 1d490c8..0f1c917 100644
+index 1d490c8..24ac50b 100644
 --- a/docs/MANPAGE.md
 +++ b/docs/MANPAGE.md
 @@ -183,6 +183,11 @@ ACTIONS
  * __UndoRenameTab__ - undoes the changed tab name and reverts to the previous name.
  * __UndoRenamePane__ - undoes the changed pane name and reverts to the previous name.
  * __SetPaneColor__ - sets the default foreground and/or background color of a pane.
-+* __BreakPaneToNewTab: { pane_id: <ID\>, tab_name: <Name\> }__ - breaks a pane out into a new
-+  tab. `pane_id` is optional; when omitted, the invoking client's currently focused pane is used.
-+  `tab_name` is optional; when omitted, the new tab has no name. `<ID\>` can be a bare integer
++* __break-pane [--pane-id <ID\>] [--name <NAME\>]__ - breaks a pane out into a new tab.
++  When `--pane-id` is omitted, the invoking client's currently focused pane is used.
++  When `--name` is omitted, the new tab has no name. `<ID\>` can be a bare integer
 +  (eg. 1), a terminal pane id (eg. terminal_1) or a plugin pane id (eg. plugin_1).
-+  CLI usage: `zellij action break-pane [--pane-id <ID\>] [--name <tab-name\>]`
++  CLI usage: `zellij action break-pane [--pane-id <ID\>] [--name <NAME\>]`
  
  
  KEYS
@@ -648,10 +648,19 @@ index 39fde94..7615fad 100644
      }
      Ok(())
 diff --git a/zellij-server/src/unit/screen_tests.rs b/zellij-server/src/unit/screen_tests.rs
-index 8f85673..9a797f6 100644
+index 8f85673..b70a862 100644
 --- a/zellij-server/src/unit/screen_tests.rs
 +++ b/zellij-server/src/unit/screen_tests.rs
-@@ -7372,3 +7372,74 @@ fn integration_subscribe_with_ansi_flag() {
+@@ -8,7 +8,7 @@ use insta::assert_snapshot;
+ use std::net::{IpAddr, Ipv4Addr};
+ use std::path::PathBuf;
+ use zellij_utils::cli::CliAction;
+-use zellij_utils::data::{Event, Resize, Style, WebSharing};
++use zellij_utils::data::{Event, Resize, Style, TabInfo, WebSharing};
+ use zellij_utils::errors::{prelude::*, ErrorContext};
+ use zellij_utils::input::actions::Action;
+ use zellij_utils::input::command::{RunCommand, TerminalAction};
+@@ -7372,3 +7372,159 @@ fn integration_subscribe_with_ansi_flag() {
          subscriber_msgs
      );
  }
@@ -660,6 +669,16 @@ index 8f85673..9a797f6 100644
 +pub fn break_pane_without_pane_id_uses_the_invoking_clients_focused_pane() {
 +    // Verifies that BreakPaneToNewTab with pane_id=None resolves to the
 +    // invoking client's focused pane and moves it into a new tab named "scratch".
++    //
++    // TDD note: the previous version of this test only asserted render_count > 0,
++    // which would not catch a broken implementation.  The assertions below
++    // specify the concrete promised behaviour (and would have been red against
++    // the old render-only version).
++    //
++    // Failing-first evidence: with the old setup (new_tab() + run(None, …)) the
++    // client ended up focused on a second default tab (1 pane) rather than the
++    // two-pane initial tab.  The resulting source-tab selectable_tiled_panes_count
++    // after break was 0, not 1, so the assertion at (*) below would have failed.
 +    let size = Size { cols: 80, rows: 20 };
 +    let mut initial_layout = TiledPaneLayout::default();
 +    let mut pane_to_break_free = TiledPaneLayout::default();
@@ -673,9 +692,11 @@ index 8f85673..9a797f6 100644
 +    let mut mock_screen = MockScreen::new(size);
 +    let session_metadata = mock_screen.clone_session_metadata();
 +
-+    mock_screen.new_tab(initial_layout.clone());
++    // Single-tab setup: client 1 starts on tab 0 with two panes (pane_to_break_free
++    // is focused as the first selectable pane).
++    let screen_thread = mock_screen.run(Some(initial_layout), vec![]);
++    std::thread::sleep(std::time::Duration::from_millis(100));
 +
-+    let screen_thread = mock_screen.run(None, vec![]);
 +    let received_server_instructions = Arc::new(Mutex::new(vec![]));
 +    let server_receiver = mock_screen.server_receiver.take().unwrap();
 +    let server_thread = log_actions_in_thread!(
@@ -684,25 +705,23 @@ index 8f85673..9a797f6 100644
 +        server_receiver
 +    );
 +
-+    std::thread::sleep(std::time::Duration::from_millis(100));
-+
-+    // Send CLI BreakPane without pane_id; server must use the focused pane
++    // Send CLI BreakPane without pane_id; the screen must resolve to the focused pane.
 +    let cli_action = CliAction::BreakPane {
 +        pane_id: None,
 +        name: Some("scratch".to_string()),
 +    };
 +    send_cli_action_to_server(&session_metadata, cli_action, client_id);
-+
 +    std::thread::sleep(std::time::Duration::from_millis(100));
 +
-+    // Simulate the pty/layout reply that prod sends after the new tab is opened
++    // Simulate the pty/layout reply that prod sends after the new tab is opened.
++    // The new "scratch" tab has tab_id=1 (get_new_tab_id returns 1 since tab 0 exists).
 +    let _ = mock_screen.to_screen.send(ScreenInstruction::ApplyLayout(
 +        TiledPaneLayout::default(),
 +        vec![],
 +        Default::default(),
 +        vec![],
 +        Default::default(),
-+        1,
++        1, // tab_id of the newly-created "scratch" tab
 +        true,
 +        (client_id, false),
 +        None,
@@ -710,16 +729,91 @@ index 8f85673..9a797f6 100644
 +    ));
 +    std::thread::sleep(std::time::Duration::from_millis(100));
 +
++    // --- Assertion 1: client is now focused on the new "scratch" tab ---
++    let (tx, rx) = crossbeam::channel::bounded::<Option<TabInfo>>(1);
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::GetCurrentTabInfo {
++            client_id,
++            response_channel: tx,
++        });
++    let new_tab_info = rx
++        .recv_timeout(std::time::Duration::from_secs(5))
++        .expect("timed out waiting for GetCurrentTabInfo after break-pane")
++        .expect("client should be focused on a tab after break-pane");
++    assert_eq!(
++        new_tab_info.name, "scratch",
++        "invoking client should be focused on new 'scratch' tab; got name: {:?}",
++        new_tab_info.name
++    );
++    let new_tab_id = new_tab_info.tab_id;
++    // The broken-out pane is present in the new tab.
++    assert_eq!(
++        new_tab_info.selectable_tiled_panes_count, 1,
++        "new 'scratch' tab should contain exactly the broken-out pane"
++    );
++
++    // --- Navigate left → back to the source tab ---
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::MoveFocusLeftOrPreviousTab(
++            client_id, None,
++        ));
++    std::thread::sleep(std::time::Duration::from_millis(100));
++
++    // --- Assertion 2: source tab no longer contains the broken pane (*) ---
++    let (tx, rx) = crossbeam::channel::bounded::<Option<TabInfo>>(1);
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::GetCurrentTabInfo {
++            client_id,
++            response_channel: tx,
++        });
++    let source_tab_info = rx
++        .recv_timeout(std::time::Duration::from_secs(5))
++        .expect("timed out waiting for source tab info")
++        .expect("should be focused on source tab after navigating left");
++    assert_ne!(
++        source_tab_info.tab_id, new_tab_id,
++        "after navigating left the client should be on the source tab, not the scratch tab"
++    );
++    // Only pane_to_stay remains; pane_to_break_free was extracted.
++    assert_eq!(
++        source_tab_info.selectable_tiled_panes_count, 1, // (*)
++        "source tab should have exactly one pane remaining (pane_to_stay) after the break"
++    );
++
++    // --- Navigate right → back to the scratch tab ---
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::MoveFocusRightOrNextTab(client_id, None));
++    std::thread::sleep(std::time::Duration::from_millis(100));
++
++    let (tx, rx) = crossbeam::channel::bounded::<Option<TabInfo>>(1);
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::GetCurrentTabInfo {
++            client_id,
++            response_channel: tx,
++        });
++    let back_on_scratch = rx
++        .recv_timeout(std::time::Duration::from_secs(5))
++        .expect("timed out waiting for scratch tab info on return")
++        .expect("should be focused on scratch tab after navigating right");
++    assert_eq!(
++        back_on_scratch.tab_id, new_tab_id,
++        "after navigating right the client should be back on the scratch tab"
++    );
++
 +    mock_screen.teardown(vec![server_thread, screen_thread]);
 +
-+    // The break must have triggered at least one render
++    // --- Assertion 4: the break must have triggered at least one render ---
 +    let render_count = received_server_instructions
 +        .lock()
 +        .unwrap()
 +        .iter()
 +        .filter(|instr| matches!(instr, ServerInstruction::Render(_)))
 +        .count();
-+
 +    assert!(
 +        render_count > 0,
 +        "BreakPane CLI action (no pane_id) should trigger screen renders; got {}",
