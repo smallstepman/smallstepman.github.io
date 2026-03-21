@@ -1,5 +1,5 @@
 diff --git a/assets/man/zellij.1 b/assets/man/zellij.1
-index 0ceb84b33a5984407761cf0bae42e55be6e9e8c0..9cdcf232ec40720bf3a27d4d488997cf7dd77378 100644
+index 0ceb84b..9cdcf23 100644
 --- a/assets/man/zellij.1
 +++ b/assets/man/zellij.1
 @@ -318,12 +318,20 @@ on the current tab and normal mode\.
@@ -25,7 +25,7 @@ index 0ceb84b33a5984407761cf0bae42e55be6e9e8c0..9cdcf232ec40720bf3a27d4d488997cf
  
  .SS "KEYS"
 diff --git a/docs/MANPAGE.md b/docs/MANPAGE.md
-index 24ac50bc831f141bacc9ad9a1fa7b0037d7d583e..f738e6c060d24def3fc4bb57d0b777202b1d6939 100644
+index 24ac50b..f738e6c 100644
 --- a/docs/MANPAGE.md
 +++ b/docs/MANPAGE.md
 @@ -189,6 +189,12 @@ ACTIONS
@@ -42,7 +42,7 @@ index 24ac50bc831f141bacc9ad9a1fa7b0037d7d583e..f738e6c060d24def3fc4bb57d0b77720
  KEYS
  ----
 diff --git a/zellij-server/src/route.rs b/zellij-server/src/route.rs
-index 1398faf720ef33bac758a0a19d46e593bc8474db..110753dbcd96e542008ecad63ea6c45d1d78fede 100644
+index 1398faf..110753d 100644
 --- a/zellij-server/src/route.rs
 +++ b/zellij-server/src/route.rs
 @@ -1519,6 +1519,18 @@ pub(crate) fn route_action(
@@ -65,7 +65,7 @@ index 1398faf720ef33bac758a0a19d46e593bc8474db..110753dbcd96e542008ecad63ea6c45d
              senders
                  .send_to_screen(ScreenInstruction::RenameSession(
 diff --git a/zellij-server/src/screen.rs b/zellij-server/src/screen.rs
-index 7615fadd724138d09a5306f6abbfbbe0e2c80df1..52064ec965bd903570be8287a929f09078696682 100644
+index 7615fad..2829f5e 100644
 --- a/zellij-server/src/screen.rs
 +++ b/zellij-server/src/screen.rs
 @@ -419,6 +419,12 @@ pub enum ScreenInstruction {
@@ -99,8 +99,37 @@ index 7615fadd724138d09a5306f6abbfbbe0e2c80df1..52064ec965bd903570be8287a929f090
              for (pane_was_floating, mut pane) in extracted_panes {
                  let pane_id = pane.pid();
                  if pane_was_floating {
-@@ -7443,6 +7451,25 @@ pub(crate) fn screen_thread_main(
+@@ -7415,19 +7423,15 @@ pub(crate) fn screen_thread_main(
+                 client_id,
+                 mut completion_tx,
+             } => {
+-                // Verify tab exists
+-                if screen.get_tab_by_id(tab_id).is_none() {
+-                    log::error!("Tab with ID {} not found", tab_id);
+-                    // Don't set affected_tab_id, it will remain None to signal failure
+-                } else {
+-                    // break_multiple_panes_to_tab_with_index uses tab ID
++                // Resolve stable tab ID to a position, since
++                // break_multiple_panes_to_tab_with_index is position-based.
++                if let Some(tab_position) = screen.get_tab_position_by_id(tab_id) {
+                     screen.break_multiple_panes_to_tab_with_index(
+                         pane_ids,
+-                        tab_id,
++                        tab_position,
+                         should_change_focus_to_target_tab,
+                         client_id,
+                     )?;
+-                    // Set affected tab ID (tab_id is the ID here)
+                     completion_tx
+                         .as_mut()
+                         .map(|c| c.set_affected_tab_id(tab_id));
+@@ -7441,8 +7445,30 @@ pub(crate) fn screen_thread_main(
+                         );
+                     }
                      screen.clear_pane_group(&client_id);
++                } else {
++                    log::error!("Tab with ID {} not found", tab_id);
++                    // Don't set affected_tab_id — it will remain None to signal failure.
                  }
              },
 +            ScreenInstruction::MovePaneToTabById {
@@ -126,7 +155,7 @@ index 7615fadd724138d09a5306f6abbfbbe0e2c80df1..52064ec965bd903570be8287a929f090
                  let all_tabs = screen.get_tabs_mut();
                  let found = all_tabs.values_mut().any(|tab| {
 diff --git a/zellij-server/src/unit/screen_tests.rs b/zellij-server/src/unit/screen_tests.rs
-index b70a8625ebd2e5f838912528126f096d13a9b466..f3ee55643b2dcc98d40c948114da48bd3b949c54 100644
+index b70a862..f3ee556 100644
 --- a/zellij-server/src/unit/screen_tests.rs
 +++ b/zellij-server/src/unit/screen_tests.rs
 @@ -8,7 +8,10 @@ use insta::assert_snapshot;
@@ -301,7 +330,7 @@ index b70a8625ebd2e5f838912528126f096d13a9b466..f3ee55643b2dcc98d40c948114da48bd
 +    );
 +}
 diff --git a/zellij-utils/assets/prost_ipc/client_server_contract.rs b/zellij-utils/assets/prost_ipc/client_server_contract.rs
-index 757bf802e3ae026fa5b8c33e5ebfb55384b3a035..06c8809beaab099101efda52102cd23766bcb4a8 100644
+index 757bf80..06c8809 100644
 --- a/zellij-utils/assets/prost_ipc/client_server_contract.rs
 +++ b/zellij-utils/assets/prost_ipc/client_server_contract.rs
 @@ -399,6 +399,8 @@ pub mod action {
@@ -329,7 +358,7 @@ index 757bf802e3ae026fa5b8c33e5ebfb55384b3a035..06c8809beaab099101efda52102cd237
  }
  #[allow(clippy::derive_partial_eq_without_eq)]
 diff --git a/zellij-utils/src/cli.rs b/zellij-utils/src/cli.rs
-index 27c4e7fd7c9b237744876585dd6c1299717d8e4e..552bb30b1d7fbeddb14832a26cd3f594e86dc7e0 100644
+index 27c4e7f..552bb30 100644
 --- a/zellij-utils/src/cli.rs
 +++ b/zellij-utils/src/cli.rs
 @@ -1594,6 +1594,15 @@ tail -f /tmp/my-live-logfile | zellij action pipe --name logs --plugin https://e
@@ -408,7 +437,7 @@ index 27c4e7fd7c9b237744876585dd6c1299717d8e4e..552bb30b1d7fbeddb14832a26cd3f594
 +    }
  }
 diff --git a/zellij-utils/src/client_server_contract/common_types.proto b/zellij-utils/src/client_server_contract/common_types.proto
-index 5cb045c5e07800f35f395c7c06e4e65bdac80415..38efcc51134ea5e3606d4d8ed3ee31e0a77e9645 100644
+index 5cb045c..38efcc5 100644
 --- a/zellij-utils/src/client_server_contract/common_types.proto
 +++ b/zellij-utils/src/client_server_contract/common_types.proto
 @@ -273,6 +273,7 @@ message Action {
@@ -431,7 +460,7 @@ index 5cb045c5e07800f35f395c7c06e4e65bdac80415..38efcc51134ea5e3606d4d8ed3ee31e0
  message ListPanesAction {
    bool show_tab = 1;
 diff --git a/zellij-utils/src/errors.rs b/zellij-utils/src/errors.rs
-index 5e6be84da8c30088efd7710b5f8d7965d8645f38..1d0e35f5acf7dc79fd716871b2382df9931071d7 100644
+index 5e6be84..1d0e35f 100644
 --- a/zellij-utils/src/errors.rs
 +++ b/zellij-utils/src/errors.rs
 @@ -304,6 +304,7 @@ pub enum ScreenContext {
@@ -443,7 +472,7 @@ index 5e6be84da8c30088efd7710b5f8d7965d8645f38..1d0e35f5acf7dc79fd716871b2382df9
      TerminalPixelDimensions,
      TerminalBackgroundColor,
 diff --git a/zellij-utils/src/input/actions.rs b/zellij-utils/src/input/actions.rs
-index 1ed7a3a252cc04180c6b020697995e3162cff20a..6e4b48f5ce0360612dba969faaa5c362fd3b0c8e 100644
+index 1ed7a3a..6e4b48f 100644
 --- a/zellij-utils/src/input/actions.rs
 +++ b/zellij-utils/src/input/actions.rs
 @@ -476,6 +476,10 @@ pub enum Action {
@@ -525,7 +554,7 @@ index 1ed7a3a252cc04180c6b020697995e3162cff20a..6e4b48f5ce0360612dba969faaa5c362
 +    }
  }
 diff --git a/zellij-utils/src/ipc/protobuf_conversion.rs b/zellij-utils/src/ipc/protobuf_conversion.rs
-index ddb5ec7010811154600bc4097d14525401f09d74..2ca0ad942d957457af0d57968e90b07bdc661432 100644
+index ddb5ec7..2ca0ad9 100644
 --- a/zellij-utils/src/ipc/protobuf_conversion.rs
 +++ b/zellij-utils/src/ipc/protobuf_conversion.rs
 @@ -837,6 +837,7 @@ impl From<crate::input::actions::Action>
@@ -563,7 +592,7 @@ index ddb5ec7010811154600bc4097d14525401f09d74..2ca0ad942d957457af0d57968e90b07b
      }
  }
 diff --git a/zellij-utils/src/ipc/tests/roundtrip_tests.rs b/zellij-utils/src/ipc/tests/roundtrip_tests.rs
-index 78e68f524f1b2291ad67fd33a5fb7f843e357e7b..615fbd777a3fc5c39d6d4ba51af5040561e38303 100644
+index 78e68f5..615fbd7 100644
 --- a/zellij-utils/src/ipc/tests/roundtrip_tests.rs
 +++ b/zellij-utils/src/ipc/tests/roundtrip_tests.rs
 @@ -3335,6 +3335,33 @@ fn test_client_messages() {
@@ -601,7 +630,7 @@ index 78e68f524f1b2291ad67fd33a5fb7f843e357e7b..615fbd777a3fc5c39d6d4ba51af50405
  
  fn test_server_messages() {
 diff --git a/zellij-utils/src/plugin_api/action.rs b/zellij-utils/src/plugin_api/action.rs
-index eafaf28b62bfa27f9ef4e5365d4b2ad66f208339..f20e40f2fb29ae474ab5a52590627d541d3e623c 100644
+index eafaf28..f20e40f 100644
 --- a/zellij-utils/src/plugin_api/action.rs
 +++ b/zellij-utils/src/plugin_api/action.rs
 @@ -1092,7 +1092,8 @@ impl TryFrom<Action> for ProtobufAction {
