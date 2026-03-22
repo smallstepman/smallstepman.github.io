@@ -1,9 +1,11 @@
-{ den, lib, ... }: {
+{ den, inputs, lib, ... }: {
   den.aspects.darwin-desktop = {
     includes = [
       ({ host, ... }:
         lib.optionalAttrs (host.class == "darwin") {
           darwin = { pkgs, ... }: {
+            imports = [ inputs.mac-app-util.darwinModules.default ];
+
             homebrew.casks = [
               "karabiner-elements"
               "claude"
@@ -137,7 +139,18 @@
             };
           };
 
-          homeManager = { ... }: {
+          homeManager = { pkgs, ... }: {
+            imports = [ inputs.mac-app-util.homeManagerModules.default ];
+
+            home.activation.emacs-trampolines = let
+              emacs = "${pkgs.emacs-pgtk}/bin/emacs";
+              emacsclient = "${pkgs.emacs-pgtk}/bin/emacsclient";
+            in ''
+              # Create Emacs.app and EmacsClient.app trampolines for Spotlight
+              nix run github:hraban/mac-app-util -- mktrampoline "${emacs}" /Applications/Emacs.app
+              nix run github:hraban/mac-app-util -- mktrampoline "${emacsclient}" /Applications/EmacsClient.app
+            '';
+
             xdg.configFile = {
               "kanata-tray" = {
                 source = ../../../dotfiles/by-host/darwin/kanata/tray;
