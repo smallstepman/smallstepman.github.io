@@ -1,0 +1,1482 @@
+From 1736aa9bb01ebc940291cb7d93ccca70c70e8e3f Mon Sep 17 00:00:00 2001
+From: Copilot Temp <copilot-temp@example.com>
+Date: Mon, 23 Mar 2026 03:11:13 +0100
+Subject: [PATCH] add move tab to session cli
+
+---
+ zellij-server/src/pty.rs                      |  70 ++--
+ zellij-server/src/route.rs                    | 120 ++++++
+ zellij-server/src/screen.rs                   | 369 +++++++++++++-----
+ zellij-server/src/session_transfer.rs         |   2 +
+ zellij-server/src/unit/screen_tests.rs        | 302 +++++++++++++-
+ .../prost_ipc/client_server_contract.rs       |  58 +--
+ zellij-utils/src/cli.rs                       |  24 ++
+ .../client_server_contract/common_types.proto |  18 +
+ zellij-utils/src/errors.rs                    |   3 +
+ zellij-utils/src/input/actions.rs             |  41 ++
+ zellij-utils/src/ipc/protobuf_conversion.rs   |  12 +
+ zellij-utils/src/plugin_api/action.rs         |   3 +-
+ 12 files changed, 861 insertions(+), 161 deletions(-)
+
+diff --git a/zellij-server/src/pty.rs b/zellij-server/src/pty.rs
+index 9b22d5c..16c776e 100644
+--- a/zellij-server/src/pty.rs
++++ b/zellij-server/src/pty.rs
+@@ -897,21 +897,40 @@ pub(crate) fn pty_thread_main(mut pty: Pty, layout: Box<Layout>) -> Result<()> {
+                         return Err(anyhow::anyhow!(error_message)).with_context(err_context);
+                     }
+ 
+-                    let mut completion_tx = completion_tx;
+-                    for (index, pane) in request.panes.iter().enumerate() {
++                    for pane in request.panes.iter() {
+                         pty.detach_terminal_pane(pane.pane_info.id)
+                             .with_context(err_context)?;
+-                        let is_last = index == request.panes.len() - 1;
+-                        let completion = if is_last { completion_tx.take() } else { None };
++                    }
++
++                    if request.transfer_kind == TransferKind::Tab {
++                        let source_tab_id = request
++                            .source_tab_id
++                            .context("missing source tab id for transferred tab")
++                            .with_context(err_context)?;
+                         pty.bus
+                             .senders
+-                            .send_to_screen(crate::screen::ScreenInstruction::ClosePaneWithoutPty(
+-                                PaneId::Terminal(pane.pane_info.id),
+-                                None,
+-                                completion,
+-                                None,
++                            .send_to_screen(crate::screen::ScreenInstruction::CloseTabWithoutPty(
++                                source_tab_id,
++                                completion_tx,
+                             ))
+                             .with_context(err_context)?;
++                    } else {
++                        let mut completion_tx = completion_tx;
++                        for (index, pane) in request.panes.iter().enumerate() {
++                            let is_last = index == request.panes.len() - 1;
++                            let completion = if is_last { completion_tx.take() } else { None };
++                            pty.bus
++                                .senders
++                                .send_to_screen(
++                                    crate::screen::ScreenInstruction::ClosePaneWithoutPty(
++                                        PaneId::Terminal(pane.pane_info.id),
++                                        None,
++                                        completion,
++                                        None,
++                                    ),
++                                )
++                                .with_context(err_context)?;
++                        }
+                     }
+                 }
+                 #[cfg(not(unix))]
+@@ -1949,7 +1968,7 @@ impl Pty {
+     fn adopt_transferred_panes(
+         &mut self,
+         destination_client_id: ClientId,
+-        destination_is_web_client: bool,
++        _destination_is_web_client: bool,
+         request: SessionTransferRequest,
+         raw_fds: Vec<i32>,
+         completion_tx: Option<NotificationEnd>,
+@@ -1978,41 +1997,30 @@ impl Pty {
+             .with_context(err_context);
+         }
+ 
++        let mut destination_tab_id = request.target_tab_id;
+         if request.transfer_kind == TransferKind::Tab {
+             if !request.new_session {
+                 let (completion_tx_for_new_tab, completion_rx_for_new_tab) =
+                     tokio::sync::oneshot::channel();
+                 self.bus
+                     .senders
+-                    .send_to_screen(ScreenInstruction::NewTab(
+-                        None,
+-                        None,
+-                        None,
+-                        vec![],
+-                        None,
+-                        (vec![], vec![]),
+-                        None,
+-                        false,
+-                        true,
+-                        (destination_client_id, destination_is_web_client),
+-                        Some(NotificationEnd::new(completion_tx_for_new_tab)),
+-                    ))
++                    .send_to_screen(ScreenInstruction::CreateTabForTransfer {
++                        completion_tx: Some(NotificationEnd::new(completion_tx_for_new_tab)),
++                    })
+                     .with_context(err_context)?;
+                 let result = wait_for_action_completion(
+                     completion_rx_for_new_tab,
+-                    "transfer tab new tab",
++                    "transfer tab destination tab",
+                     true,
+                 );
+                 if let Some(error_message) = result.error_message {
+                     return Err(anyhow::anyhow!(error_message)).with_context(err_context);
+                 }
+-                self.bus
+-                    .senders
+-                    .send_to_screen(ScreenInstruction::CloseFocusedPane(
+-                        destination_client_id,
+-                        None,
+-                    ))
++                let new_tab_id = result
++                    .affected_tab_id
++                    .context("failed to determine destination tab id for transferred tab")
+                     .with_context(err_context)?;
++                destination_tab_id = Some(new_tab_id);
+             } else {
+                 self.bus
+                     .senders
+@@ -2032,7 +2040,7 @@ impl Pty {
+                 .with_context(err_context)?;
+         }
+ 
+-        let client_or_tab_index = if let Some(target_tab_id) = request.target_tab_id {
++        let client_or_tab_index = if let Some(target_tab_id) = destination_tab_id {
+             ClientTabIndexOrPaneId::TabIndex(target_tab_id)
+         } else {
+             ClientTabIndexOrPaneId::ClientId(destination_client_id)
+diff --git a/zellij-server/src/route.rs b/zellij-server/src/route.rs
+index 983ce3b..1dcdcb6 100644
+--- a/zellij-server/src/route.rs
++++ b/zellij-server/src/route.rs
+@@ -472,6 +472,7 @@ pub(crate) fn route_action(
+             session_name,
+             tab_id,
+         } => {
++            wait_forever = true;
+             let pane_id = action_pane_id
+                 .map(Into::into)
+                 .or(pane_id)
+@@ -501,6 +502,32 @@ pub(crate) fn route_action(
+                 })
+                 .with_context(err_context)?;
+         },
++        Action::MoveTabToSession {
++            new_session,
++            session_name,
++        } => {
++            wait_forever = true;
++            let target_session_name = if new_session {
++                session_name
++                    .or_else(generate_unique_session_name)
++                    .with_context(|| {
++                        "failed to generate a session name for move-tab-to-session".to_string()
++                    })?
++            } else {
++                session_name.with_context(|| {
++                    "failed to move tab to session: missing target session name".to_string()
++                })?
++            };
++            let notification_end = Some(NotificationEnd::new(completion_tx));
++            senders
++                .send_to_screen(ScreenInstruction::MoveTabToSession {
++                    target_session_name,
++                    new_session,
++                    client_id,
++                    completion_tx: notification_end,
++                })
++                .with_context(err_context)?;
++        },
+         Action::ClearScreen => {
+             senders
+                 .send_to_screen(ScreenInstruction::ClearScreen(
+@@ -3134,6 +3161,8 @@ fn send_output_to_client(
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use std::time::Duration;
++    use zellij_utils::channels::{self, SenderWithContext};
+ 
+     #[test]
+     fn test_notification_end_sets_affected_tab_id() {
+@@ -3199,4 +3228,95 @@ mod tests {
+         // But channel should be None (as per the Clone implementation comment)
+         assert!(cloned.channel.is_none());
+     }
++
++    fn thread_senders_with_screen_receiver(
++    ) -> (
++        ThreadSenders,
++        channels::Receiver<(ScreenInstruction, zellij_utils::errors::ErrorContext)>,
++    ) {
++        let (to_screen, screen_receiver) = channels::unbounded();
++        let to_screen = SenderWithContext::new(to_screen);
++        (
++            ThreadSenders {
++                to_screen: Some(to_screen),
++                should_silently_fail: true,
++                ..Default::default()
++            },
++            screen_receiver,
++        )
++    }
++
++    #[test]
++    fn move_pane_to_session_waits_for_full_completion() {
++        let (senders, screen_receiver) = thread_senders_with_screen_receiver();
++        let handle = std::thread::spawn(move || {
++            route_action(
++                Action::MovePaneToSession {
++                    pane_id: Some(zellij_utils::data::PaneId::Terminal(1)),
++                    new_session: false,
++                    session_name: Some("target-session".to_string()),
++                    tab_id: Some(0),
++                },
++                1,
++                None,
++                None,
++                senders,
++                PluginCapabilities::default(),
++                ClientAttributes::default(),
++                None,
++                Box::new(Layout::default()),
++                None,
++                Keybinds::default(),
++                InputMode::Normal,
++                None,
++            )
++            .unwrap()
++        });
++
++        let screen_instruction = screen_receiver.recv().unwrap();
++        std::thread::sleep(Duration::from_millis(1100));
++        assert!(
++            !handle.is_finished(),
++            "move-pane-to-session should keep waiting until transfer completion is signaled"
++        );
++
++        drop(screen_instruction);
++        let _ = handle.join().unwrap();
++    }
++
++    #[test]
++    fn move_tab_to_session_waits_for_full_completion() {
++        let (senders, screen_receiver) = thread_senders_with_screen_receiver();
++        let handle = std::thread::spawn(move || {
++            route_action(
++                Action::MoveTabToSession {
++                    new_session: false,
++                    session_name: Some("target-session".to_string()),
++                },
++                1,
++                None,
++                None,
++                senders,
++                PluginCapabilities::default(),
++                ClientAttributes::default(),
++                None,
++                Box::new(Layout::default()),
++                None,
++                Keybinds::default(),
++                InputMode::Normal,
++                None,
++            )
++            .unwrap()
++        });
++
++        let screen_instruction = screen_receiver.recv().unwrap();
++        std::thread::sleep(Duration::from_millis(1100));
++        assert!(
++            !handle.is_finished(),
++            "move-tab-to-session should keep waiting until transfer completion is signaled"
++        );
++
++        drop(screen_instruction);
++        let _ = handle.join().unwrap();
++    }
+ }
+diff --git a/zellij-server/src/screen.rs b/zellij-server/src/screen.rs
+index edc4384..9ccf21b 100644
+--- a/zellij-server/src/screen.rs
++++ b/zellij-server/src/screen.rs
+@@ -87,7 +87,7 @@ use crate::{
+     plugins::{DumpSessionLayoutResponse, PluginId, PluginInstruction, PluginRenderAsset},
+     pty::{get_default_shell, ClientTabIndexOrPaneId, PtyInstruction, VteBytes},
+     tab::{pane_info_for_pane, SuppressedPanes, Tab},
+-    thread_bus::Bus,
++    thread_bus::{Bus, ThreadSenders},
+     ui::loading_indication::LoadingIndication,
+     ClientId, ServerInstruction,
+ };
+@@ -387,6 +387,9 @@ pub enum ScreenInstruction {
+         (ClientId, bool),                                // bool -> is_web_client
+         Option<NotificationEnd>,                         // completion signal
+     ),
++    CreateTabForTransfer {
++        completion_tx: Option<NotificationEnd>,
++    },
+     /// Apply layout to tab with given stable ID.
+     ///
+     /// The sixth parameter (usize) is a stable identifier (not position) from the
+@@ -423,6 +426,7 @@ pub enum ScreenInstruction {
+     MoveTabRight(ClientId, Option<NotificationEnd>),
+     GoToTabWithId(usize, Option<ClientId>, Option<NotificationEnd>),
+     CloseTabWithId(usize, Option<NotificationEnd>),
++    CloseTabWithoutPty(usize, Option<NotificationEnd>),
+     RenameTabWithId(usize, Vec<u8>, Option<NotificationEnd>),
+     BreakPanesToTabWithId {
+         pane_ids: Vec<PaneId>,
+@@ -439,6 +443,12 @@ pub enum ScreenInstruction {
+         client_id: ClientId,
+         completion_tx: Option<NotificationEnd>,
+     },
++    MoveTabToSession {
++        target_session_name: String,
++        new_session: bool,
++        client_id: ClientId,
++        completion_tx: Option<NotificationEnd>,
++    },
+     TerminalResize(Size),
+     TerminalPixelDimensions(PixelDimensions),
+     TerminalBackgroundColor(String),
+@@ -843,6 +853,7 @@ impl From<&ScreenInstruction> for ScreenContext {
+             ScreenInstruction::UpdatePaneName(..) => ScreenContext::UpdatePaneName,
+             ScreenInstruction::UndoRenamePane(..) => ScreenContext::UndoRenamePane,
+             ScreenInstruction::NewTab(..) => ScreenContext::NewTab,
++            ScreenInstruction::CreateTabForTransfer { .. } => ScreenContext::CreateTabForTransfer,
+             ScreenInstruction::ApplyLayout(..) => ScreenContext::ApplyLayout,
+             ScreenInstruction::SwitchTabNext(..) => ScreenContext::SwitchTabNext,
+             ScreenInstruction::SwitchTabPrev(..) => ScreenContext::SwitchTabPrev,
+@@ -855,9 +866,11 @@ impl From<&ScreenInstruction> for ScreenContext {
+             ScreenInstruction::MoveTabRight(..) => ScreenContext::MoveTabRight,
+             ScreenInstruction::GoToTabWithId(..) => ScreenContext::GoToTabWithId,
+             ScreenInstruction::CloseTabWithId(..) => ScreenContext::CloseTabWithId,
++            ScreenInstruction::CloseTabWithoutPty(..) => ScreenContext::CloseTabWithoutPty,
+             ScreenInstruction::RenameTabWithId(..) => ScreenContext::RenameTabWithId,
+             ScreenInstruction::BreakPanesToTabWithId { .. } => ScreenContext::BreakPanesToTabWithId,
+             ScreenInstruction::MovePaneToSession { .. } => ScreenContext::MovePaneToSession,
++            ScreenInstruction::MoveTabToSession { .. } => ScreenContext::MoveTabToSession,
+             ScreenInstruction::TerminalResize(..) => ScreenContext::TerminalResize,
+             ScreenInstruction::TerminalPixelDimensions(..) => {
+                 ScreenContext::TerminalPixelDimensions
+@@ -1733,7 +1746,7 @@ impl Screen {
+         self.switch_active_tab_name(name, client_id)
+     }
+ 
+-    fn close_tab_by_id(&mut self, tab_id: usize) -> Result<()> {
++    fn close_tab_by_id_internal(&mut self, tab_id: usize, close_panes_in_pty: bool) -> Result<()> {
+         let err_context = || format!("failed to close tab at index {tab_id:?}");
+ 
+         let mut tab_to_close = self.tabs.remove(&tab_id).with_context(err_context)?;
+@@ -1763,10 +1776,12 @@ impl Screen {
+         // below we don't check the result of sending the CloseTab instruction to the pty thread
+         // because this might be happening when the app is closing, at which point the pty thread
+         // has already closed and this would result in an error
+-        self.bus
+-            .senders
+-            .send_to_pty(PtyInstruction::CloseTab(pane_ids))
+-            .with_context(err_context)?;
++        if close_panes_in_pty {
++            self.bus
++                .senders
++                .send_to_pty(PtyInstruction::CloseTab(pane_ids))
++                .with_context(err_context)?;
++        }
+         if self.tabs.is_empty() {
+             self.active_tab_ids.clear();
+             self.bus
+@@ -1796,6 +1811,14 @@ impl Screen {
+         }
+     }
+ 
++    fn close_tab_by_id(&mut self, tab_id: usize) -> Result<()> {
++        self.close_tab_by_id_internal(tab_id, true)
++    }
++
++    fn close_tab_without_pty_by_id(&mut self, tab_id: usize) -> Result<()> {
++        self.close_tab_by_id_internal(tab_id, false)
++    }
++
+     // Closes the client_id's focused tab
+     pub fn close_tab(&mut self, client_id: ClientId) -> Result<()> {
+         let err_context = || format!("failed to close tab for client {client_id:?}");
+@@ -4728,6 +4751,121 @@ fn find_already_running_panes(
+     (tiled_to_ignore, floating_indices)
+ }
+ 
++#[cfg(unix)]
++fn start_session_transfer_listener(
++    session_transfer_listener_started: &mut bool,
++    session_name: String,
++    senders: ThreadSenders,
++    destination_client_id: ClientId,
++    destination_is_web_client: bool,
++) {
++    if *session_transfer_listener_started || session_name.is_empty() {
++        return;
++    }
++    *session_transfer_listener_started = true;
++    std::thread::spawn(move || {
++        let listener = match bind_session_transfer_socket(&session_name) {
++            Ok(listener) => listener,
++            Err(err) => {
++                log::error!(
++                    "Failed to bind session transfer socket for {}: {}",
++                    session_name,
++                    err
++                );
++                return;
++            },
++        };
++
++        for incoming in listener.incoming() {
++            let mut stream = match incoming {
++                Ok(stream) => stream,
++                Err(err) => {
++                    log::error!(
++                        "Failed to accept session transfer connection for {}: {}",
++                        session_name,
++                        err
++                    );
++                    continue;
++                },
++            };
++
++            let (request, raw_fds) = match recv_request_with_fds(&stream) {
++                Ok(request) => request,
++                Err(err) => {
++                    let _ = send_response(
++                        &mut stream,
++                        &SessionTransferResponse {
++                            success: false,
++                            error: Some(err.to_string()),
++                        },
++                    );
++                    log::error!(
++                        "Failed to decode session transfer request for {}: {}",
++                        session_name,
++                        err
++                    );
++                    continue;
++                },
++            };
++
++            let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
++            if let Err(err) = senders.send_to_pty(PtyInstruction::AdoptTransferredPanes {
++                destination_client_id,
++                destination_is_web_client,
++                request,
++                raw_fds,
++                completion_tx: Some(NotificationEnd::new(completion_tx)),
++            }) {
++                let _ = send_response(
++                    &mut stream,
++                    &SessionTransferResponse {
++                        success: false,
++                        error: Some(err.to_string()),
++                    },
++                );
++                log::error!(
++                    "Failed to queue transferred panes for {}: {}",
++                    session_name,
++                    err
++                );
++                continue;
++            }
++
++            let completion =
++                wait_for_action_completion(completion_rx, "adopt transferred panes", true);
++            let response = SessionTransferResponse {
++                success: completion.exit_status.unwrap_or(0) == 0
++                    && completion.error_message.is_none(),
++                error: completion.error_message,
++            };
++            if let Err(err) = send_response(&mut stream, &response) {
++                log::error!(
++                    "Failed to send session transfer response for {}: {}",
++                    session_name,
++                    err
++                );
++            }
++        }
++    });
++}
++
++pub(crate) fn filter_live_terminal_panes_for_session_transfer(
++    mut transferred_panes: Vec<TransferredPane>,
++) -> Vec<TransferredPane> {
++    transferred_panes.retain(|pane| {
++        !pane.pane_info.is_plugin
++            && !pane.pane_info.is_suppressed
++            && !pane.pane_info.exited
++            && !pane.pane_info.is_held
++    });
++    if !transferred_panes.iter().any(|pane| pane.pane_info.is_focused) {
++        if let Some(first_live_terminal) = transferred_panes.first_mut() {
++            first_live_terminal.pane_info.is_focused = true;
++        }
++    }
++    transferred_panes
++}
++
+ // The box is here in order to make the
+ // NewClient enum smaller
+ #[allow(clippy::boxed_local)]
+@@ -6098,6 +6236,16 @@ pub(crate) fn screen_thread_main(
+                     tab_name.clone(),
+                     client_id_for_new_tab,
+                 )?;
++                #[cfg(unix)]
++                if !session_transfer_listener_started {
++                    start_session_transfer_listener(
++                        &mut session_transfer_listener_started,
++                        screen.session_name.clone(),
++                        screen.bus.senders.clone(),
++                        client_id,
++                        is_web_client,
++                    );
++                }
+                 screen
+                     .bus
+                     .senders
+@@ -6114,6 +6262,15 @@ pub(crate) fn screen_thread_main(
+                         completion_tx,
+                     ))?;
+             },
++            ScreenInstruction::CreateTabForTransfer { mut completion_tx } => {
++                let tab_id = screen.get_new_tab_id();
++                screen.new_tab(tab_id, (vec![], vec![]), None, None)?;
++                completion_tx
++                    .as_mut()
++                    .map(|c| c.set_affected_tab_id(tab_id));
++                screen.log_and_report_session_state()?;
++                screen.render(None)?;
++            },
+             ScreenInstruction::ApplyLayout(
+                 layout,
+                 floating_panes_layout,
+@@ -6440,102 +6597,13 @@ pub(crate) fn screen_thread_main(
+                 screen.add_client(client_id, is_web_client)?;
+                 #[cfg(unix)]
+                 if !session_transfer_listener_started {
+-                    session_transfer_listener_started = true;
+-                    let session_name = screen.session_name.clone();
+-                    let senders = screen.bus.senders.clone();
+-                    let destination_client_id = client_id;
+-                    let destination_is_web_client = is_web_client;
+-                    std::thread::spawn(move || {
+-                        if session_name.is_empty() {
+-                            return;
+-                        }
+-
+-                        let listener = match bind_session_transfer_socket(&session_name) {
+-                            Ok(listener) => listener,
+-                            Err(err) => {
+-                                log::error!(
+-                                    "Failed to bind session transfer socket for {}: {}",
+-                                    session_name,
+-                                    err
+-                                );
+-                                return;
+-                            },
+-                        };
+-
+-                        for incoming in listener.incoming() {
+-                            let mut stream = match incoming {
+-                                Ok(stream) => stream,
+-                                Err(err) => {
+-                                    log::error!(
+-                                        "Failed to accept session transfer connection for {}: {}",
+-                                        session_name,
+-                                        err
+-                                    );
+-                                    continue;
+-                                },
+-                            };
+-
+-                            let (request, raw_fds) = match recv_request_with_fds(&stream) {
+-                                Ok(request) => request,
+-                                Err(err) => {
+-                                    let _ = send_response(
+-                                        &mut stream,
+-                                        &SessionTransferResponse {
+-                                            success: false,
+-                                            error: Some(err.to_string()),
+-                                        },
+-                                    );
+-                                    log::error!(
+-                                        "Failed to decode session transfer request for {}: {}",
+-                                        session_name,
+-                                        err
+-                                    );
+-                                    continue;
+-                                },
+-                            };
+-
+-                            let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+-                            if let Err(err) = senders.send_to_pty(PtyInstruction::AdoptTransferredPanes {
+-                                destination_client_id,
+-                                destination_is_web_client,
+-                                request,
+-                                raw_fds,
+-                                completion_tx: Some(NotificationEnd::new(completion_tx)),
+-                            }) {
+-                                let _ = send_response(
+-                                    &mut stream,
+-                                    &SessionTransferResponse {
+-                                        success: false,
+-                                        error: Some(err.to_string()),
+-                                    },
+-                                );
+-                                log::error!(
+-                                    "Failed to queue transferred panes for {}: {}",
+-                                    session_name,
+-                                    err
+-                                );
+-                                continue;
+-                            }
+-
+-                            let completion = wait_for_action_completion(
+-                                completion_rx,
+-                                "adopt transferred panes",
+-                                true,
+-                            );
+-                            let response = SessionTransferResponse {
+-                                success: completion.exit_status.unwrap_or(0) == 0
+-                                    && completion.error_message.is_none(),
+-                                error: completion.error_message,
+-                            };
+-                            if let Err(err) = send_response(&mut stream, &response) {
+-                                log::error!(
+-                                    "Failed to send session transfer response for {}: {}",
+-                                    session_name,
+-                                    err
+-                                );
+-                            }
+-                        }
+-                    });
++                    start_session_transfer_listener(
++                        &mut session_transfer_listener_started,
++                        screen.session_name.clone(),
++                        screen.bus.senders.clone(),
++                        client_id,
++                        is_web_client,
++                    );
+                 }
+                 let pane_id = pane_id_to_focus.map(|(pane_id, is_plugin)| {
+                     if is_plugin {
+@@ -7550,6 +7618,13 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Failed to find tab with ID: {}", tab_id);
+                 }
+             },
++            ScreenInstruction::CloseTabWithoutPty(tab_id, _completion_tx) => {
++                if screen.get_tab_by_id(tab_id).is_some() {
++                    screen.close_tab_without_pty_by_id(tab_id).non_fatal();
++                } else {
++                    log::error!("Failed to find tab with ID: {}", tab_id);
++                }
++            },
+             ScreenInstruction::BreakPanesToTabWithId {
+                 pane_ids,
+                 tab_id,
+@@ -7644,6 +7719,7 @@ pub(crate) fn screen_thread_main(
+                     new_session,
+                     target_session_name,
+                     target_tab_id,
++                    source_tab_id: None,
+                     panes: vec![transferred_pane],
+                 };
+                 screen
+@@ -7655,6 +7731,95 @@ pub(crate) fn screen_thread_main(
+                     ))
+                     .with_context(|| "failed to start pane transfer".to_string())?;
+             },
++            ScreenInstruction::MoveTabToSession {
++                target_session_name,
++                new_session,
++                client_id,
++                mut completion_tx,
++            } => {
++                let source_client_id = if screen.active_tab_ids.contains_key(&client_id) {
++                    Some(client_id)
++                } else {
++                    screen.get_first_client_id()
++                };
++                let source_tab_id = source_client_id
++                    .and_then(|client_id| screen.active_tab_ids.get(&client_id).copied())
++                    .or_else(|| {
++                        if screen.tabs.contains_key(&screen.global_last_active_tab_id) {
++                            Some(screen.global_last_active_tab_id)
++                        } else {
++                            None
++                        }
++                    })
++                    .or_else(|| {
++                        if screen.tabs.contains_key(&0) {
++                            Some(0)
++                        } else {
++                            None
++                        }
++                    })
++                    .or_else(|| screen.tabs.keys().next().copied());
++                let focused_pane_id = source_client_id
++                    .and_then(|client_id| screen.get_active_tab(client_id).ok().and_then(|tab| tab.get_active_pane_id(client_id)));
++                let empty_pane_group: HashMap<ClientId, Vec<PaneId>> = HashMap::new();
++                let transferred_panes = {
++                    let active_tab = match source_tab_id.and_then(|tab_id| screen.get_tab_by_id_mut(tab_id)) {
++                        Some(tab) => tab,
++                        None => {
++                            if let Some(completion_tx) = completion_tx.as_mut() {
++                                completion_tx.set_exit_status(1);
++                                completion_tx.set_error_message(
++                                    "Failed to find active tab".to_string(),
++                                );
++                            }
++                            return Ok(());
++                        },
++                    };
++                    let mut transferred_panes = vec![];
++                    for pane_id in active_tab.get_all_pane_ids() {
++                        if let Some(pane) = active_tab.get_pane_with_id_mut(pane_id) {
++                            let mut pane_info =
++                                pane_info_for_pane(&pane_id, &*pane, &empty_pane_group);
++                            pane_info.is_focused = Some(pane_id) == focused_pane_id;
++                            transferred_panes.push(TransferredPane {
++                                pane_info,
++                                invoked_with: pane.invoked_with().clone(),
++                                pane_contents: pane.pane_contents_with_ansi(None, true, None),
++                                child_pid: None,
++                            });
++                        }
++                    }
++                    filter_live_terminal_panes_for_session_transfer(transferred_panes)
++                };
++
++                if transferred_panes.is_empty() {
++                    if let Some(completion_tx) = completion_tx.as_mut() {
++                        completion_tx.set_exit_status(1);
++                        completion_tx.set_error_message(
++                            "Only live terminal panes can be transferred between sessions"
++                                .to_string(),
++                        );
++                    }
++                    return Ok(());
++                }
++
++                let request = SessionTransferRequest {
++                    transfer_kind: TransferKind::Tab,
++                    new_session,
++                    target_session_name,
++                    target_tab_id: None,
++                    source_tab_id,
++                    panes: transferred_panes,
++                };
++                screen
++                    .bus
++                    .senders
++                    .send_to_pty(PtyInstruction::TransferPanesToSession(
++                        request,
++                        completion_tx,
++                    ))
++                    .with_context(|| "failed to start tab transfer".to_string())?;
++            },
+             ScreenInstruction::RequestPluginPermissions(plugin_id, plugin_permission) => {
+                 let all_tabs = screen.get_tabs_mut();
+                 let found = all_tabs.values_mut().any(|tab| {
+diff --git a/zellij-server/src/session_transfer.rs b/zellij-server/src/session_transfer.rs
+index 31b4145..28fc530 100644
+--- a/zellij-server/src/session_transfer.rs
++++ b/zellij-server/src/session_transfer.rs
+@@ -29,6 +29,7 @@ pub struct SessionTransferRequest {
+     pub new_session: bool,
+     pub target_session_name: String,
+     pub target_tab_id: Option<usize>,
++    pub source_tab_id: Option<usize>,
+     pub panes: Vec<TransferredPane>,
+ }
+ 
+@@ -282,6 +283,7 @@ mod tests {
+             new_session: true,
+             target_session_name: "test-session".to_string(),
+             target_tab_id: Some(7),
++            source_tab_id: Some(3),
+             panes: vec![TransferredPane {
+                 pane_info: PaneInfo::default(),
+                 invoked_with: None,
+diff --git a/zellij-server/src/unit/screen_tests.rs b/zellij-server/src/unit/screen_tests.rs
+index 64eadf3..b8d714d 100644
+--- a/zellij-server/src/unit/screen_tests.rs
++++ b/zellij-server/src/unit/screen_tests.rs
+@@ -30,6 +30,7 @@ use std::env::set_var;
+ #[cfg(unix)]
+ use std::os::unix::io::RawFd;
+ use std::sync::{Arc, Mutex};
++use std::time::{Duration, SystemTime, UNIX_EPOCH};
+ 
+ use crate::{
+     plugins::PluginInstruction,
+@@ -53,8 +54,9 @@ use crate::panes::sixel::SixelImageStore;
+ use std::cell::RefCell;
+ use std::collections::HashMap;
+ use std::rc::Rc;
+-use zellij_utils::data::{PaneContents, PaneRenderReport};
++use zellij_utils::data::{PaneContents, PaneInfo, PaneRenderReport};
+ use zellij_utils::ipc::ExitReason;
++use crate::session_transfer::TransferredPane;
+ 
+ fn take_snapshot_and_cursor_coordinates(
+     ansi_instructions: &str,
+@@ -370,6 +372,7 @@ struct MockScreen {
+     pub config: Config,
+     advanced_mouse_actions: bool,
+     last_opened_tab_index: Option<usize>,
++    session_name: String,
+ }
+ 
+ impl MockScreen {
+@@ -394,10 +397,11 @@ impl MockScreen {
+         )
+         .should_silently_fail();
+         let debug = false;
++        let session_name = self.session_name.clone();
+         let screen_thread = std::thread::Builder::new()
+             .name("screen_thread".to_string())
+             .spawn(move || {
+-                set_var("ZELLIJ_SESSION_NAME", "zellij-test");
++                set_var("ZELLIJ_SESSION_NAME", session_name);
+                 screen_thread_main(
+                     screen_bus,
+                     None,
+@@ -480,10 +484,11 @@ impl MockScreen {
+         )
+         .should_silently_fail();
+         let debug = false;
++        let session_name = self.session_name.clone();
+         let screen_thread = std::thread::Builder::new()
+             .name("screen_thread".to_string())
+             .spawn(move || {
+-                set_var("ZELLIJ_SESSION_NAME", "zellij-test");
++                set_var("ZELLIJ_SESSION_NAME", session_name);
+                 screen_thread_main(
+                     screen_bus,
+                     None,
+@@ -625,6 +630,10 @@ impl MockScreen {
+ 
+ impl MockScreen {
+     pub fn new(size: Size) -> Self {
++        Self::new_with_session_name(size, "zellij-test".to_owned())
++    }
++
++    pub fn new_with_session_name(size: Size, session_name: String) -> Self {
+         let (to_server, server_receiver): ChannelWithContext<ServerInstruction> =
+             channels::bounded(50);
+         let to_server = SenderWithContext::new(to_server);
+@@ -726,6 +735,7 @@ impl MockScreen {
+             last_opened_tab_index: None,
+             config: Config::default(),
+             advanced_mouse_actions: true,
++            session_name,
+         }
+     }
+     pub fn set_advanced_hover_effects(&mut self, advanced_mouse_actions: bool) {
+@@ -6691,6 +6701,292 @@ pub fn send_cli_move_pane_to_existing_session_with_pane_id() {
+     mock_screen.teardown(vec![]);
+ }
+ 
++#[test]
++pub fn send_cli_move_tab_to_existing_session() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let client_id = 10;
++    let mut mock_screen = MockScreen::new(size);
++    let screen_receiver = mock_screen.screen_receiver.take().unwrap();
++    let session_metadata = mock_screen.clone_session_metadata();
++    let captured_instruction = Arc::new(Mutex::new(None));
++    let captured_instruction_for_thread = captured_instruction.clone();
++    let screen_thread = std::thread::spawn(move || {
++        let (instruction, _err_ctx) = screen_receiver.recv().unwrap();
++        *captured_instruction_for_thread.lock().unwrap() = Some(instruction.clone());
++    });
++    let cli_action = CliAction::MoveTabToSession {
++        new_session: false,
++        target_session_name: Some("target-session".to_string()),
++    };
++
++    send_cli_action_to_server(&session_metadata, cli_action, client_id);
++
++    screen_thread.join().unwrap();
++    let instruction = captured_instruction
++        .lock()
++        .unwrap()
++        .clone()
++        .expect("screen instruction should be captured");
++    assert!(matches!(
++        instruction,
++        ScreenInstruction::MoveTabToSession {
++            target_session_name: ref name,
++            new_session: false,
++            client_id: instruction_client_id,
++            completion_tx: Some(_),
++        } if name == "target-session" && instruction_client_id == client_id
++    ));
++
++    mock_screen.teardown(vec![]);
++}
++
++#[test]
++pub fn move_tab_to_session_works_without_connected_clients() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let mut mock_screen = MockScreen::new(size);
++    let screen_thread = mock_screen.run(None, vec![]);
++    mock_screen.drop_all_pty_messages();
++
++    std::thread::sleep(Duration::from_millis(100));
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::RemoveClient(mock_screen.main_client_id));
++    std::thread::sleep(Duration::from_millis(100));
++
++    let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
++    let _ = mock_screen.to_screen.send(ScreenInstruction::MoveTabToSession {
++        target_session_name: "target-session".to_owned(),
++        new_session: false,
++        client_id: mock_screen.main_client_id,
++        completion_tx: Some(crate::route::NotificationEnd::new(completion_tx)),
++    });
++
++    let result =
++        crate::route::wait_for_action_completion(completion_rx, "move-tab-to-session", true);
++
++    mock_screen.teardown(vec![screen_thread]);
++    assert_ne!(
++        result.error_message.as_deref(),
++        Some("Failed to find active tab"),
++        "move-tab-to-session should keep working for background sessions without connected clients"
++    );
++}
++
++#[test]
++pub fn move_tab_to_session_ignores_default_plugin_panes() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let mut mock_screen = MockScreen::new(size);
++    let pty_receiver = mock_screen.pty_receiver.take().unwrap();
++    let captured_request = Arc::new(Mutex::new(None));
++    let captured_request_for_thread = captured_request.clone();
++    let pty_thread = std::thread::spawn(move || loop {
++        let (instruction, _err_ctx) = pty_receiver.recv().unwrap();
++        match instruction {
++            PtyInstruction::TransferPanesToSession(request, _) => {
++                *captured_request_for_thread.lock().unwrap() = Some(request);
++                break;
++            },
++            PtyInstruction::Exit => break,
++            _ => {},
++        }
++    });
++    let screen_thread = mock_screen.run(None, vec![]);
++    let _ = mock_screen.to_screen.send(ScreenInstruction::MoveTabToSession {
++        target_session_name: "target-session".to_owned(),
++        new_session: false,
++        client_id: mock_screen.main_client_id,
++        completion_tx: None,
++    });
++    pty_thread.join().unwrap();
++
++    let request = captured_request
++        .lock()
++        .unwrap()
++        .clone()
++        .expect("move-tab-to-session should send a transfer request to PTY");
++
++    mock_screen.teardown(vec![screen_thread]);
++    assert!(
++        !request.panes.is_empty(),
++        "move-tab-to-session should transfer at least one live terminal pane"
++    );
++    assert!(
++        request.panes.iter().all(|pane| {
++            !pane.pane_info.is_plugin
++                && !pane.pane_info.is_suppressed
++                && !pane.pane_info.exited
++                && !pane.pane_info.is_held
++        }),
++        "move-tab-to-session should skip default plugin panes instead of transferring them"
++    );
++}
++
++#[test]
++pub fn filter_live_terminal_panes_for_session_transfer_skips_ui_panes_and_restores_focus() {
++    let ui_plugin = TransferredPane {
++        pane_info: PaneInfo {
++            id: 1,
++            is_plugin: true,
++            is_focused: true,
++            ..Default::default()
++        },
++        invoked_with: None,
++        pane_contents: PaneContents {
++            lines_above_viewport: vec![],
++            lines_below_viewport: vec![],
++            viewport: vec![],
++            selected_text: None,
++        },
++        child_pid: None,
++    };
++    let live_terminal = TransferredPane {
++        pane_info: PaneInfo {
++            id: 2,
++            is_plugin: false,
++            is_focused: false,
++            ..Default::default()
++        },
++        invoked_with: None,
++        pane_contents: PaneContents {
++            lines_above_viewport: vec![],
++            lines_below_viewport: vec![],
++            viewport: vec![],
++            selected_text: None,
++        },
++        child_pid: None,
++    };
++
++    let filtered = crate::screen::filter_live_terminal_panes_for_session_transfer(vec![
++        ui_plugin,
++        live_terminal,
++    ]);
++
++    assert_eq!(filtered.len(), 1);
++    assert_eq!(filtered[0].pane_info.id, 2);
++    assert!(
++        filtered[0].pane_info.is_focused,
++        "when the focused pane is filtered out, the first live terminal should become focused"
++    );
++}
++
++#[test]
++pub fn create_tab_for_transfer_works_without_connected_clients() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let mut mock_screen = MockScreen::new(size);
++    let screen_thread = mock_screen.run(None, vec![]);
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::RemoveClient(mock_screen.main_client_id));
++
++    let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::CreateTabForTransfer {
++            completion_tx: Some(crate::route::NotificationEnd::new(completion_tx)),
++        });
++
++    let result =
++        crate::route::wait_for_action_completion(completion_rx, "create-tab-for-transfer", true);
++
++    mock_screen.teardown(vec![screen_thread]);
++    assert_eq!(result.error_message, None);
++    assert!(
++        result.affected_tab_id.is_some(),
++        "creating a transfer destination tab should report the new stable tab id even without connected clients"
++    );
++}
++
++#[test]
++pub fn close_tab_without_pty_closes_tab_shell_without_reclosing_terminals() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let mut mock_screen = MockScreen::new(size);
++    let pty_receiver = mock_screen.pty_receiver.take().unwrap();
++    let server_receiver = mock_screen.server_receiver.take().unwrap();
++    let pty_events = Arc::new(Mutex::new(vec![]));
++    let server_events = Arc::new(Mutex::new(vec![]));
++    let pty_thread = log_actions_in_thread!(pty_events, PtyInstruction::Exit, pty_receiver);
++    let server_thread =
++        log_actions_in_thread!(server_events, ServerInstruction::KillSession, server_receiver);
++    let screen_thread = mock_screen.run(None, vec![]);
++
++    std::thread::sleep(Duration::from_millis(100));
++    pty_events.lock().unwrap().clear();
++    server_events.lock().unwrap().clear();
++
++    let _ = mock_screen
++        .to_screen
++        .send(ScreenInstruction::CloseTabWithoutPty(0, None));
++
++    std::thread::sleep(Duration::from_millis(100));
++    let logged_pty_events = pty_events.lock().unwrap().clone();
++    let logged_server_events = server_events.lock().unwrap().clone();
++
++    mock_screen.teardown(vec![pty_thread, server_thread, screen_thread]);
++
++    assert!(
++        logged_pty_events
++            .iter()
++            .all(|event| !matches!(event, PtyInstruction::CloseTab(..))),
++        "closing a transferred source tab should not send PTY close-tab instructions"
++    );
++    assert!(
++        logged_server_events
++            .iter()
++            .any(|event| matches!(event, ServerInstruction::Render(None))),
++        "closing the last tab without PTY should leave the screen with no tabs to render"
++    );
++}
++
++#[test]
++pub fn fresh_session_starts_session_transfer_listener_without_later_attach() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let unique_suffix = SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .unwrap()
++        .as_nanos()
++        % 1_000_000_000;
++    let session_name = format!("zt-{unique_suffix:x}");
++    let socket_path =
++        zellij_utils::consts::session_transfer_socket_file_name(session_name.as_str());
++    let _ = std::fs::remove_file(&socket_path);
++
++    let mut mock_screen = MockScreen::new_with_session_name(size, session_name);
++    let screen_thread = mock_screen.run(None, vec![]);
++
++    let listener_started = (0..20).any(|_| {
++        if socket_path.exists() {
++            true
++        } else {
++            std::thread::sleep(Duration::from_millis(50));
++            false
++        }
++    });
++
++    mock_screen.teardown(vec![screen_thread]);
++    assert!(
++        listener_started,
++        "fresh sessions should bind the transfer listener before any later attach path"
++    );
++}
++
+ #[test]
+ pub fn send_cli_clear_with_pane_id() {
+     let size = Size {
+diff --git a/zellij-utils/assets/prost_ipc/client_server_contract.rs b/zellij-utils/assets/prost_ipc/client_server_contract.rs
+index 2c65e74..471e631 100644
+--- a/zellij-utils/assets/prost_ipc/client_server_contract.rs
++++ b/zellij-utils/assets/prost_ipc/client_server_contract.rs
+@@ -119,7 +119,7 @@ pub struct RgbColor {
+ #[allow(clippy::derive_partial_eq_without_eq)]
+ #[derive(Clone, PartialEq, ::prost::Message)]
+ pub struct Action {
+-    #[prost(oneof="action::ActionType", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136")]
++    #[prost(oneof="action::ActionType", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137")]
+     pub action_type: ::core::option::Option<action::ActionType>,
+ }
+ /// Nested message and enum types in `Action`.
+@@ -401,9 +401,11 @@ pub mod action {
+         MovePaneToTab(super::MovePaneToTabAction),
+         #[prost(message, tag="136")]
+         MovePaneToSession(super::MovePaneToSessionAction),
++        #[prost(message, tag="137")]
++        MoveTabToSession(super::MoveTabToSessionAction),
+     }
+ }
+-// Action message definitions (all 94 variants)
++// Action message definitions (all 92 variants)
+ 
+ /// Simple action types (no data)
+ #[allow(clippy::derive_partial_eq_without_eq)]
+@@ -614,6 +616,36 @@ pub struct BreakPaneLeftAction {
+ }
+ #[allow(clippy::derive_partial_eq_without_eq)]
+ #[derive(Clone, PartialEq, ::prost::Message)]
++pub struct MovePaneToTabAction {
++    #[prost(message, optional, tag="1")]
++    pub pane_id: ::core::option::Option<PaneId>,
++    #[prost(uint64, optional, tag="2")]
++    pub tab_id: ::core::option::Option<u64>,
++    #[prost(string, optional, tag="3")]
++    pub new_tab_name: ::core::option::Option<::prost::alloc::string::String>,
++}
++#[allow(clippy::derive_partial_eq_without_eq)]
++#[derive(Clone, PartialEq, ::prost::Message)]
++pub struct MovePaneToSessionAction {
++    #[prost(message, optional, tag="1")]
++    pub pane_id: ::core::option::Option<PaneId>,
++    #[prost(bool, tag="2")]
++    pub new_session: bool,
++    #[prost(string, optional, tag="3")]
++    pub session_name: ::core::option::Option<::prost::alloc::string::String>,
++    #[prost(uint64, optional, tag="4")]
++    pub tab_id: ::core::option::Option<u64>,
++}
++#[allow(clippy::derive_partial_eq_without_eq)]
++#[derive(Clone, PartialEq, ::prost::Message)]
++pub struct MoveTabToSessionAction {
++    #[prost(bool, tag="1")]
++    pub new_session: bool,
++    #[prost(string, optional, tag="2")]
++    pub session_name: ::core::option::Option<::prost::alloc::string::String>,
++}
++#[allow(clippy::derive_partial_eq_without_eq)]
++#[derive(Clone, PartialEq, ::prost::Message)]
+ pub struct ListClientsAction {
+ }
+ #[allow(clippy::derive_partial_eq_without_eq)]
+@@ -2062,28 +2094,6 @@ pub struct MoveTabByTabIdAction {
+     #[prost(enumeration="Direction", tag="2")]
+     pub direction: i32,
+ }
+-#[allow(clippy::derive_partial_eq_without_eq)]
+-#[derive(Clone, PartialEq, ::prost::Message)]
+-pub struct MovePaneToTabAction {
+-    #[prost(message, optional, tag="1")]
+-    pub pane_id: ::core::option::Option<PaneId>,
+-    #[prost(uint64, optional, tag="2")]
+-    pub tab_id: ::core::option::Option<u64>,
+-    #[prost(string, optional, tag="3")]
+-    pub new_tab_name: ::core::option::Option<::prost::alloc::string::String>,
+-}
+-#[allow(clippy::derive_partial_eq_without_eq)]
+-#[derive(Clone, PartialEq, ::prost::Message)]
+-pub struct MovePaneToSessionAction {
+-    #[prost(message, optional, tag="1")]
+-    pub pane_id: ::core::option::Option<PaneId>,
+-    #[prost(bool, tag="2")]
+-    pub new_session: bool,
+-    #[prost(string, optional, tag="3")]
+-    pub session_name: ::core::option::Option<::prost::alloc::string::String>,
+-    #[prost(uint64, optional, tag="4")]
+-    pub tab_id: ::core::option::Option<u64>,
+-}
+ #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+ #[repr(i32)]
+ pub enum BareKey {
+diff --git a/zellij-utils/src/cli.rs b/zellij-utils/src/cli.rs
+index 20ca5b3..36c8bd8 100644
+--- a/zellij-utils/src/cli.rs
++++ b/zellij-utils/src/cli.rs
+@@ -796,6 +796,16 @@ pub enum CliAction {
+         #[clap(short, long, value_parser)]
+         pane_id: Option<String>,
+     },
++    /// Move the active tab to another session
++    #[clap(name = "move-tab-to-session")]
++    MoveTabToSession {
++        /// Move the tab to a freshly created session
++        #[clap(long, value_parser, default_value("false"), takes_value(false))]
++        new_session: bool,
++        /// Move the tab to an existing session by name
++        #[clap(long = "session-name", value_parser)]
++        target_session_name: Option<String>,
++    },
+     /// Clear all buffers for a focused pane
+     Clear {
+         /// Target a specific pane by ID (eg. terminal_1, plugin_2, or 3)
+@@ -1773,4 +1783,18 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn move_tab_to_session_new_session_parses_new_session_flag() {
++        let action = parse_action_big_stack(&["move-tab-to-session", "--new-session"]);
++        match action {
++            CliAction::MoveTabToSession {
++                new_session,
++                target_session_name,
++            } => {
++                assert!(new_session);
++                assert!(target_session_name.is_none());
++            },
++            other => panic!("Expected MoveTabToSession, got {:?}", other),
++        }
++    }
+ }
+diff --git a/zellij-utils/src/client_server_contract/common_types.proto b/zellij-utils/src/client_server_contract/common_types.proto
+index 864083b..2b0bef8 100644
+--- a/zellij-utils/src/client_server_contract/common_types.proto
++++ b/zellij-utils/src/client_server_contract/common_types.proto
+@@ -272,6 +272,9 @@ message Action {
+     PreviousSwapLayoutByTabIdAction previous_swap_layout_by_tab_id = 132;
+     NextSwapLayoutByTabIdAction next_swap_layout_by_tab_id = 133;
+     MoveTabByTabIdAction move_tab_by_tab_id = 134;
++    MovePaneToTabAction move_pane_to_tab = 135;
++    MovePaneToSessionAction move_pane_to_session = 136;
++    MoveTabToSessionAction move_tab_to_session = 137;
+   }
+ }
+ 
+@@ -342,6 +345,21 @@ message QueryTabNamesAction {}
+ message BreakPaneAction {}
+ message BreakPaneRightAction {}
+ message BreakPaneLeftAction {}
++message MovePaneToTabAction {
++  optional PaneId pane_id = 1;
++  optional uint64 tab_id = 2;
++  optional string new_tab_name = 3;
++}
++message MovePaneToSessionAction {
++  optional PaneId pane_id = 1;
++  bool new_session = 2;
++  optional string session_name = 3;
++  optional uint64 tab_id = 4;
++}
++message MoveTabToSessionAction {
++  bool new_session = 1;
++  optional string session_name = 2;
++}
+ message ListClientsAction {}
+ message ListPanesAction {
+   bool show_tab = 1;
+diff --git a/zellij-utils/src/errors.rs b/zellij-utils/src/errors.rs
+index a77fa17..778d2de 100644
+--- a/zellij-utils/src/errors.rs
++++ b/zellij-utils/src/errors.rs
+@@ -291,6 +291,7 @@ pub enum ScreenContext {
+     UpdatePaneName,
+     UndoRenamePane,
+     NewTab,
++    CreateTabForTransfer,
+     ApplyLayout,
+     SwitchTabNext,
+     SwitchTabPrev,
+@@ -303,9 +304,11 @@ pub enum ScreenContext {
+     MoveTabRight,
+     GoToTabWithId,
+     CloseTabWithId,
++    CloseTabWithoutPty,
+     RenameTabWithId,
+     BreakPanesToTabWithId,
+     MovePaneToSession,
++    MoveTabToSession,
+     TerminalResize,
+     TerminalPixelDimensions,
+     TerminalBackgroundColor,
+diff --git a/zellij-utils/src/input/actions.rs b/zellij-utils/src/input/actions.rs
+index 1afb851..661c6a1 100644
+--- a/zellij-utils/src/input/actions.rs
++++ b/zellij-utils/src/input/actions.rs
+@@ -183,6 +183,10 @@ pub enum Action {
+         session_name: Option<String>,
+         tab_id: Option<usize>,
+     },
++    MoveTabToSession {
++        new_session: bool,
++        session_name: Option<String>,
++    },
+     /// Clear all buffers of a current screen
+     ClearScreen,
+     /// Dumps the screen to a file or STDOUT
+@@ -875,6 +879,21 @@ impl Action {
+                     tab_id,
+                 }])
+             },
++            CliAction::MoveTabToSession {
++                new_session,
++                target_session_name,
++            } => {
++                if new_session && target_session_name.is_some() {
++                    return Err("new-session cannot be combined with session-name".into());
++                }
++                if !new_session && target_session_name.is_none() {
++                    return Err("session-name is required unless new-session is set".into());
++                }
++                Ok(vec![Action::MoveTabToSession {
++                    new_session,
++                    session_name: target_session_name,
++                }])
++            },
+             CliAction::MoveTab { direction, tab_id } => match tab_id {
+                 Some(id) => Ok(vec![Action::MoveTabByTabId {
+                     id: id as u64,
+@@ -3130,6 +3149,28 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn test_move_tab_to_new_session() {
++        let cli_action = CliAction::MoveTabToSession {
++            new_session: true,
++            target_session_name: None,
++        };
++        let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
++        assert!(result.is_ok());
++        let actions = result.unwrap();
++        assert_eq!(actions.len(), 1);
++        match &actions[0] {
++            Action::MoveTabToSession {
++                new_session,
++                session_name,
++            } => {
++                assert!(*new_session);
++                assert!(session_name.is_none());
++            },
++            _ => panic!("Expected MoveTabToSession action"),
++        }
++    }
++
+     // 28. ANSI flag tests
+ 
+     #[test]
+diff --git a/zellij-utils/src/ipc/protobuf_conversion.rs b/zellij-utils/src/ipc/protobuf_conversion.rs
+index 150c574..9f19f88 100644
+--- a/zellij-utils/src/ipc/protobuf_conversion.rs
++++ b/zellij-utils/src/ipc/protobuf_conversion.rs
+@@ -838,6 +838,7 @@ impl From<crate::input::actions::Action>
+             MovePaneToSessionAction,
+             MoveTabAction,
+             MoveTabByTabIdAction,
++            MoveTabToSessionAction,
+             NewBlockingPaneAction,
+             NewFloatingPaneAction,
+             NewFloatingPluginPaneAction,
+@@ -1733,6 +1734,13 @@ impl From<crate::input::actions::Action>
+                 session_name,
+                 tab_id: tab_id.map(|id| id as u64),
+             }),
++            crate::input::actions::Action::MoveTabToSession {
++                new_session,
++                session_name,
++            } => ActionType::MoveTabToSession(MoveTabToSessionAction {
++                new_session,
++                session_name,
++            }),
+         };
+ 
+         Self {
+@@ -2651,6 +2659,10 @@ impl TryFrom<crate::client_server_contract::client_server_contract::Action>
+                     tab_id: a.tab_id.map(|id| id as usize),
+                 })
+             },
++            ActionType::MoveTabToSession(a) => Ok(crate::input::actions::Action::MoveTabToSession {
++                new_session: a.new_session,
++                session_name: a.session_name,
++            }),
+         }
+     }
+ }
+diff --git a/zellij-utils/src/plugin_api/action.rs b/zellij-utils/src/plugin_api/action.rs
+index fe0c990..0b28d83 100644
+--- a/zellij-utils/src/plugin_api/action.rs
++++ b/zellij-utils/src/plugin_api/action.rs
+@@ -1093,7 +1093,8 @@ impl TryFrom<Action> for ProtobufAction {
+             | Action::NextSwapLayoutByTabId { .. }
+             | Action::MoveTabByTabId { .. }
+             | Action::MovePaneToTab { .. }
+-            | Action::MovePaneToSession { .. } => {
++            | Action::MovePaneToSession { .. }
++            | Action::MoveTabToSession { .. } => {
+                 Err("These are CLI-only actions, not available in keybindings")
+             },
+             Action::SwitchToMode { input_mode } => {
+-- 
+2.51.2
+
