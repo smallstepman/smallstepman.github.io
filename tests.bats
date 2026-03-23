@@ -851,6 +851,18 @@ PYEOF
   grep -Fq 'source_tab_id,' "$patch"
 }
 
+# bats test_tags=zellij-patches
+@test "zellij-patches: macOS session transfer socket hardening is shipped as a follow-up patch" {
+  local patch=patches/zellij-0005-harden-macos-session-transfer-sockets.patch
+  assert_file_exists "$patch"
+  grep -Fq 'zellij-0005-harden-macos-session-transfer-sockets.patch' den/mk-config-outputs.nix
+  grep -Fq 'ZELLIJ_TMP_DIR' "$patch"
+  grep -Fq '.join("session-transfer")' "$patch"
+  grep -Fq 'Failed to rename session transfer socket' "$patch"
+  grep -Fq 'session_transfer_socket_path_fits_macos_socket_limit' "$patch"
+  grep -Fq 'renaming_session_immediately_after_startup_moves_transfer_listener_socket' "$patch"
+}
+
 # bats test_tags=devtools
 @test "devtools: ai-tools.nix owns AI package and program entries" {
   grep -Fq 'pkgs.claude-code-acp'                    den/aspects/features/ai-tools.nix

@@ -120,6 +120,7 @@ PYEOF
             ../patches/zellij-0002-add-session-transfer-groundwork.patch
             ../patches/zellij-0003-add-move-pane-to-session-cli.patch
             ../patches/zellij-0004-add-move-tab-to-session-cli.patch
+            ../patches/zellij-0005-harden-macos-session-transfer-sockets.patch
           ];
 
           cargoHash = "sha256-nGMOVq5etxiOfocjTKXAd8sJHFw34T49Ga48Isc8dCg=";
