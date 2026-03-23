@@ -96,6 +96,97 @@ PYEOF
         '';
       });
 
+      zellij =
+        let
+          rustToolchain = final.rust-bin.stable.latest.default;
+          rustPlatform = final.makeRustPlatform {
+            cargo = rustToolchain;
+            rustc = rustToolchain;
+          };
+        in
+        rustPlatform.buildRustPackage {
+          pname = "zellij";
+          version = "0.44.0";
+
+          src = final.fetchFromGitHub {
+            owner = "zellij-org";
+            repo = "zellij";
+            rev = "a6a6440";
+            hash = "sha256-8dYKjGLhi02EpYunThXZnFkLMwyPTWunDtnm+svvJNk=";
+          };
+
+          patches = [
+            ../patches/zellij-0001-add-move-pane-to-tab-cli.patch
+            ../patches/zellij-0002-add-session-transfer-groundwork.patch
+            ../patches/zellij-0003-add-move-pane-to-session-cli.patch
+            ../patches/zellij-0004-add-move-tab-to-session-cli.patch
+          ];
+
+          cargoHash = "sha256-nGMOVq5etxiOfocjTKXAd8sJHFw34T49Ga48Isc8dCg=";
+
+          postPatch = ''
+            substituteInPlace Cargo.toml \
+              --replace-fail ', "vendored_curl"' ""
+          '';
+
+          env.OPENSSL_NO_VENDOR = 1;
+
+          nativeBuildInputs = [
+            final.mandown
+            final.installShellFiles
+            final.pkg-config
+            (final.lib.getDev final.curl)
+          ];
+
+          buildInputs = [
+            final.curl
+            final.openssl
+          ];
+
+          nativeCheckInputs = [ final.writableTmpDirAsHomeHook ];
+          nativeInstallCheckInputs = [ final.versionCheckHook ];
+          versionCheckProgramArg = "--version";
+          doInstallCheck = true;
+
+          installCheckPhase = final.lib.optionalString (final.stdenv.hostPlatform.libc == "glibc") ''
+            runHook preInstallCheck
+
+            ldd "$out/bin/zellij" | grep libcurl.so
+
+            runHook postInstallCheck
+          '';
+
+          postInstall =
+            ''
+              mandown docs/MANPAGE.md > zellij.1
+              installManPage zellij.1
+            ''
+            + final.lib.optionalString (final.stdenv.buildPlatform.canExecute final.stdenv.hostPlatform) ''
+              installShellCompletion --cmd $pname \
+                --bash <($out/bin/zellij setup --generate-completion bash) \
+                --fish <($out/bin/zellij setup --generate-completion fish) \
+                --zsh <($out/bin/zellij setup --generate-completion zsh)
+            '';
+
+          meta = {
+            description = "Terminal workspace with batteries included";
+            homepage = "https://zellij.dev/";
+            license = [ final.lib.licenses.mit ];
+            maintainers = with final.lib.maintainers; [
+              therealansh
+              _0x4A6F
+              abbe
+              matthiasbeyer
+              ryan4yin
+            ];
+            mainProgram = "zellij";
+          };
+        };
+
+      rbw = prev.rbw.overrideAttrs (old: {
+        patches = (old.patches or []) ++ [ ../patches/rbw-inject.patch ];
+      });
+
       tmuxPlugins = prev.tmuxPlugins // {
         "tmux-menus" = final.tmuxPlugins.mkTmuxPlugin {
           pluginName = "tmux-menus";

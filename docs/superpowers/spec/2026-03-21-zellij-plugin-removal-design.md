@@ -1,87 +1,125 @@
-# Zellij plugin-removal design
+# Zellij Plugin Removal Design
 
 ## Problem
 
-`yeetnyoink` currently depends on a custom Zellij plugin (`plugins/zellij-bridge`) to:
+`yeetnyoink` currently depends on a custom Zellij plugin (`plugins/zellij-bridge`) for pane and tab moves that should be exposed as public CLI actions instead.
 
-- break a pane into a new tab
-- move a pane into an existing tab
-- avoid inventing a plugin-only control path for functionality Zellij already largely has internally
+The active goal is to replace that plugin with a small upstreamable four-patch series:
 
-The goal is to prepare a small upstreamable Zellij patch set that lets `yeetnyoink` drop that plugin entirely while still reading as a generally useful scripting feature for Zellij users.
+- `move-pane-to-tab`
+- session transfer groundwork
+- `move-pane-to-session`
+- `move-tab-to-session`
+
+For the cross-session commands, the destination must receive the live pane/tab state rather than a recreated layout or respawned command.
 
 ## Goals
 
-- Remove the need for a custom Zellij plugin in the `yeetnyoink` flow
-- Keep the public API surface minimal and script-friendly
-- Reuse existing Zellij internals where possible
-- Make the resulting feature obviously useful beyond `yeetnyoink`
+- Remove the need for the custom `zellij-bridge` plugin in the `yeetnyoink` flow
+- Keep the public CLI surface coherent and script-friendly
+- Preserve live pane/tab state for cross-session moves
+- Split the work into reviewable patches
+- Keep the result upstreamable, with targeted tests and docs per patch
 
 ## Non-goals
 
 - No new plugin / pipe control API
 - No new permission model
 - No new pane-query command in this change
-- No broad redesign of Zellij scripting or tab management
+- No recreate-from-layout fallback for the cross-session commands
+- No silent compatibility layer or heuristic guessing
 
 ## Approved design
 
-### Patch 1: expose `zellij action break-pane`
+### Patch 1: `zellij action move-pane-to-tab`
 
-Make `break-pane` a documented public CLI action.
+Expose a documented public CLI action for moving a pane into another tab.
 
-- Default behavior: break the focused pane into a new tab
-- Optional `--pane-id <PANE_ID>`: target a specific pane instead of the focused pane
-- Optional `--name <TAB_NAME>`: set the new tab name
-- Focus behavior: the invoking client follows the pane into the new tab
+- `zellij action move-pane-to-tab --new-tab [--name <TAB_NAME>] [--pane-id <PANE_ID>]`
+- `zellij action move-pane-to-tab --tab-id <TAB_ID> [--pane-id <PANE_ID>]`
 
-Implementation should reuse Zellij's existing break-to-new-tab path rather than adding a new plugin-like control flow.
+Semantics:
 
-### Patch 2: add `zellij action move-pane-to-tab`
+- `--new-tab` moves the pane into a freshly created tab
+- `--tab-id` moves the pane into an existing tab by stable ID
+- `--pane-id` remains optional; omitted means the focused pane
+- focus should follow the moved pane into the destination tab
 
-Add a second documented public CLI action for moving a pane into an existing tab.
+Implementation should reuse the existing same-session pane extraction / move path and carry forward the runtime fixes needed for detached CLI usage and protobuf decode.
 
-- Required `--tab-id <TAB_ID>`: stable target tab identifier
-- Optional `--pane-id <PANE_ID>`: target a specific pane instead of the focused pane
-- Focus behavior: the invoking client focuses the target tab after the move, while otherwise inheriting Zellij's existing break-to-tab semantics rather than adding custom pane-focus rules
+### Patch 2: session transfer groundwork
 
-Implementation should reuse the existing screen/server path that already moves panes into a tab by stable ID.
+Add the minimum internal server-side plumbing needed to move live panes between sessions without a plugin.
 
-### Introspection strategy
+Semantics:
 
-Do not add a new pane-info command in this patch set.
+- no new public user-facing command in this patch
+- introduce the Unix-only transfer mechanism used by the later session-moving commands
+- keep the groundwork narrow: socket setup, request/response framing, FD passing, PTY adoption, and the supporting tests
 
-Scripting and downstream consumers should rely on already-existing discovery commands:
+### Patch 3: `zellij action move-pane-to-session`
 
-- `zellij action list-clients`
-- `zellij action list-panes`
-- `zellij action list-tabs`
-- `zellij action current-tab-info`
+Add a public CLI action for transferring a pane into another session.
 
-These commands already exist on current upstream `main`, so this patch set does not need a companion introspection feature.
+- `zellij action move-pane-to-session --new-session [--pane-id <PANE_ID>]`
+- `zellij action move-pane-to-session --session-name <SESSION_NAME> --tab-id <TAB_ID> [--pane-id <PANE_ID>]`
 
-## Implementation notes
+Semantics:
 
-- Keep validation strict and explicit
-- `--pane-id` should use Zellij's existing pane-id parsing conventions
-- `--tab-id` should use Zellij's existing tab-id handling and must resolve to an existing tab or fail normally
-- No silent fallback, no guessing, no hidden compatibility layer
-- Prefer the smallest internal additions needed to bridge CLI parsing to existing screen instructions
+- true live transfer of the selected pane into another session
+- no respawn / no layout recreation fallback
+- source session loses the pane
+- destination session gains the live pane in the requested target tab, or in a newly created destination session when `--new-session` is used
 
-## Testing and docs
+### Patch 4: `zellij action move-tab-to-session`
 
-Each behavior patch should carry its own verification:
+Add a public CLI action for transferring the active tab into another session.
 
-- CLI parsing / help coverage
-- action-to-screen routing tests
-- screen-level tests proving the intended break / move instruction is emitted with the expected focus behavior
-- user-facing CLI docs updated in the same patch that introduces the command
+- `zellij action move-tab-to-session --new-session`
+- `zellij action move-tab-to-session --session-name <SESSION_NAME>`
+
+Semantics:
+
+- true live transfer of the active tab into another session
+- all panes in the tab move with their live state intact
+- source session loses the tab
+- destination session gains the transferred tab
+
+## Architecture findings
+
+The old assumption that session-moving commands could piggyback on session-switch or layout replay is not valid for the live-transfer semantics.
+
+Important findings from the upstream checkout:
+
+- each named Zellij session uses its own server daemon and IPC socket
+- each server instance owns a single `SessionMetaData`
+- `ServerInstruction::SwitchSession` only tells a client to disconnect and reconnect; it does not transfer pane or tab state
+
+Implication:
+
+- patch 1 stays relatively small and can reuse existing screen logic
+- patches 2 through 4 require a real cross-session transfer mechanism, likely spanning server routing, PTY ownership/lifecycle, and destination-session insertion
+
+## Testing strategy
+
+Follow strict TDD:
+
+1. write a failing test first
+2. verify the failure is for the intended missing behavior
+3. write the minimum code to make it pass
+4. keep the patch split reviewable
+
+Primary test locations:
+
+- `zellij-utils/src/cli.rs` for CLI parsing/help coverage
+- `zellij-utils/src/input/actions.rs` for `CliAction` -> `Action` conversion
+- `zellij-server/src/route.rs` for action-to-instruction routing
+- `zellij-server/src/unit/screen_tests.rs` for same-session movement behavior
+- additional server/session integration tests for true cross-session transfer
 
 ## Planned patch split
 
-1. `0001-zellij-expose-break-pane-cli.patch`
-2. `0002-zellij-add-move-pane-to-tab-cli.patch`
-
-## Out of scope follow-up
-
-Once the Zellij patch set exists, `yeetnyoink` can switch from plugin pipes to the new CLI actions and existing discovery commands. That downstream change is not part of this patch-authoring task.
+1. `zellij-0001-add-move-pane-to-tab-cli.patch`
+2. `zellij-0002-add-session-transfer-groundwork.patch`
+3. `zellij-0003-add-move-pane-to-session-cli.patch`
+4. `zellij-0004-add-move-tab-to-session-cli.patch`
