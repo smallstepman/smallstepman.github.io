@@ -839,6 +839,18 @@ PYEOF
   grep -Fq 'pkgs.zellij'              den/aspects/features/devtools.nix
 }
 
+# bats test_tags=zellij-patches
+@test "zellij-patches: move-tab export carries source tab transfer plumbing" {
+  local patch=patches/zellij-0004-add-move-tab-to-session-cli.patch
+  grep -Fq 'diff --git a/zellij-server/src/pty.rs b/zellij-server/src/pty.rs' "$patch"
+  grep -Fq 'diff --git a/zellij-server/src/session_transfer.rs b/zellij-server/src/session_transfer.rs' "$patch"
+  grep -Fq 'pub source_tab_id: Option<usize>,' "$patch"
+  grep -Fq '.source_tab_id' "$patch"
+  grep -Fq 'CloseTabWithoutPty(' "$patch"
+  grep -Fq 'source_tab_id: None,' "$patch"
+  grep -Fq 'source_tab_id,' "$patch"
+}
+
 # bats test_tags=devtools
 @test "devtools: ai-tools.nix owns AI package and program entries" {
   grep -Fq 'pkgs.claude-code-acp'                    den/aspects/features/ai-tools.nix
