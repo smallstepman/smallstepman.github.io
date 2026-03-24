@@ -852,14 +852,23 @@ PYEOF
 }
 
 # bats test_tags=zellij-patches
-@test "zellij-patches: macOS session transfer socket hardening is shipped as a follow-up patch" {
-  local patch=patches/zellij-0005-harden-macos-session-transfer-sockets.patch
+@test "zellij-patches: macOS session transfer socket path hardening lives in patch 0002" {
+  local patch=patches/zellij-0002-add-session-transfer-groundwork.patch
   assert_file_exists "$patch"
-  grep -Fq 'zellij-0005-harden-macos-session-transfer-sockets.patch' den/mk-config-outputs.nix
+  if grep -Fq 'zellij-0005-harden-macos-session-transfer-sockets.patch' den/mk-config-outputs.nix; then
+    fail 'macOS session transfer socket hardening should be folded into patch 0002, not shipped as patch 0005'
+  fi
   grep -Fq 'ZELLIJ_TMP_DIR' "$patch"
   grep -Fq '.join("session-transfer")' "$patch"
-  grep -Fq 'Failed to rename session transfer socket' "$patch"
   grep -Fq 'session_transfer_socket_path_fits_macos_socket_limit' "$patch"
+}
+
+# bats test_tags=zellij-patches
+@test "zellij-patches: listener rename and startup hardening is folded into patch 0004" {
+  local patch=patches/zellij-0004-add-move-tab-to-session-cli.patch
+  assert_file_exists "$patch"
+  grep -Fq 'session_transfer_socket_file_name(&old_session_name)' "$patch"
+  grep -Fq 'Failed to rename session transfer socket' "$patch"
   grep -Fq 'renaming_session_immediately_after_startup_moves_transfer_listener_socket' "$patch"
 }
 

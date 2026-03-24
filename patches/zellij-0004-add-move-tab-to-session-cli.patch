@@ -292,9 +292,18 @@ index 983ce3b..1dcdcb6 100644
 +    }
  }
 diff --git a/zellij-server/src/screen.rs b/zellij-server/src/screen.rs
-index edc4384..9ccf21b 100644
+index edc4384a..96c9fedc 100644
 --- a/zellij-server/src/screen.rs
 +++ b/zellij-server/src/screen.rs
+@@ -62,7 +62,7 @@ use zellij_utils::ipc::{ExitReason, ServerToClientMsg};
+ use zellij_utils::pane_size::{PaneGeom, Size, SizeInPixels};
+ use zellij_utils::shared::clean_string_from_control_and_linebreak;
+ use zellij_utils::{
+-    consts::{session_info_folder_for_session, ZELLIJ_SOCK_DIR},
++    consts::{session_info_folder_for_session, session_transfer_socket_file_name, ZELLIJ_SOCK_DIR},
+     envs::set_session_name,
+     input::command::TerminalAction,
+     input::layout::{
 @@ -87,7 +87,7 @@ use crate::{
      plugins::{DumpSessionLayoutResponse, PluginId, PluginInstruction, PluginRenderAsset},
      pty::{get_default_shell, ClientTabIndexOrPaneId, PtyInstruction, VteBytes},
@@ -396,7 +405,7 @@ index edc4384..9ccf21b 100644
      // Closes the client_id's focused tab
      pub fn close_tab(&mut self, client_id: ClientId) -> Result<()> {
          let err_context = || format!("failed to close tab for client {client_id:?}");
-@@ -4728,6 +4751,121 @@ fn find_already_running_panes(
+@@ -4728,6 +4751,120 @@ fn find_already_running_panes(
      (tiled_to_ignore, floating_indices)
  }
  
@@ -411,20 +420,19 @@ index edc4384..9ccf21b 100644
 +    if *session_transfer_listener_started || session_name.is_empty() {
 +        return;
 +    }
++    let listener = match bind_session_transfer_socket(&session_name) {
++        Ok(listener) => listener,
++        Err(err) => {
++            log::error!(
++                "Failed to bind session transfer socket for {}: {}",
++                session_name,
++                err
++            );
++            return;
++        },
++    };
 +    *session_transfer_listener_started = true;
 +    std::thread::spawn(move || {
-+        let listener = match bind_session_transfer_socket(&session_name) {
-+            Ok(listener) => listener,
-+            Err(err) => {
-+                log::error!(
-+                    "Failed to bind session transfer socket for {}: {}",
-+                    session_name,
-+                    err
-+                );
-+                return;
-+            },
-+        };
-+
 +        for incoming in listener.incoming() {
 +            let mut stream = match incoming {
 +                Ok(stream) => stream,
@@ -518,7 +526,7 @@ index edc4384..9ccf21b 100644
  // The box is here in order to make the
  // NewClient enum smaller
  #[allow(clippy::boxed_local)]
-@@ -6098,6 +6236,16 @@ pub(crate) fn screen_thread_main(
+@@ -6098,6 +6235,16 @@ pub(crate) fn screen_thread_main(
                      tab_name.clone(),
                      client_id_for_new_tab,
                  )?;
@@ -535,7 +543,7 @@ index edc4384..9ccf21b 100644
                  screen
                      .bus
                      .senders
-@@ -6114,6 +6262,15 @@ pub(crate) fn screen_thread_main(
+@@ -6114,6 +6261,15 @@ pub(crate) fn screen_thread_main(
                          completion_tx,
                      ))?;
              },
@@ -551,7 +559,7 @@ index edc4384..9ccf21b 100644
              ScreenInstruction::ApplyLayout(
                  layout,
                  floating_panes_layout,
-@@ -6440,102 +6597,13 @@ pub(crate) fn screen_thread_main(
+@@ -6440,102 +6596,13 @@ pub(crate) fn screen_thread_main(
                  screen.add_client(client_id, is_web_client)?;
                  #[cfg(unix)]
                  if !session_transfer_listener_started {
@@ -661,7 +669,7 @@ index edc4384..9ccf21b 100644
                  }
                  let pane_id = pane_id_to_focus.map(|(pane_id, is_plugin)| {
                      if is_plugin {
-@@ -7550,6 +7618,13 @@ pub(crate) fn screen_thread_main(
+@@ -7550,6 +7617,13 @@ pub(crate) fn screen_thread_main(
                      log::error!("Failed to find tab with ID: {}", tab_id);
                  }
              },
@@ -675,7 +683,7 @@ index edc4384..9ccf21b 100644
              ScreenInstruction::BreakPanesToTabWithId {
                  pane_ids,
                  tab_id,
-@@ -7644,6 +7719,7 @@ pub(crate) fn screen_thread_main(
+@@ -7644,6 +7718,7 @@ pub(crate) fn screen_thread_main(
                      new_session,
                      target_session_name,
                      target_tab_id,
@@ -683,7 +691,7 @@ index edc4384..9ccf21b 100644
                      panes: vec![transferred_pane],
                  };
                  screen
-@@ -7655,6 +7731,95 @@ pub(crate) fn screen_thread_main(
+@@ -7655,6 +7730,95 @@ pub(crate) fn screen_thread_main(
                      ))
                      .with_context(|| "failed to start pane transfer".to_string())?;
              },
@@ -779,6 +787,24 @@ index edc4384..9ccf21b 100644
              ScreenInstruction::RequestPluginPermissions(plugin_id, plugin_permission) => {
                  let all_tabs = screen.get_tabs_mut();
                  let found = all_tabs.values_mut().any(|tab| {
+@@ -7846,6 +8010,17 @@ pub(crate) fn screen_thread_main(
+                         log::error!("Failed to rename ipc socket: {:?}", e);
+                     }
+ 
++                    let old_transfer_socket_file_path =
++                        session_transfer_socket_file_name(&old_session_name);
++                    let new_transfer_socket_file_path =
++                        session_transfer_socket_file_name(&name);
++                    if let Err(e) = std::fs::rename(
++                        old_transfer_socket_file_path,
++                        new_transfer_socket_file_path,
++                    ) {
++                        log::error!("Failed to rename session transfer socket: {:?}", e);
++                    }
++
+                     // rename session_info folder (TODO: make this atomic, right now there is a
+                     // chance background_jobs will re-create this folder before it knows the
+                     // session was renamed)
 diff --git a/zellij-server/src/session_transfer.rs b/zellij-server/src/session_transfer.rs
 index 31b4145..28fc530 100644
 --- a/zellij-server/src/session_transfer.rs
@@ -800,7 +826,7 @@ index 31b4145..28fc530 100644
                  pane_info: PaneInfo::default(),
                  invoked_with: None,
 diff --git a/zellij-server/src/unit/screen_tests.rs b/zellij-server/src/unit/screen_tests.rs
-index 64eadf3..b8d714d 100644
+index 64eadf3a..13685ad1 100644
 --- a/zellij-server/src/unit/screen_tests.rs
 +++ b/zellij-server/src/unit/screen_tests.rs
 @@ -30,6 +30,7 @@ use std::env::set_var;
@@ -875,7 +901,7 @@ index 64eadf3..b8d714d 100644
          }
      }
      pub fn set_advanced_hover_effects(&mut self, advanced_mouse_actions: bool) {
-@@ -6691,6 +6701,292 @@ pub fn send_cli_move_pane_to_existing_session_with_pane_id() {
+@@ -6691,6 +6701,392 @@ pub fn send_cli_move_pane_to_existing_session_with_pane_id() {
      mock_screen.teardown(vec![]);
  }
  
@@ -1162,6 +1188,106 @@ index 64eadf3..b8d714d 100644
 +    assert!(
 +        listener_started,
 +        "fresh sessions should bind the transfer listener before any later attach path"
++    );
++}
++
++#[test]
++pub fn renaming_session_moves_session_transfer_listener_socket() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let unique_suffix = SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .unwrap()
++        .as_nanos()
++        % 1_000_000_000;
++    let old_session_name = format!("zt-old-{unique_suffix:x}");
++    let new_session_name = format!("zt-new-{unique_suffix:x}");
++    let old_socket_path =
++        zellij_utils::consts::session_transfer_socket_file_name(old_session_name.as_str());
++    let new_socket_path =
++        zellij_utils::consts::session_transfer_socket_file_name(new_session_name.as_str());
++    let _ = std::fs::remove_file(&old_socket_path);
++    let _ = std::fs::remove_file(&new_socket_path);
++
++    let mut mock_screen = MockScreen::new_with_session_name(size, old_session_name);
++    let screen_thread = mock_screen.run(None, vec![]);
++
++    let listener_started = (0..20).any(|_| {
++        if old_socket_path.exists() {
++            true
++        } else {
++            std::thread::sleep(Duration::from_millis(50));
++            false
++        }
++    });
++    assert!(listener_started, "expected transfer listener to start before rename");
++
++    let _ = mock_screen.to_screen.send(ScreenInstruction::RenameSession(
++        new_session_name,
++        mock_screen.main_client_id,
++        None,
++    ));
++
++    let listener_renamed = (0..20).any(|_| {
++        if new_socket_path.exists() && !old_socket_path.exists() {
++            true
++        } else {
++            std::thread::sleep(Duration::from_millis(50));
++            false
++        }
++    });
++
++    mock_screen.teardown(vec![screen_thread]);
++    assert!(
++        listener_renamed,
++        "renaming a session should move the transfer listener socket to the new session path"
++    );
++}
++
++#[test]
++pub fn renaming_session_immediately_after_startup_moves_transfer_listener_socket() {
++    let size = Size {
++        cols: 121,
++        rows: 20,
++    };
++    let unique_suffix = SystemTime::now()
++        .duration_since(UNIX_EPOCH)
++        .unwrap()
++        .as_nanos()
++        % 1_000_000_000;
++    let old_session_name = format!("zt-now-{unique_suffix:x}");
++    let new_session_name = format!("zt-next-{unique_suffix:x}");
++    let old_socket_path =
++        zellij_utils::consts::session_transfer_socket_file_name(old_session_name.as_str());
++    let new_socket_path =
++        zellij_utils::consts::session_transfer_socket_file_name(new_session_name.as_str());
++    let _ = std::fs::remove_file(&old_socket_path);
++    let _ = std::fs::remove_file(&new_socket_path);
++
++    let mut mock_screen = MockScreen::new_with_session_name(size, old_session_name);
++    let screen_thread = mock_screen.run(None, vec![]);
++
++    let _ = mock_screen.to_screen.send(ScreenInstruction::RenameSession(
++        new_session_name,
++        mock_screen.main_client_id,
++        None,
++    ));
++
++    let listener_renamed = (0..20).any(|_| {
++        if new_socket_path.exists() && !old_socket_path.exists() {
++            true
++        } else {
++            std::thread::sleep(Duration::from_millis(50));
++            false
++        }
++    });
++
++    mock_screen.teardown(vec![screen_thread]);
++    assert!(
++        listener_renamed,
++        "renaming immediately after startup should still move the transfer listener socket"
 +    );
 +}
 +
