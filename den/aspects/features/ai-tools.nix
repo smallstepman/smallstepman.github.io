@@ -115,11 +115,6 @@ PY
             run chmod u+w "$packageJson"
           '';
 
-        home.activation.ensureOpencodeAuthJson =
-          lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-            run ${opencodeAuthRefresh}/bin/opencode-auth-refresh
-          '';
-
         programs.opencode = {
           enable = true;
           package = pkgs.opencode;

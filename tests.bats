@@ -874,7 +874,6 @@ PYEOF
   grep -Fq 'agent-shell-opencode-acp'                den/aspects/features/ai-tools.nix
   grep -Fq 'opencode-auth-refresh'                   den/aspects/features/ai-tools.nix
   grep -Fq '.local/share/opencode'                   den/aspects/features/ai-tools.nix
-  grep -Fq 'ensureOpencodeAuthJson'                  den/aspects/features/ai-tools.nix
   grep -Fq 'opencode-auth-bailian-coding-plan'       den/aspects/features/ai-tools.nix
   grep -Fq 'opencode-auth-github-copilot'            den/aspects/features/ai-tools.nix
   grep -Fq 'opencode-auth-opencode-go'               den/aspects/features/ai-tools.nix
@@ -909,6 +908,15 @@ PYEOF
   fi
   grep -Fq 'opencode-serve' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'opencode-web'   den/aspects/hosts/vm-aarch64.nix
+}
+
+# bats test_tags=devtools
+@test "devtools: ai-tools.nix does not fetch opencode auth during home-manager activation" {
+  grep -Fq 'opencode-auth-refresh' den/aspects/features/ai-tools.nix
+
+  if grep -Fq 'home.activation.ensureOpencodeAuthJson' den/aspects/features/ai-tools.nix; then
+    fail 'opencode auth refresh must not run during Home Manager activation'
+  fi
 }
 
 # bats test_tags=devtools

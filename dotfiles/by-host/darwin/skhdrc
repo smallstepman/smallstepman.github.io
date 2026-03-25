@@ -60,33 +60,33 @@ ctrl - d [
 
 ctrl - n [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus west
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus west
 ]
 ctrl - e [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus south
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus south
 ]
 ctrl - i [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus north
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus north
 ]
 ctrl - o [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus east
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus east
 ]
 ctrl - l [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move west
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append  --config /Users/m/yny.config.dev.toml move west
 ]
 ctrl - u [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move south
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append  --config /Users/m/yny.config.dev.toml move south
 ]
 ctrl - y [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move north
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append  --config /Users/m/yny.config.dev.toml move north
 ]
 ctrl - 0x29 [
   "VMWare Fusion" ~
-  *   : /Users/m/Projects/yeetnyoink/target/release/yny --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move east
+  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append  --config /Users/m/yny.config.dev.toml move east
 ]

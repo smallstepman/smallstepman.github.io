@@ -50,6 +50,7 @@
         pkgs.kitty
         pkgs.alacritty
         pkgs.uniclip
+        pkgs.wezterm
       ];
 
       home.file.".gdbinit".source = ../../../dotfiles/common/gdbinit;

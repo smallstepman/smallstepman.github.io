@@ -318,6 +318,7 @@
             pkgs.sentry-cli
             pkgs.rsync
             pkgs.sshpass
+            pkgs.keycastr
           ];
 
           xdg.configFile = {

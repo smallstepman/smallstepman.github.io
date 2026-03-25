@@ -480,12 +480,12 @@
           bind=SUPER,r,reload_config
 
           # Apps
-          bind=Alt,Return,spawn,${ynyDbg} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
-          bind=Alt,t,spawn,${ynyDbg} focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
+          bind=Alt,Return,spawn,/home/m/.cargo/target/release/yny focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
+          bind=Alt,t,spawn,/home/m/.cargo/target/release/yny focus-or-cycle --app-id org.wezfurlong.wezterm --spawn wezterm
           bind=Alt+SHIFT,t,spawn,wezterm
-          bind=Alt,s,spawn,${ynyDbg} focus-or-cycle --app-id librewolf --spawn librewolf
+          bind=Alt,s,spawn,/home/m/.cargo/target/release/yny focus-or-cycle --app-id librewolf --spawn librewolf
           bind=Alt+SHIFT,s,spawn,librewolf
-          bind=Alt,p,spawn,${ynyDbg} focus-or-cycle --app-id spotify --spawn spotify --summon
+          bind=Alt,p,spawn,/home/m/.cargo/target/release/yny focus-or-cycle --app-id spotify --spawn spotify --summon
           bind=Alt,space,spawn,wlr-which-key
 
           # Close window
@@ -496,16 +496,16 @@
           bind=Alt,backslash,togglefloating
 
           # Focus — NEIO matching niri west/south/north/east
-          bind=Alt,n,spawn,${ynyDbg} focus west
-          bind=Alt,e,spawn,${ynyDbg} focus south
-          bind=Alt,i,spawn,${ynyDbg} focus north
-          bind=Alt,o,spawn,${ynyDbg} focus east
+          bind=Alt,n,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml focus west
+          bind=Alt,e,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml focus south
+          bind=Alt,i,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml focus north
+          bind=Alt,o,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml focus east
 
           # Move window
-          bind=Alt+SHIFT,n,spawn,${ynyDbg} move west
-          bind=Alt+SHIFT,e,spawn,${ynyDbg} move south
-          bind=Alt+SHIFT,i,spawn,${ynyDbg} move north
-          bind=Alt+SHIFT,o,spawn,${ynyDbg} move east
+          bind=Alt+SHIFT,l,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml move west
+          bind=Alt+SHIFT,u,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml move south
+          bind=Alt+SHIFT,y,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml move north
+          # bind=Alt+SHIFT,;,spawn,/home/m/.cargo/target/release/yny --config /home/m/.config/yeetnyoink/config-dev.toml move east
 
           # Resize (master factor)
           bind=Alt,minus,set_mfact,-0.05
