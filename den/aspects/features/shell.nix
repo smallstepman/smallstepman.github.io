@@ -54,6 +54,15 @@
                       fi
                     fi
 
+                    if ! { [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; }; then
+                      if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+                        exec </dev/tty >/dev/tty 2>/dev/tty
+                      else
+                        echo "niks-worktree: interactive terminal required" >&2
+                        exit 1
+                      fi
+                    fi
+
                     list_repos() {
                       printf '%s\n' "$repo_root"
                       if [ -d "$repo_root/.worktrees" ]; then
@@ -69,24 +78,19 @@
                         return 1
                       fi
 
-                      if [ -t 0 ] && [ -t 1 ] && command -v fzf >/dev/null 2>&1; then
+                      if command -v fzf >/dev/null 2>&1; then
                         selected=$(printf '%s\n' "''${repos[@]}" | fzf --prompt='niks-worktree> ')
                         [ -n "$selected" ] || return 1
                         printf '%s\n' "$selected"
                         return 0
                       fi
 
-                      if [ -t 0 ] && [ -t 1 ]; then
-                        PS3='Select nix worktree: '
-                        select selected in "''${repos[@]}"; do
-                          [ -n "$selected" ] || continue
-                          printf '%s\n' "$selected"
-                          return 0
-                        done
-                      fi
-
-                      echo "niks-worktree: interactive terminal required" >&2
-                      return 1
+                      PS3='Select nix worktree: '
+                      select selected in "''${repos[@]}"; do
+                        [ -n "$selected" ] || continue
+                        printf '%s\n' "$selected"
+                        return 0
+                      done
                     }
 
                     selected=$(choose_repo)

@@ -665,6 +665,8 @@ checks = [
     ("~/.config/nix", darwin_text, "darwin niks-worktree should target ~/.config/nix"),
     (".worktrees", vm_text, "vm niks-worktree should scan .worktrees"),
     (".worktrees", darwin_text, "darwin niks-worktree should scan .worktrees"),
+    ("/dev/tty", vm_text, "vm niks-worktree should reattach to /dev/tty for interactive selection"),
+    ("/dev/tty", darwin_text, "darwin niks-worktree should reattach to /dev/tty for interactive selection"),
 ]
 
 for needle, haystack, message in checks:
