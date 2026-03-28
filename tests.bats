@@ -616,6 +616,30 @@ PYEOF
 }
 
 # bats test_tags=home-manager-core
+@test "vm: vm-aarch64 rbw uses macOS touchid bridge" {
+  local actual
+
+  actual=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
+    'pinentry: toString pinentry')
+
+  [[ "$actual" != *pinentry-wayprompt ]] \
+    || fail "vm-aarch64 rbw pinentry still hardcodes pinentry-wayprompt: '$actual'"
+  [[ "$actual" == *rbw-pinentry-* ]] \
+    || fail "vm-aarch64 rbw pinentry should evaluate to a VM-side wrapper, got '$actual'"
+  [[ "$actual" == *bridge* || "$actual" == *fallback* ]] \
+    || fail "vm-aarch64 rbw pinentry should evaluate to the broker bridge or fallback wrapper, got '$actual'"
+
+  if grep -Fq 'programs.rbw.settings.pinentry = pkgs.wayprompt;' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 still hardcodes pkgs.wayprompt for rbw pinentry'
+  fi
+
+  if grep -Fq -- '--arg pinentry "${pkgs.wayprompt}/bin/pinentry-wayprompt"' den/aspects/features/secrets.nix; then
+    fail 'secrets.nix still writes pinentry-wayprompt directly into rbw/config.json'
+  fi
+}
+
+# bats test_tags=home-manager-core
 @test "home-manager-core: vm-aarch64 has Linux pbcopy alias" {
   local zsh_aliases
   zsh_aliases=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases)
@@ -1133,6 +1157,25 @@ PYEOF
     || fail "sops.defaultSopsFile does not mention secrets.yaml; got '$actual'"
 }
 
+# bats test_tags=linux-core
+@test "linux: vm-aarch64 sudo uses macOS touchid bridge" {
+  local actual actual_oneline before_fallback
+
+  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.security.pam.services.sudo.text)
+  actual_oneline=$(printf '%s' "$actual" | tr '\n' ' ')
+
+  [[ "$actual_oneline" == *pam_exec.so* ]] \
+    || fail "vm-aarch64 sudo PAM should include a pam_exec bridge entry, got: $actual"
+  [[ "$actual_oneline" == *touchid* || "$actual_oneline" == *broker* ]] \
+    || fail "vm-aarch64 sudo PAM bridge should reference the macOS Touch ID broker, got: $actual"
+  [[ "$actual_oneline" == *'pam_unix.so likeauth try_first_pass'* ]] \
+    || fail "vm-aarch64 sudo PAM lost the local password fallback, got: $actual"
+
+  before_fallback=${actual_oneline%%pam_unix.so likeauth try_first_pass*}
+  [[ "$before_fallback" == *pam_exec.so* ]] \
+    || fail "vm-aarch64 sudo PAM should place the broker bridge before pam_unix fallback, got: $actual"
+}
+
 
 # ===========================================================================
 # vm-desktop — linux-desktop and vmware aspects
@@ -1506,6 +1549,36 @@ PYEOF
     .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents \
     'agents: if agents ? "opencode-web" then "yes" else "no"')
   assert_equal "$actual" "yes"
+}
+
+# bats test_tags=darwin
+@test "darwin: macOS touchid broker is wired" {
+  local agents
+
+  agents=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents \
+    'agents: builtins.concatStringsSep "," (builtins.attrNames agents)')
+  [[ ",$agents," =~ ,[^,]*(touchid.*broker|broker.*touchid)[^,]*, ]] \
+    || fail "macbook-pro-m1 launchd.user.agents missing a Touch ID broker agent; got: $agents"
+
+  run python - <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+pattern = re.compile(
+    r'name\s*=\s*"[^"]*(?:touchid.*broker|broker.*touchid)[^"]*".*?text\s*=\s*\'\'(.*?)\'\'',
+    re.S,
+)
+for match in pattern.finditer(text):
+    if "pinentry-touchid" in match.group(1):
+        sys.exit(0)
+
+sys.exit(1)
+PY
+  assert_success \
+    || fail 'darwin-core.nix should define a Touch ID broker package whose script text invokes pinentry-touchid'
 }
 
 
