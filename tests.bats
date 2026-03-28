@@ -616,6 +616,74 @@ PYEOF
 }
 
 # bats test_tags=home-manager-core
+@test "home-manager-core: vm-aarch64 and macbook-pro-m1 expose niks-worktree" {
+  local vm_alias darwin_alias
+
+  vm_alias=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases."niks-worktree")
+  [[ "$vm_alias" == /nix/store/*/bin/niks-worktree* ]] \
+    || fail "vm-aarch64 should expose a store-backed niks-worktree command, got '$vm_alias'"
+
+  darwin_alias=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.zsh.shellAliases."niks-worktree")
+  [[ "$darwin_alias" == /nix/store/*/bin/niks-worktree* ]] \
+    || fail "macbook-pro-m1 should expose a store-backed niks-worktree command, got '$darwin_alias'"
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: niks-worktree command knows platform repo roots and worktrees" {
+  local vm_drv darwin_drv
+
+  vm_drv=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases."niks-worktree" \
+    'alias: builtins.head (builtins.attrNames (builtins.getContext alias))')
+  darwin_drv=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.zsh.shellAliases."niks-worktree" \
+    'alias: builtins.head (builtins.attrNames (builtins.getContext alias))')
+
+  run python - "$vm_drv" "$darwin_drv" <<'PY'
+import json
+import subprocess
+import sys
+
+vm_drv, darwin_drv = sys.argv[1:3]
+
+def derivation_text(drv: str) -> str:
+    payload = json.loads(
+        subprocess.run(
+            ["nix", "derivation", "show", drv],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    return next(iter(payload["derivations"].values()))["env"]["text"]
+
+vm_text = derivation_text(vm_drv)
+darwin_text = derivation_text(darwin_drv)
+
+checks = [
+    ("/nixos-config", vm_text, "vm niks-worktree should target /nixos-config"),
+    ("~/.config/nix", darwin_text, "darwin niks-worktree should target ~/.config/nix"),
+    (".worktrees", vm_text, "vm niks-worktree should scan .worktrees"),
+    (".worktrees", darwin_text, "darwin niks-worktree should scan .worktrees"),
+]
+
+for needle, haystack, message in checks:
+    if needle not in haystack:
+        print(message, file=sys.stderr)
+        sys.exit(1)
+
+if "fzf" not in vm_text or "select " not in vm_text:
+    print("vm niks-worktree should prefer fzf and fall back to shell select", file=sys.stderr)
+    sys.exit(1)
+
+if "fzf" not in darwin_text or "select " not in darwin_text:
+    print("darwin niks-worktree should prefer fzf and fall back to shell select", file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success || fail "niks-worktree derivation does not encode the expected platform/worktree selector behavior"
+}
+
+# bats test_tags=home-manager-core
 @test "vm: vm-aarch64 evaluated rbw pinentry derivation encodes touchid bridge fallback" {
   local actual actual_drv
 
