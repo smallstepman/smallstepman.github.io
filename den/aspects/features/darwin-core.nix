@@ -3,11 +3,14 @@
     includes = [
       ({ host, ... }:
         lib.optionalAttrs (host.class == "darwin") {
-        darwin = { pkgs, ... }:
+          darwin = { pkgs, ... }:
           let
             kubeconfigGeneratedDir = "/Users/m/.local/share/nix-config-generated";
             kubeconfigBitwardenItem = "orbstack-kubeconfig";
             kubeconfigTarget = "${kubeconfigGeneratedDir}/kubeconfig";
+            vmTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
+            vmTouchIdRemoteSocket = "/home/m/.local/run/vm-touchid-broker.sock";
+            vmTouchIdPinentry = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid";
 
             orbstackKubeconfigSync = pkgs.writeShellApplication {
               name = "orbstack-kubeconfig-sync";
@@ -34,6 +37,196 @@
                 if ! cmp -s "$tmp_kubeconfig" ${kubeconfigTarget} 2>/dev/null; then
                   mv "$tmp_kubeconfig" ${kubeconfigTarget}
                 fi
+              '';
+            };
+
+            vmTouchIdBroker = pkgs.writeTextFile {
+              name = "vm-touchid-broker";
+              destination = "/bin/vm-touchid-broker";
+              executable = true;
+              text = ''
+                #!${pkgs.python3}/bin/python3
+                import argparse
+                import hashlib
+                import json
+                import os
+                import socketserver
+                import subprocess
+                import urllib.parse
+                from pathlib import Path
+
+                RBW_CONFIG = Path.home() / "Library/Application Support/rbw/config.json"
+                DEFAULT_EMAIL = "rbw@local"
+                APPROVE_DESC = "VM sudo approval <vm-aarch64>"
+
+
+                class PinentryFailure(RuntimeError):
+                    def __init__(self, lines):
+                        super().__init__("pinentry-touchid command failed")
+                        self.lines = lines
+
+
+                def load_rbw_email():
+                    try:
+                        cfg = json.loads(RBW_CONFIG.read_text())
+                    except Exception:
+                        return DEFAULT_EMAIL
+                    return cfg.get("email") or DEFAULT_EMAIL
+
+
+                def quote_assuan(value):
+                    escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
+                    return f"\"{escaped}\""
+
+
+                def decode_assuan_data(value):
+                    return urllib.parse.unquote(value)
+
+
+                class PinentrySession:
+                    def __init__(self, pinentry_program):
+                        self.proc = subprocess.Popen(
+                            [pinentry_program],
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1,
+                        )
+
+                    def __enter__(self):
+                        greeting = self.read_response()
+                        if greeting[-1].startswith("ERR"):
+                            raise PinentryFailure(greeting)
+                        return self
+
+                    def __exit__(self, exc_type, exc, tb):
+                        try:
+                            if self.proc.stdin:
+                                self.proc.stdin.close()
+                        except Exception:
+                            pass
+                        self.proc.wait(timeout=5)
+
+                    def read_response(self):
+                        lines = []
+                        while True:
+                            line = self.proc.stdout.readline()
+                            if line == "":
+                                raise EOFError("pinentry-touchid closed stdout unexpectedly")
+                            lines.append(line)
+                            if line.startswith("OK") or line.startswith("ERR"):
+                                return lines
+
+                    def command(self, raw_command, require_ok=False):
+                        self.proc.stdin.write(raw_command)
+                        self.proc.stdin.flush()
+                        lines = self.read_response()
+                        if require_ok and lines[-1].startswith("ERR"):
+                            raise PinentryFailure(lines)
+                        return lines
+
+
+                def get_secret(pinentry_program):
+                    email = load_rbw_email()
+                    key_id = hashlib.sha1(email.encode("utf-8")).hexdigest()[:8].upper()
+                    keyinfo = f"rbw/{key_id}"
+                    desc = f"Bitwarden RBW <{email}> ID {key_id}, Unlock the local database for 'rbw'"
+
+                    with PinentrySession(pinentry_program) as pinentry:
+                        pinentry.command("OPTION allow-external-password-cache\n", require_ok=True)
+                        pinentry.command(f"SETKEYINFO {keyinfo}\n", require_ok=True)
+                        pinentry.command(
+                            f"SETDESC {quote_assuan(desc)}\n",
+                            require_ok=True,
+                        )
+                        response = pinentry.command("GETPIN\n")
+
+                    if response[-1].startswith("ERR"):
+                        raise PinentryFailure(response)
+
+                    chunks = []
+                    for line in response:
+                        if line.startswith("D "):
+                            chunks.append(decode_assuan_data(line[2:].rstrip("\n")))
+                    return "".join(chunks)
+
+
+                def approve(pinentry_program):
+                    with PinentrySession(pinentry_program) as pinentry:
+                        pinentry.command(
+                            f"SETTITLE {quote_assuan('VM sudo approval')}\n",
+                            require_ok=True,
+                        )
+                        pinentry.command(
+                            f"SETDESC {quote_assuan(APPROVE_DESC)}\n",
+                            require_ok=True,
+                        )
+                        pinentry.command(
+                            f"SETPROMPT {quote_assuan('Touch ID')}\n",
+                            require_ok=True,
+                        )
+                        response = pinentry.command("GETPIN\n")
+                    return not response[-1].startswith("ERR")
+
+
+                class ThreadedUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+                    daemon_threads = True
+
+
+                class Handler(socketserver.StreamRequestHandler):
+                    def handle(self):
+                        try:
+                            raw = self.rfile.readline()
+                            if not raw:
+                                return
+                            request = json.loads(raw.decode("utf-8"))
+                            op = request.get("op")
+
+                            if op == "approve":
+                                response = {"ok": True, "approved": approve(self.server.pinentry_program)}
+                            elif op == "get-secret":
+                                response = {"ok": True, "secret": get_secret(self.server.pinentry_program)}
+                            else:
+                                response = {"ok": False, "error": f"unsupported op: {op}"}
+                        except PinentryFailure as exc:
+                            response = {
+                                "ok": False,
+                                "error": "pinentry-touchid command failed",
+                                "details": exc.lines,
+                            }
+                        except Exception as exc:
+                            response = {"ok": False, "error": str(exc)}
+
+                        self.wfile.write((json.dumps(response) + "\n").encode("utf-8"))
+                        self.wfile.flush()
+
+
+                def main():
+                    parser = argparse.ArgumentParser()
+                    parser.add_argument("--socket-path", required=True)
+                    parser.add_argument("--pinentry-program", required=True)
+                    args = parser.parse_args()
+
+                    socket_path = Path(args.socket_path)
+                    socket_path.parent.mkdir(parents=True, exist_ok=True)
+                    if socket_path.exists():
+                        socket_path.unlink()
+
+                    server = ThreadedUnixServer(str(socket_path), Handler)
+                    server.pinentry_program = args.pinentry_program
+                    os.chmod(socket_path, 0o600)
+
+                    try:
+                        server.serve_forever()
+                    finally:
+                        server.server_close()
+                        if socket_path.exists():
+                            socket_path.unlink()
+
+
+                if __name__ == "__main__":
+                    main()
               '';
             };
           in {
@@ -202,6 +395,55 @@
               StartInterval = 300;
               StandardOutPath = "/tmp/orbstack-kubeconfig-sync.log";
               StandardErrorPath = "/tmp/orbstack-kubeconfig-sync.log";
+            };
+          };
+
+          launchd.user.agents.rbw-pinentry-touchid-broker = {
+            serviceConfig = {
+              ProgramArguments = [
+                "/bin/bash" "-c"
+                ''
+                  set -euo pipefail
+                  /bin/wait4path /nix/store
+                  exec ${vmTouchIdBroker}/bin/vm-touchid-broker \
+                    --socket-path ${vmTouchIdBrokerSocket} \
+                    --pinentry-program ${vmTouchIdPinentry}
+                ''
+              ];
+              RunAtLoad = true;
+              KeepAlive = true;
+              StandardOutPath = "/tmp/rbw-pinentry-touchid-broker.log";
+              StandardErrorPath = "/tmp/rbw-pinentry-touchid-broker.log";
+            };
+          };
+
+          launchd.user.agents.vm-touchid-broker-tunnel = {
+            serviceConfig = {
+              ProgramArguments = [
+                "/bin/bash" "-c"
+                ''
+                  set -euo pipefail
+                  while true; do
+                    while [ ! -S ${vmTouchIdBrokerSocket} ]; do
+                      sleep 1
+                    done
+                    /usr/bin/ssh-keygen -R "192.168.130.3" >/dev/null 2>&1 || true
+                    /usr/bin/ssh -o StrictHostKeyChecking=accept-new m@192.168.130.3 \
+                      "mkdir -p /home/m/.local/run && rm -f ${vmTouchIdRemoteSocket}" >/dev/null 2>&1 || true
+                    /usr/bin/ssh -N \
+                      -o StreamLocalBindUnlink=yes \
+                      -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+                      -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
+                      -R ${vmTouchIdRemoteSocket}:${vmTouchIdBrokerSocket} \
+                      m@192.168.130.3
+                    sleep 5
+                  done
+                ''
+              ];
+              RunAtLoad = true;
+              KeepAlive = true;
+              StandardOutPath = "/tmp/vm-touchid-broker-tunnel.log";
+              StandardErrorPath = "/tmp/vm-touchid-broker-tunnel.log";
             };
           };
 
