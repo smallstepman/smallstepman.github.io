@@ -13,6 +13,7 @@ let
     # Build non-flake packages from source
     (final: prev: {
         opencode = inputs.opencode.packages.${prev.stdenv.hostPlatform.system}.default;
+        rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
         agent-of-empires = inputs.agent-of-empires-src.packages.${prev.stdenv.hostPlatform.system}.default;
         gastown = inputs.gastown.packages.${prev.stdenv.hostPlatform.system}.gt.overrideAttrs (old: {
           proxyVendor = true;
@@ -183,10 +184,6 @@ PYEOF
             mainProgram = "zellij";
           };
         };
-
-      rbw = prev.rbw.overrideAttrs (old: {
-        src = inputs.rbw;
-      });
 
       tmuxPlugins = prev.tmuxPlugins // {
         "tmux-menus" = final.tmuxPlugins.mkTmuxPlugin {
