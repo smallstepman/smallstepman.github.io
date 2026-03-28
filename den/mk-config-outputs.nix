@@ -185,7 +185,7 @@ PYEOF
         };
 
       rbw = prev.rbw.overrideAttrs (old: {
-        patches = (old.patches or []) ++ [ ../patches/rbw-inject.patch ];
+        src = inputs.rbw;
       });
 
       tmuxPlugins = prev.tmuxPlugins // {

@@ -78,6 +78,9 @@
     # Non-flake sources for packages we build ourselves
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
+
+    # rbw (Bitwarden CLI) with inject/run support
+    rbw.url = "github:smallstepman/rbw";
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
 
     # yeetnyoink - window/app focus orchestrator for niri

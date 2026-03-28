@@ -945,6 +945,22 @@
       }
     },
     "nixpkgs_11": {
+      "locked": {
+        "lastModified": 1774386573,
+        "narHash": "sha256-4hAV26quOxdC6iyG7kYaZcM3VOskcPUrdCQd/nx8obc=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "46db2e09e1d3f113a13c0d7b81e2f221c63b8ce9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_12": {
       "flake": false,
       "locked": {
         "lastModified": 1773821835,
@@ -957,7 +973,7 @@
         "url": "https://github.com/NixOS/nixpkgs/archive/b40629efe5d6ec48dd1efba650c797ddbd39ace0.tar.gz"
       }
     },
-    "nixpkgs_12": {
+    "nixpkgs_13": {
       "locked": {
         "lastModified": 1744868846,
         "narHash": "sha256-5RJTdUHDmj12Qsv7XOhuospjAjATNiTMElplWnJE9Hs=",
@@ -973,7 +989,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_13": {
+    "nixpkgs_14": {
       "locked": {
         "lastModified": 1772598333,
         "narHash": "sha256-YaHht/C35INEX3DeJQNWjNaTcPjYmBwwjFJ2jdtr+5U=",
@@ -1227,6 +1243,24 @@
         "type": "github"
       }
     },
+    "rbw": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_11"
+      },
+      "locked": {
+        "lastModified": 1774672261,
+        "narHash": "sha256-7BUa26/AOJi3zsh4NpC/+rzge7o/72uLu24Ayzp/r/c=",
+        "owner": "smallstepman",
+        "repo": "rbw",
+        "rev": "7a5b9ede94575b9f3474a7e082a1256f6ae49abc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "smallstepman",
+        "repo": "rbw",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "agent-of-empires-src": "agent-of-empires-src",
@@ -1254,6 +1288,7 @@
         "opencode": "opencode",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
+        "rbw": "rbw",
         "rust-overlay": "rust-overlay",
         "sonar": "sonar",
         "sops-nix": "sops-nix",
@@ -1307,7 +1342,7 @@
     },
     "sonar": {
       "inputs": {
-        "nixpkgs": "nixpkgs_11"
+        "nixpkgs": "nixpkgs_12"
       },
       "locked": {
         "lastModified": 1774022300,
@@ -1345,7 +1380,7 @@
     },
     "sops-nix_2": {
       "inputs": {
-        "nixpkgs": "nixpkgs_12"
+        "nixpkgs": "nixpkgs_13"
       },
       "locked": {
         "lastModified": 1752544651,
@@ -1636,7 +1671,7 @@
     },
     "yeetnyoink": {
       "inputs": {
-        "nixpkgs": "nixpkgs_13"
+        "nixpkgs": "nixpkgs_14"
       },
       "locked": {
         "lastModified": 1773528849,
