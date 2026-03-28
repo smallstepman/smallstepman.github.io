@@ -7,7 +7,192 @@
       den.aspects.vmware
       den.provides.hostname
 
-      ({ host, ... }: {
+      ({ host, ... }:
+        let
+          vmTouchIdBrokerSocket = "/home/m/.local/run/vm-touchid-broker.sock";
+          macTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
+
+          mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {
+            name = "rbw-pinentry-touchid-bridge-fallback";
+            destination = "/bin/rbw-pinentry-touchid-bridge";
+            executable = true;
+            text = ''
+              #!${pkgs.python3}/bin/python3
+              import json
+              import socket
+              import subprocess
+              import sys
+              import urllib.parse
+
+              BROKER_SOCKET = "${vmTouchIdBrokerSocket}"
+              LOCAL_FALLBACK = "${pkgs.wayprompt}/bin/pinentry-wayprompt"
+              OK = "OK\n"
+
+
+              class PinentryProcess:
+                  def __init__(self, program):
+                      self.proc = subprocess.Popen(
+                          [program],
+                          stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          text=True,
+                          bufsize=1,
+                      )
+                      self.read_response()
+
+                  def read_response(self):
+                      lines = []
+                      while True:
+                          line = self.proc.stdout.readline()
+                          if line == "":
+                              raise EOFError("fallback pinentry closed stdout unexpectedly")
+                          lines.append(line)
+                          if line.startswith("OK") or line.startswith("ERR"):
+                              return lines
+
+                  def command(self, raw_command):
+                      self.proc.stdin.write(raw_command)
+                      self.proc.stdin.flush()
+                      return self.read_response()
+
+                  def close(self):
+                      try:
+                          if self.proc.stdin:
+                              self.proc.stdin.close()
+                      except Exception:
+                          pass
+                      return self.proc.wait()
+
+
+              def encode_data(value):
+                  return urllib.parse.quote(value, safe="")
+
+
+              def broker_get_secret():
+                  with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                      client.settimeout(2.0)
+                      client.connect(BROKER_SOCKET)
+                      client.sendall(b'{"op":"get-secret"}\n')
+
+                      response = bytearray()
+                      while not response.endswith(b"\n"):
+                          chunk = client.recv(4096)
+                          if not chunk:
+                              raise EOFError("broker closed connection unexpectedly")
+                          response.extend(chunk)
+
+                  payload = json.loads(response.decode("utf-8"))
+                  if not payload.get("ok"):
+                      raise RuntimeError(payload.get("error") or "broker request failed")
+
+                  secret = payload.get("secret")
+                  if not isinstance(secret, str) or secret == "":
+                      raise RuntimeError("broker returned an empty secret")
+                  return secret
+
+
+              def activate_fallback(history):
+                  child = PinentryProcess(LOCAL_FALLBACK)
+                  for raw in history:
+                      child.command(raw)
+                  return child
+
+
+              def emit(lines):
+                  for line in lines:
+                      sys.stdout.write(line)
+                  sys.stdout.flush()
+
+
+              def main():
+                  fallback = None
+                  history = []
+
+                  sys.stdout.write("OK Pleased to meet you, broker touchid fallback ready\n")
+                  sys.stdout.flush()
+
+                  try:
+                      for raw in sys.stdin:
+                          if fallback is not None:
+                              emit(fallback.command(raw))
+                              continue
+
+                          if raw == "GETPIN\n":
+                              try:
+                                  secret = broker_get_secret()
+                              except Exception:
+                                  fallback = activate_fallback(history)
+                                  emit(fallback.command(raw))
+                                  continue
+
+                              sys.stdout.write(f"D {encode_data(secret)}\n")
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
+                          if raw == "BYE\n":
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              return 0
+
+                          if (
+                              raw.startswith("OPTION ")
+                              or raw.startswith("SETDESC ")
+                              or raw.startswith("SETTITLE ")
+                              or raw.startswith("SETPROMPT ")
+                              or raw.startswith("SETKEYINFO ")
+                              or raw.startswith("SETOK ")
+                              or raw.startswith("SETCANCEL ")
+                              or raw.startswith("SETNOTOK ")
+                              or raw.startswith("SETERROR ")
+                          ):
+                              history.append(raw)
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
+                          fallback = activate_fallback(history)
+                          emit(fallback.command(raw))
+                  finally:
+                      if fallback is not None:
+                          raise SystemExit(fallback.close())
+
+                  return 0
+
+
+              if __name__ == "__main__":
+                  raise SystemExit(main())
+            '';
+          };
+
+          mkRbwPinentryTouchIdBrokerTunnel = pkgs: pkgs.writeShellApplication {
+            name = "rbw-pinentry-touchid-broker-tunnel";
+            runtimeInputs = [ pkgs.coreutils pkgs.openssh ];
+            text = ''
+              set -euo pipefail
+
+              local_socket="${vmTouchIdBrokerSocket}"
+              remote_socket="${macTouchIdBrokerSocket}"
+
+              mkdir -p "$(dirname "$local_socket")"
+
+              while true; do
+                rm -f "$local_socket"
+                ssh-keygen -R "192.168.130.1" >/dev/null 2>&1 || true
+                ssh -N \
+                  -o StreamLocalBindUnlink=yes \
+                  -o ServerAliveInterval=30 \
+                  -o ServerAliveCountMax=3 \
+                  -o ExitOnForwardFailure=yes \
+                  -o StrictHostKeyChecking=accept-new \
+                  -L "$local_socket:$remote_socket" \
+                  m@192.168.130.1
+                sleep 5
+              done
+            '';
+          };
+        in {
         nixos = { config, pkgs, lib, ... }: {
           imports = [
             inputs.disko.nixosModules.disko
@@ -117,11 +302,14 @@
               (generated.requireFile "host-authorized-keys")
             ];
           };
+
+          den.secrets.rbwPinentryPackage = mkRbwPinentryTouchIdBridge pkgs;
         };
 
         homeManager = { pkgs, lib, ... }:
           let
             vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";
+            rbwPinentryTouchIdBrokerTunnel = mkRbwPinentryTouchIdBrokerTunnel pkgs;
 
             kubePassthroughBroker = pkgs.writeShellApplication {
               name = "kubectl-passthrough-broker";
@@ -477,8 +665,6 @@ EOF
               DOCKER_CONTEXT = "host-mac";
             };
 
-            programs.rbw.settings.pinentry = pkgs.wayprompt;
-
             programs.git.signing.key = vmGitSigningKey;
             programs.git.settings.gpg.program = "${pkgs.gnupg}/bin/gpg";
             programs.git.package = repairingGit;
@@ -536,6 +722,20 @@ EOF
                 ExecStart = "${gpgPresetPassphraseLogin}/bin/gpg-preset-passphrase-login";
                 Restart = "on-failure";
                 RestartSec = 30;
+              };
+              Install.WantedBy = [ "default.target" ];
+            };
+
+            systemd.user.services.rbw-pinentry-touchid-broker-tunnel = {
+              Unit = {
+                Description = "Forward the macOS Touch ID rbw broker socket into the VM";
+                After = [ "default.target" ];
+              };
+              Service = {
+                Type = "simple";
+                ExecStart = "${rbwPinentryTouchIdBrokerTunnel}/bin/rbw-pinentry-touchid-broker-tunnel";
+                Restart = "always";
+                RestartSec = 5;
               };
               Install.WantedBy = [ "default.target" ];
             };
