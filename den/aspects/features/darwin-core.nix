@@ -144,6 +144,7 @@
           homebrew.enable = true;
           homebrew.taps = [
             "lujstn/tap"
+            "kezhenxu94/tap"
           ];
           homebrew.casks = [
             "activitywatch"
@@ -156,6 +157,7 @@
           ];
           homebrew.brews = [
             "gnupg"
+            "ipass"
             "pinentry-touchid"
             "gromgit/fuse/s3fs-mac"
           ];
