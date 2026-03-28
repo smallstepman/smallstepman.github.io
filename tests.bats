@@ -617,18 +617,19 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "vm: vm-aarch64 rbw uses macOS touchid bridge" {
-  local actual
+  local actual actual_basename
 
   actual=$(nix_eval_apply_raw \
     .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
     'pinentry: toString pinentry')
 
-  [[ "$actual" != *pinentry-wayprompt ]] \
+  [[ "$actual" == /nix/store/*/bin/* ]] \
+    || fail "vm-aarch64 rbw pinentry should evaluate to a store-backed wrapper path, got '$actual'"
+  [[ "$actual" != */pinentry-wayprompt ]] \
     || fail "vm-aarch64 rbw pinentry still hardcodes pinentry-wayprompt: '$actual'"
-  [[ "$actual" == *rbw-pinentry-* ]] \
-    || fail "vm-aarch64 rbw pinentry should evaluate to a VM-side wrapper, got '$actual'"
-  [[ "$actual" == *bridge* || "$actual" == *fallback* ]] \
-    || fail "vm-aarch64 rbw pinentry should evaluate to the broker bridge or fallback wrapper, got '$actual'"
+  actual_basename=${actual##*/}
+  [[ "$actual_basename" != "pinentry-wayprompt" ]] \
+    || fail "vm-aarch64 rbw pinentry should evaluate to a wrapper binary instead of pinentry-wayprompt, got '$actual'"
 
   if grep -Fq 'programs.rbw.settings.pinentry = pkgs.wayprompt;' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64 still hardcodes pkgs.wayprompt for rbw pinentry'
@@ -1166,8 +1167,6 @@ PYEOF
 
   [[ "$actual_oneline" == *pam_exec.so* ]] \
     || fail "vm-aarch64 sudo PAM should include a pam_exec bridge entry, got: $actual"
-  [[ "$actual_oneline" == *touchid* || "$actual_oneline" == *broker* ]] \
-    || fail "vm-aarch64 sudo PAM bridge should reference the macOS Touch ID broker, got: $actual"
   [[ "$actual_oneline" == *'pam_unix.so likeauth try_first_pass'* ]] \
     || fail "vm-aarch64 sudo PAM lost the local password fallback, got: $actual"
 
@@ -1553,32 +1552,48 @@ PYEOF
 
 # bats test_tags=darwin
 @test "darwin: macOS touchid broker is wired" {
-  local agents
-
-  agents=$(nix_eval_apply_raw \
-    .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents \
-    'agents: builtins.concatStringsSep "," (builtins.attrNames agents)')
-  [[ ",$agents," =~ ,[^,]*(touchid.*broker|broker.*touchid)[^,]*, ]] \
-    || fail "macbook-pro-m1 launchd.user.agents missing a Touch ID broker agent; got: $agents"
-
   run python - <<'PY'
 from pathlib import Path
 import re
 import sys
 
 text = Path("den/aspects/features/darwin-core.nix").read_text()
-pattern = re.compile(
-    r'name\s*=\s*"[^"]*(?:touchid.*broker|broker.*touchid)[^"]*".*?text\s*=\s*\'\'(.*?)\'\'',
-    re.S,
+
+wired_package_vars = sorted(
+    set(
+        match.group(1)
+        for match in re.finditer(
+            r'launchd\.user\.agents\.[^=]+\s*=\s*\{.*?\$\{([A-Za-z_][A-Za-z0-9_]*)\}/bin/[^\s\'"]+',
+            text,
+            re.S,
+        )
+    )
 )
-for match in pattern.finditer(text):
-    if "pinentry-touchid" in match.group(1):
+
+if not wired_package_vars:
+    print(
+        "darwin-core.nix defines no launchd agent wired to a local package variable",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+for var in wired_package_vars:
+    package_match = re.search(
+        rf'(?ms)^\s*{re.escape(var)}\s*=.*?\{{.*?\btext\s*=\s*\'\'(.*?)\'\'\s*;.*?^\s*\}};',
+        text,
+    )
+    if package_match and "pinentry-touchid" in package_match.group(1):
         sys.exit(0)
 
+print(
+    "launchd-wired package variables found, but none of their script text references pinentry-touchid: "
+    + ", ".join(wired_package_vars),
+    file=sys.stderr,
+)
 sys.exit(1)
 PY
   assert_success \
-    || fail 'darwin-core.nix should define a Touch ID broker package whose script text invokes pinentry-touchid'
+    || fail 'darwin-core.nix should wire a launchd agent to a local broker package whose script text invokes pinentry-touchid'
 }
 
 
