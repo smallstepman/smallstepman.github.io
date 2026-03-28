@@ -1374,6 +1374,97 @@ PY
 }
 
 
+# bats test_tags=linux-core
+@test "linux: vm-aarch64 sudo touchid bridge uses a root-trusted broker tunnel" {
+  local actual bridge_path bridge_drv tunnel_path tunnel_drv
+
+  actual=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.systemd.services \
+    'services: if services ? "vm-touchid-sudo-broker-tunnel" then "yes" else "no"')
+  assert_equal "$actual" "yes"
+
+  bridge_path=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.environment.systemPackages \
+    'pkgs:
+      let
+        matches = builtins.filter (pkg: builtins.match ".*vm-touchid-sudo-bridge.*" (toString pkg) != null) pkgs;
+      in
+      toString (builtins.head matches)')
+  [[ "$bridge_path" == /nix/store/* ]] \
+    || fail "vm-touchid-sudo-bridge should evaluate to a store-backed helper path, got '$bridge_path'"
+
+  bridge_drv=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.environment.systemPackages \
+    'pkgs:
+      let
+        matches = builtins.filter (pkg: builtins.match ".*vm-touchid-sudo-bridge.*" (toString pkg) != null) pkgs;
+      in
+      builtins.head (builtins.attrNames (builtins.getContext (toString (builtins.head matches))))')
+
+  tunnel_path=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.systemd.services.vm-touchid-sudo-broker-tunnel.serviceConfig.ExecStart)
+  [[ "$tunnel_path" == /nix/store/*/bin/* ]] \
+    || fail "vm-touchid-sudo-broker-tunnel should evaluate to a store-backed helper path, got '$tunnel_path'"
+
+  tunnel_drv=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.systemd.services.vm-touchid-sudo-broker-tunnel.serviceConfig.ExecStart \
+    'execStart: builtins.head (builtins.attrNames (builtins.getContext execStart))')
+
+  run python - "$bridge_drv" "$tunnel_drv" <<'PY'
+import json
+import subprocess
+import sys
+
+bridge_drv, tunnel_drv = sys.argv[1:3]
+
+def derivation_text(drv: str) -> str:
+    payload = json.loads(
+        subprocess.run(
+            ["nix", "derivation", "show", drv],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    return next(iter(payload["derivations"].values()))["env"]["text"]
+
+bridge_text = derivation_text(bridge_drv)
+tunnel_text = derivation_text(tunnel_drv)
+expected_socket = "/run/vm-touchid-sudo-broker.sock"
+legacy_socket = "/home/m/.local/run/vm-touchid-broker.sock"
+
+if f'BROKER_SOCKET = "{expected_socket}"' not in bridge_text:
+    print(
+        f"sudo bridge does not point at the root-trusted broker socket {expected_socket!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if legacy_socket in bridge_text:
+    print(
+        f"sudo bridge still references the legacy user-controlled broker socket {legacy_socket!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if expected_socket not in tunnel_text:
+    print(
+        f"sudo broker tunnel does not expose the expected root runtime socket {expected_socket!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if "ssh -N" not in tunnel_text or "/Users/m/Library/Caches/vm-touchid-broker.sock" not in tunnel_text:
+    print(
+        "sudo broker tunnel derivation no longer encodes an SSH tunnel to the macOS Touch ID broker socket",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "vm-aarch64 sudo should trust a root-owned tunnel endpoint instead of the legacy user-home broker socket"
+}
+
+
 # ===========================================================================
 # vm-desktop — linux-desktop and vmware aspects
 # ===========================================================================

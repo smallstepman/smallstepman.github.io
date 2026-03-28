@@ -9,7 +9,8 @@
 
       ({ host, ... }:
         let
-          vmTouchIdBrokerSocket = "/home/m/.local/run/vm-touchid-broker.sock";
+          vmTouchIdUserBrokerSocket = "/home/m/.local/run/vm-touchid-broker.sock";
+          vmTouchIdSudoBrokerSocket = "/run/vm-touchid-sudo-broker.sock";
           macTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
 
           mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {
@@ -24,7 +25,7 @@
               import sys
               import urllib.parse
 
-              BROKER_SOCKET = "${vmTouchIdBrokerSocket}"
+              BROKER_SOCKET = "${vmTouchIdUserBrokerSocket}"
               LOCAL_FALLBACK = "${pkgs.wayprompt}/bin/pinentry-wayprompt"
               BROKER_CONNECT_TIMEOUT_SECONDS = 2.0
               BROKER_RESPONSE_TIMEOUT_SECONDS = 60.0
@@ -175,7 +176,7 @@
             text = ''
               set -euo pipefail
 
-              local_socket="${vmTouchIdBrokerSocket}"
+              local_socket="${vmTouchIdUserBrokerSocket}"
               remote_socket="${macTouchIdBrokerSocket}"
 
               mkdir -p "$(dirname "$local_socket")"
@@ -206,7 +207,7 @@
               import os
               import socket
 
-              BROKER_SOCKET = "${vmTouchIdBrokerSocket}"
+              BROKER_SOCKET = "${vmTouchIdSudoBrokerSocket}"
               BROKER_CONNECT_TIMEOUT_SECONDS = 2.0
               BROKER_RESPONSE_TIMEOUT_SECONDS = 60.0
 
@@ -260,10 +261,43 @@
                   raise SystemExit(main())
             '';
           };
+
+          mkVmTouchIdSudoBrokerTunnel = pkgs: pkgs.writeShellApplication {
+            name = "vm-touchid-sudo-broker-tunnel";
+            runtimeInputs = [ pkgs.coreutils pkgs.openssh ];
+            text = ''
+              set -euo pipefail
+              umask 077
+
+              local_socket="${vmTouchIdSudoBrokerSocket}"
+              remote_socket="${macTouchIdBrokerSocket}"
+
+              mkdir -p "$(dirname "$local_socket")"
+
+              while true; do
+                rm -f "$local_socket"
+                ssh-keygen -R "192.168.130.1" >/dev/null 2>&1 || true
+                ssh -N \
+                  -F /dev/null \
+                  -i /home/m/.ssh/id_ed25519 \
+                  -o BatchMode=yes \
+                  -o IdentitiesOnly=yes \
+                  -o StreamLocalBindUnlink=yes \
+                  -o ServerAliveInterval=30 \
+                  -o ServerAliveCountMax=3 \
+                  -o ExitOnForwardFailure=yes \
+                  -o StrictHostKeyChecking=accept-new \
+                  -L "$local_socket:$remote_socket" \
+                  m@192.168.130.1
+                sleep 5
+              done
+            '';
+          };
         in {
         nixos = { config, pkgs, lib, ... }:
           let
             vmTouchIdSudoBridge = mkVmTouchIdSudoBridge pkgs;
+            vmTouchIdSudoBrokerTunnel = mkVmTouchIdSudoBrokerTunnel pkgs;
           in {
           imports = [
             inputs.disko.nixosModules.disko
@@ -364,6 +398,17 @@
               ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:127.0.0.1:18080";
               Restart = "always";
               RestartSec = 1;
+            };
+          };
+
+          systemd.services.vm-touchid-sudo-broker-tunnel = {
+            description = "Expose the macOS Touch ID sudo broker on a root-owned runtime socket";
+            wantedBy = [ "multi-user.target" ];
+            after = [ "network.target" ];
+            serviceConfig = {
+              ExecStart = "${vmTouchIdSudoBrokerTunnel}/bin/vm-touchid-sudo-broker-tunnel";
+              Restart = "always";
+              RestartSec = 5;
             };
           };
 
