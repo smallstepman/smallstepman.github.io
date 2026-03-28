@@ -1446,6 +1446,36 @@ PYEOF
 }
 
 # bats test_tags=darwin
+@test "darwin: git aspect wires rbw Touch ID adapter activation" {
+  local actual
+
+  actual=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.activation \
+    'activation: builtins.concatStringsSep "," (builtins.attrNames activation)')
+  [[ ",$actual," == *",ensureDarwinRbwPinentry,"* ]] \
+    || fail "macbook-pro-m1 home.activation missing ensureDarwinRbwPinentry; got: $actual"
+
+  actual=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.home.activation \
+    'activation: builtins.concatStringsSep "," (builtins.attrNames activation)')
+  [[ ",$actual," != *",ensureDarwinRbwPinentry,"* ]] \
+    || fail "vm-aarch64 unexpectedly includes Darwin rbw pinentry activation; got: $actual"
+
+  actual=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.activation.ensureDarwinRbwPinentry \
+    'activation: activation.data')
+  [[ "$actual" == *"rbw-pinentry-touchid"* ]] \
+    || fail "Darwin rbw activation should set pinentry to the adapter wrapper; got: $actual"
+
+  grep -Fq 'OPTION allow-external-password-cache' den/aspects/features/git.nix \
+    || fail 'git aspect missing allow-external-password-cache adapter shim'
+  grep -Fq 'SETKEYINFO {keyinfo}' den/aspects/features/git.nix \
+    || fail 'git aspect missing SETKEYINFO adapter shim'
+  grep -Fq 'Bitwarden RBW <{email}>' den/aspects/features/git.nix \
+    || fail 'git aspect missing stable Bitwarden RBW keychain label'
+}
+
+# bats test_tags=darwin
 @test "darwin: uniclip overlay package present in both darwin and vm" {
   local actual
 
