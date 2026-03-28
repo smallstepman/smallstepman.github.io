@@ -106,7 +106,13 @@
                                 self.proc.stdin.close()
                         except Exception:
                             pass
-                        self.proc.wait(timeout=5)
+                        try:
+                            self.proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired as timeout_exc:
+                            self.proc.kill()
+                            self.proc.wait()
+                            if exc_type is None:
+                                raise RuntimeError("pinentry-touchid did not exit cleanly") from timeout_exc
 
                     def read_response(self):
                         lines = []
