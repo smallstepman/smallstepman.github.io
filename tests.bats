@@ -630,6 +630,8 @@ PYEOF
     .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
     'pinentry: builtins.head (builtins.attrNames (builtins.getContext (toString pinentry)))')
 
+  # Check semantic derivation markers so the contract survives wrapper refactors
+  # and equivalent Nix rewrites that keep the same bridge/fallback behavior.
   run python - "$actual" "$actual_drv" <<'PY'
 import subprocess
 import sys
@@ -663,12 +665,14 @@ PY
   assert_success \
     || fail "vm-aarch64 rbw pinentry should evaluate to a derivation payload that references both the macOS touchid bridge and a local fallback, got '$actual' via '$actual_drv'"
 
-  if grep -Fq 'programs.rbw.settings.pinentry = pkgs.wayprompt;' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'vm-aarch64 still hardcodes pkgs.wayprompt for rbw pinentry'
+  # Secondary anti-regression checks: the VM host and secrets aspect should not
+  # own direct rbw pinentry wiring, regardless of the exact Nix spelling used.
+  if rg -n 'programs\.rbw\.settings\.pinentry\s*=' den/aspects/hosts/vm-aarch64.nix >/dev/null; then
+    fail 'vm-aarch64 host config still owns a direct rbw pinentry assignment'
   fi
 
-  if grep -Fq -- '--arg pinentry "${pkgs.wayprompt}/bin/pinentry-wayprompt"' den/aspects/features/secrets.nix; then
-    fail 'secrets.nix still writes pinentry-wayprompt directly into rbw/config.json'
+  if rg -n -- '--arg\s+pinentry\b' den/aspects/features/secrets.nix >/dev/null; then
+    fail 'secrets.nix still writes rbw pinentry directly into config.json'
   fi
 }
 
@@ -1192,19 +1196,59 @@ PY
 
 # bats test_tags=linux-core
 @test "linux: vm-aarch64 sudo uses macOS touchid bridge" {
-  local actual actual_oneline before_fallback
+  local actual
 
   actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.security.pam.services.sudo.text)
-  actual_oneline=$(printf '%s' "$actual" | tr '\n' ' ')
 
-  [[ "$actual_oneline" == *pam_exec.so* ]] \
-    || fail "vm-aarch64 sudo PAM should include a pam_exec bridge entry, got: $actual"
-  [[ "$actual_oneline" == *'pam_unix.so likeauth try_first_pass'* ]] \
-    || fail "vm-aarch64 sudo PAM lost the local password fallback, got: $actual"
+  run python - "$actual" <<'PY'
+import sys
 
-  before_fallback=${actual_oneline%%pam_unix.so likeauth try_first_pass*}
-  [[ "$before_fallback" == *pam_exec.so* ]] \
-    || fail "vm-aarch64 sudo PAM should place the broker bridge before pam_unix fallback, got: $actual"
+actual = sys.argv[1]
+lines = actual.splitlines()
+
+bridge_index = next(
+    (
+        idx
+        for idx, line in enumerate(lines)
+        if line.startswith("auth ")
+        and "pam_exec.so" in line
+        and "sufficient" in line
+    ),
+    None,
+)
+fallback_index = next(
+    (
+        idx
+        for idx, line in enumerate(lines)
+        if line.startswith("auth ")
+        and "pam_unix.so likeauth try_first_pass" in line
+        and "sufficient" in line
+    ),
+    None,
+)
+
+if bridge_index is None:
+    print(
+        "vm-aarch64 sudo PAM should include an auth-sufficient pam_exec bridge line",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if fallback_index is None:
+    print(
+        "vm-aarch64 sudo PAM lost the auth-sufficient pam_unix.so likeauth try_first_pass fallback line",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if bridge_index >= fallback_index:
+    print(
+        "vm-aarch64 sudo PAM should place the auth bridge line before the pam_unix fallback line",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+  assert_success || fail "vm-aarch64 sudo PAM bridge ordering is wrong, got: $actual"
 }
 
 
