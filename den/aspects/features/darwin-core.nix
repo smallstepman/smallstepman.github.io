@@ -157,7 +157,7 @@
           ];
           homebrew.brews = [
             "gnupg"
-            "ipass"
+            "kezhenxu94/tap/ipass"
             "pinentry-touchid"
             "gromgit/fuse/s3fs-mac"
           ];
