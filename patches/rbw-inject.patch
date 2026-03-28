@@ -1,22 +1,16 @@
 diff --git a/src/bin/rbw/commands.rs b/src/bin/rbw/commands.rs
-index bb49cf2..eda8f9a 100644
+index bddf0ef..eb02232 100644
 --- a/src/bin/rbw/commands.rs
 +++ b/src/bin/rbw/commands.rs
-@@ -1,4 +1,12 @@
--use std::{fmt::Write as _, io::Write as _, os::unix::ffi::OsStrExt as _};
-+use std::{
-+    ffi::OsString,
-+    fmt::Write as _,
-+    io::{Read as _, Write as _},
-+    os::unix::ffi::OsStrExt as _,
-+};
-+
+@@ -1,3 +1,7 @@
++use std::ffi::OsString;
++use std::io::Read as _;
 +#[cfg(unix)]
 +use std::os::unix::fs::PermissionsExt as _;
+ use std::{fmt::Write as _, io::Write as _, os::unix::ffi::OsStrExt as _};
  
  use anyhow::Context as _;
- 
-@@ -1242,6 +1250,38 @@ pub fn code(
+@@ -1954,6 +1958,34 @@ pub fn stop_agent() -> anyhow::Result<()> {
      Ok(())
  }
  
@@ -24,7 +18,8 @@ index bb49cf2..eda8f9a 100644
 +    input: Option<&std::path::Path>,
 +    output: Option<&std::path::Path>,
 +) -> anyhow::Result<()> {
-+    let rendered = render_inject_input(input)?;
++    let ctx = InjectContext::load()?;
++    let rendered = ctx.render_input(input)?;
 +
 +    match output {
 +        Some(path) => write_rendered_template_file(path, &rendered)?,
@@ -38,292 +33,621 @@ index bb49cf2..eda8f9a 100644
 +    Ok(())
 +}
 +
-+pub fn inject_run(
-+    input: Option<&std::path::Path>,
++pub fn run(
++    env_file: &std::path::Path,
 +    command: &[OsString],
 +) -> anyhow::Result<std::process::ExitStatus> {
-+    unlock()?;
-+
-+    let db = load_db()?;
-+    let template = read_inject_template(input)?;
-+    let env_bindings = parse_inject_run_env(&template, |reference| {
-+        resolve_inject_reference(&db, reference)
-+    })?;
++    let ctx = InjectContext::load()?;
++    let env_bindings = ctx.env_bindings_from_file(env_file)?;
 +    run_inject_command(command, &env_bindings)
 +}
 +
- pub fn add(
-     name: &str,
-     username: Option<&str>,
-@@ -2453,228 +2493,1687 @@ fn display_field(name: &str, field: Option<&str>, clipboard: bool) -> bool {
-     )
+ fn ensure_agent() -> anyhow::Result<()> {
+     check_config()?;
+     if matches!(check_agent_version(), Ok(())) {
+@@ -2769,6 +2801,827 @@ fn parse_totp_secret(secret: &str) -> anyhow::Result<TotpParams> {
+     }
  }
  
--#[cfg(test)]
--mod test {
--    use super::*;
++struct InjectContext {
++    entries: Vec<rbw::db::Entry>,
++}
++
++impl InjectContext {
++    fn load() -> anyhow::Result<Self> {
++        unlock()?;
++
++        let db = load_db()?;
++        Ok(Self {
++            entries: db.entries,
++        })
++    }
++
++    fn render_input(
++        &self,
++        input: Option<&std::path::Path>,
++    ) -> anyhow::Result<String> {
++        let template = read_inject_template(input)?;
++        InjectTemplate::new(&template)
++            .render(|reference| self.resolve(reference))
++    }
++
++    fn env_bindings_from_file(
++        &self,
++        env_file: &std::path::Path,
++    ) -> anyhow::Result<Vec<(String, String)>> {
++        let template =
++            std::fs::read_to_string(env_file).with_context(|| {
++                format!("failed to read env file {}", env_file.display())
++            })?;
++        parse_run_env_file(&template, |reference| self.resolve(reference))
++            .with_context(|| {
++                format!("failed to parse env file {}", env_file.display())
++            })
++    }
++
++    fn resolve(&self, reference: &InjectReference) -> anyhow::Result<String> {
++        let (entry, _) = self.find_entry_raw(&reference.target)?;
++        let decrypted = decrypt_cipher(&entry).with_context(|| {
++            format!("failed to decrypt entry '{}'", reference.id)
++        })?;
++        resolve_inject_value(&decrypted, reference.field.as_deref())
++            .with_context(|| {
++                format!(
++                    "failed to resolve inject reference '{}'",
++                    reference.id
++                )
++            })
++    }
++
++    fn find_entry_raw(
++        &self,
++        target: &InjectReferenceTarget,
++    ) -> anyhow::Result<(rbw::db::Entry, DecryptedSearchCipher)> {
++        let entries = self
++            .entries
++            .iter()
++            .map(|entry| {
++                decrypt_search_cipher(entry)
++                    .map(|decrypted| (entry.clone(), decrypted))
++            })
++            .collect::<anyhow::Result<Vec<_>>>()?;
++        target.find_entry(&entries)
++    }
++}
++
 +#[derive(Debug, Clone, Eq, PartialEq)]
 +enum InjectReferenceTarget {
 +    Uuid(String),
 +    Name(String),
 +}
- 
--    #[test]
--    fn test_find_entry() {
--        let entries = &[
--            make_entry("github", Some("foo"), None, &[]),
--            make_entry("gitlab", Some("foo"), None, &[]),
--            make_entry("gitlab", Some("bar"), None, &[]),
--            make_entry("gitter", Some("baz"), None, &[]),
--            make_entry("git", Some("foo"), None, &[]),
--            make_entry("bitwarden", None, None, &[]),
--            make_entry("github", Some("foo"), Some("websites"), &[]),
--            make_entry("github", Some("foo"), Some("ssh"), &[]),
--            make_entry("github", Some("root"), Some("ssh"), &[]),
--            make_entry("codeberg", Some("foo"), None, &[]),
--            make_entry("codeberg", None, None, &[]),
--            make_entry("1password", Some("foo"), None, &[]),
--            make_entry("1password", None, Some("foo"), &[]),
--        ];
++
 +impl InjectReferenceTarget {
++    fn parse(raw_target: &str) -> anyhow::Result<Self> {
++        if let Ok(uuid) = uuid::Uuid::parse_str(raw_target) {
++            Ok(Self::Uuid(uuid.to_string()))
++        } else if Self::is_valid_name(raw_target) {
++            Ok(Self::Name(raw_target.to_string()))
++        } else {
++            anyhow::bail!(
++                "invalid item uuid or supported name '{raw_target}'"
++            );
++        }
++    }
++
 +    fn as_str(&self) -> &str {
 +        match self {
 +            Self::Uuid(value) | Self::Name(value) => value,
 +        }
 +    }
++
++    fn kind(&self) -> &'static str {
++        match self {
++            Self::Uuid(_) => "id",
++            Self::Name(_) => "name",
++        }
++    }
++
++    fn matches_entry(
++        &self,
++        entry: &rbw::db::Entry,
++        decrypted: &DecryptedSearchCipher,
++    ) -> bool {
++        match self {
++            Self::Uuid(id) => entry.id.eq_ignore_ascii_case(id),
++            Self::Name(name) => decrypted.name.eq_ignore_ascii_case(name),
++        }
++    }
++
++    fn find_entry(
++        &self,
++        entries: &[(rbw::db::Entry, DecryptedSearchCipher)],
++    ) -> anyhow::Result<(rbw::db::Entry, DecryptedSearchCipher)> {
++        let matches: Vec<(rbw::db::Entry, DecryptedSearchCipher)> = entries
++            .iter()
++            .filter(|(entry, decrypted)| self.matches_entry(entry, decrypted))
++            .cloned()
++            .collect();
++
++        if matches.is_empty() {
++            anyhow::bail!(
++                "no entry found for item {} '{}'",
++                self.kind(),
++                self.as_str()
++            );
++        } else if matches.len() == 1 {
++            Ok(matches[0].clone())
++        } else {
++            let entries: Vec<String> = matches
++                .iter()
++                .map(|(_, decrypted)| decrypted.display_name())
++                .collect();
++            match self {
++                Self::Name(name) => anyhow::bail!(
++                    "multiple entries found for item name '{}': {}; use bw://<uuid> instead",
++                    name,
++                    entries.join(", ")
++                ),
++                Self::Uuid(id) => anyhow::bail!(
++                    "multiple entries found for item id '{}': {}",
++                    id,
++                    entries.join(", ")
++                ),
++            }
++        }
++    }
++
++    fn is_valid_name(name: &str) -> bool {
++        !name.is_empty()
++            && name.chars().all(|ch| {
++                ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'
++            })
++    }
 +}
- 
--        assert!(
--            one_match(entries, "github", Some("foo"), None, 0, false),
--            "foo@github"
--        );
--        assert!(
--            one_match(entries, "GITHUB", Some("foo"), None, 0, true),
--            "foo@GITHUB"
--        );
--        assert!(one_match(entries, "github", None, None, 0, false), "github");
--        assert!(one_match(entries, "GITHUB", None, None, 0, true), "GITHUB");
--        assert!(
--            one_match(entries, "gitlab", Some("foo"), None, 1, false),
--            "foo@gitlab"
--        );
--        assert!(
--            one_match(entries, "GITLAB", Some("foo"), None, 1, true),
--            "foo@GITLAB"
--        );
--        assert!(
--            one_match(entries, "git", Some("bar"), None, 2, false),
--            "bar@git"
--        );
--        assert!(
--            one_match(entries, "GIT", Some("bar"), None, 2, true),
--            "bar@GIT"
--        );
--        assert!(
--            one_match(entries, "gitter", Some("ba"), None, 3, false),
--            "ba@gitter"
--        );
--        assert!(
--            one_match(entries, "GITTER", Some("ba"), None, 3, true),
--            "ba@GITTER"
--        );
--        assert!(
--            one_match(entries, "git", Some("foo"), None, 4, false),
--            "foo@git"
--        );
--        assert!(
--            one_match(entries, "GIT", Some("foo"), None, 4, true),
--            "foo@GIT"
--        );
--        assert!(one_match(entries, "git", None, None, 4, false), "git");
--        assert!(one_match(entries, "GIT", None, None, 4, true), "GIT");
--        assert!(
--            one_match(entries, "bitwarden", None, None, 5, false),
--            "bitwarden"
--        );
--        assert!(
--            one_match(entries, "BITWARDEN", None, None, 5, true),
--            "BITWARDEN"
--        );
--        assert!(
--            one_match(
--                entries,
--                "github",
--                Some("foo"),
--                Some("websites"),
--                6,
--                false
--            ),
--            "websites/foo@github"
--        );
--        assert!(
--            one_match(
--                entries,
--                "GITHUB",
--                Some("foo"),
--                Some("websites"),
--                6,
--                true
--            ),
--            "websites/foo@GITHUB"
--        );
--        assert!(
--            one_match(entries, "github", Some("foo"), Some("ssh"), 7, false),
--            "ssh/foo@github"
--        );
--        assert!(
--            one_match(entries, "GITHUB", Some("foo"), Some("ssh"), 7, true),
--            "ssh/foo@GITHUB"
--        );
--        assert!(
--            one_match(entries, "github", Some("root"), None, 8, false),
--            "ssh/root@github"
--        );
--        assert!(
--            one_match(entries, "GITHUB", Some("root"), None, 8, true),
--            "ssh/root@GITHUB"
--        );
++
 +#[derive(Debug, Clone, Eq, PartialEq)]
 +struct InjectReference {
 +    id: String,
 +    target: InjectReferenceTarget,
 +    field: Option<String>,
 +}
- 
--        assert!(
--            no_matches(entries, "gitlab", Some("baz"), None, false),
--            "baz@gitlab"
--        );
--        assert!(
--            no_matches(entries, "GITLAB", Some("baz"), None, true),
--            "baz@"
--        );
--        assert!(
--            no_matches(entries, "bitbucket", Some("foo"), None, false),
--            "foo@bitbucket"
--        );
--        assert!(
--            no_matches(entries, "BITBUCKET", Some("foo"), None, true),
--            "foo@BITBUCKET"
--        );
--        assert!(
--            no_matches(entries, "github", Some("foo"), Some("bar"), false),
--            "bar/foo@github"
--        );
--        assert!(
--            no_matches(entries, "GITHUB", Some("foo"), Some("bar"), true),
--            "bar/foo@"
--        );
--        assert!(
--            no_matches(entries, "gitlab", Some("foo"), Some("bar"), false),
--            "bar/foo@gitlab"
--        );
--        assert!(
--            no_matches(entries, "GITLAB", Some("foo"), Some("bar"), true),
--            "bar/foo@GITLAB"
--        );
++
++impl InjectReference {
++    fn parse(reference: &str) -> anyhow::Result<Self> {
++        let parsed = url::Url::parse(reference).with_context(|| {
++            format!("invalid inject reference '{reference}'")
++        })?;
++        if parsed.scheme() != "bw" {
++            anyhow::bail!(
++                "invalid inject reference scheme '{}'",
++                parsed.scheme()
++            );
++        }
++        if parsed.fragment().is_some() {
++            anyhow::bail!("inject references do not support fragments");
++        }
++        if !parsed.username().is_empty() {
++            anyhow::bail!("inject references do not support usernames");
++        }
++        if parsed.password().is_some() {
++            anyhow::bail!("inject references do not support passwords");
++        }
++        if parsed.port().is_some() {
++            anyhow::bail!("inject references do not support ports");
++        }
++        if !parsed.path().is_empty() {
++            anyhow::bail!("inject references do not support paths");
++        }
++
++        let raw_target = parsed
++            .host_str()
++            .context("inject reference is missing an item id or name")?;
++        let target = InjectReferenceTarget::parse(raw_target)?;
++
++        let mut field = None;
++        for (key, value) in parsed.query_pairs() {
++            match key.as_ref() {
++                "field" => {
++                    if field.replace(value.into_owned()).is_some() {
++                        anyhow::bail!(
++                            "inject reference has multiple field parameters"
++                        );
++                    }
++                }
++                _ => anyhow::bail!(
++                    "unsupported inject query parameter '{key}'"
++                ),
++            }
++        }
++
++        let field = field
++            .map(|value| {
++                let trimmed = value.trim();
++                if trimmed.is_empty() {
++                    anyhow::bail!(
++                        "inject field query parameter cannot be empty"
++                    );
++                }
++                Ok(trimmed.to_string())
++            })
++            .transpose()?;
++
++        Ok(Self {
++            id: target.as_str().to_string(),
++            target,
++            field,
++        })
++    }
++
++    fn parse_braced(expr: &str) -> anyhow::Result<Option<Self>> {
++        let expr = expr.trim();
++        let expr = if expr.starts_with('"') {
++            match serde_json::from_str::<String>(expr) {
++                Ok(expr) => expr,
++                Err(_) => return Ok(None),
++            }
++        } else {
++            expr.to_string()
++        };
++        if !expr.starts_with("bw://") {
++            return Ok(None);
++        }
++        Self::parse(&expr).map(Some)
++    }
++}
++
 +#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 +enum InjectMarker {
 +    Braced,
 +    Raw,
 +}
- 
--        assert!(many_matches(entries, "gitlab", None, None, false), "gitlab");
--        assert!(many_matches(entries, "gitlab", None, None, true), "GITLAB");
--        assert!(
--            many_matches(entries, "gi", Some("foo"), None, false),
--            "foo@gi"
--        );
--        assert!(
--            many_matches(entries, "GI", Some("foo"), None, true),
--            "foo@GI"
--        );
--        assert!(
--            many_matches(entries, "git", Some("ba"), None, false),
--            "ba@git"
--        );
--        assert!(
--            many_matches(entries, "GIT", Some("ba"), None, true),
--            "ba@GIT"
--        );
--        assert!(
--            many_matches(entries, "github", Some("foo"), Some("s"), false),
--            "s/foo@github"
--        );
--        assert!(
--            many_matches(entries, "GITHUB", Some("foo"), Some("s"), true),
--            "s/foo@GITHUB"
--        );
-+fn render_inject_template<F>(
-+    template: &str,
-+    mut resolver: F,
-+) -> anyhow::Result<String>
-+where
-+    F: FnMut(&InjectReference) -> anyhow::Result<String>,
-+{
-+    let mut rendered = String::with_capacity(template.len());
-+    let mut start = 0;
-+    while let Some((idx, marker)) = next_inject_marker(template, start) {
-+        rendered.push_str(&template[start..idx]);
-+        match marker {
-+            InjectMarker::Braced => {
-+                let rest = &template[idx + 2..];
-+                let Some(end) = rest.find("}}") else {
-+                    anyhow::bail!("unterminated inject template expression");
-+                };
-+                let end = idx + 2 + end;
-+                let expr = template[idx + 2..end].trim();
-+                if let Some(reference) = expr.strip_prefix("bw://") {
-+                    let reference =
-+                        parse_inject_reference(&format!("bw://{reference}"))?;
-+                    rendered.push_str(&resolver(&reference)?);
-+                } else {
-+                    rendered.push_str(&template[idx..end + 2]);
++
++struct InjectTemplate<'a> {
++    src: &'a str,
++}
++
++impl<'a> InjectTemplate<'a> {
++    fn new(src: &'a str) -> Self {
++        Self { src }
++    }
++
++    fn render<F>(&self, mut resolver: F) -> anyhow::Result<String>
++    where
++        F: FnMut(&InjectReference) -> anyhow::Result<String>,
++    {
++        self.render_with_variable_resolver(
++            lookup_inject_template_variable,
++            |reference| resolver(reference),
++        )
++    }
++
++    fn render_with_variable_resolver<F, G>(
++        &self,
++        mut lookup_variable: G,
++        mut resolver: F,
++    ) -> anyhow::Result<String>
++    where
++        F: FnMut(&InjectReference) -> anyhow::Result<String>,
++        G: FnMut(&str) -> Option<String>,
++    {
++        let expanded =
++            self.expand_variables_with_lookup(&mut lookup_variable)?;
++        InjectTemplate::new(&expanded)
++            .render_secret_references(|reference| resolver(reference))
++    }
++
++    fn render_secret_references<F>(
++        &self,
++        mut resolver: F,
++    ) -> anyhow::Result<String>
++    where
++        F: FnMut(&InjectReference) -> anyhow::Result<String>,
++    {
++        let mut rendered = String::with_capacity(self.src.len());
++        let mut start = 0;
++        while let Some((idx, marker)) = self.next_marker(start) {
++            rendered.push_str(
++                self.src
++                    .get(start..idx)
++                    .expect("marker range should be valid"),
++            );
++            start = match marker {
++                InjectMarker::Braced => {
++                    self.render_braced(idx, &mut rendered, &mut resolver)?
 +                }
-+                start = end + 2;
-+            }
-+            InjectMarker::Raw => {
-+                let end = raw_reference_end(template, idx);
-+                let prefix = &template[..idx];
-+                let (reference, split) = parse_raw_inject_reference(
-+                    &template[idx..end],
-+                    prefix.ends_with(':') || prefix.ends_with("://"),
-+                    prefix.ends_with('='),
-+                )?;
-+                rendered.push_str(&resolver(&reference)?);
-+                start = idx + split;
++                InjectMarker::Raw => {
++                    self.render_raw(idx, &mut rendered, &mut resolver)?
++                }
++            };
++        }
++        rendered.push_str(
++            self.src
++                .get(start..)
++                .expect("template tail range should be valid"),
++        );
++        Ok(rendered)
++    }
++
++    fn expand_variables_with_lookup<G>(
++        &self,
++        lookup_variable: &mut G,
++    ) -> anyhow::Result<String>
++    where
++        G: FnMut(&str) -> Option<String>,
++    {
++        let mut rendered = String::with_capacity(self.src.len());
++        let mut start = 0;
++        while let Some(offset) = self
++            .src
++            .get(start..)
++            .expect("variable search start should be valid")
++            .find('$')
++        {
++            let idx = start + offset;
++            rendered.push_str(
++                self.src
++                    .get(start..idx)
++                    .expect("variable prefix range should be valid"),
++            );
++            if let Some((value, next_start)) =
++                self.resolve_variable_at(idx, lookup_variable)?
++            {
++                rendered.push_str(&value);
++                start = next_start;
++            } else {
++                rendered.push('$');
++                start = idx + '$'.len_utf8();
 +            }
 +        }
++        rendered.push_str(
++            self.src
++                .get(start..)
++                .expect("variable tail range should be valid"),
++        );
++        Ok(rendered)
 +    }
-+    rendered.push_str(&template[start..]);
-+    Ok(rendered)
++
++    fn take_braced_expression(
++        &self,
++        idx: usize,
++    ) -> anyhow::Result<(&'a str, usize)> {
++        let rest = self
++            .src
++            .get(idx..)
++            .expect("braced expression start should be valid")
++            .strip_prefix("{{")
++            .expect("braced expression must start with '{{'");
++        let Some((expr, tail)) = rest.split_once("}}") else {
++            anyhow::bail!("unterminated inject template expression");
++        };
++        Ok((expr, self.src.len() - tail.len()))
++    }
++
++    fn render_braced<F>(
++        &self,
++        idx: usize,
++        out: &mut String,
++        resolver: &mut F,
++    ) -> anyhow::Result<usize>
++    where
++        F: FnMut(&InjectReference) -> anyhow::Result<String>,
++    {
++        let (expr, next_start) = self.take_braced_expression(idx)?;
++        if let Some(reference) = InjectReference::parse_braced(expr)? {
++            out.push_str(&resolver(&reference)?);
++        } else {
++            out.push_str("{{");
++            out.push_str(expr);
++            out.push_str("}}");
++        }
++        Ok(next_start)
++    }
++
++    fn render_raw<F>(
++        &self,
++        idx: usize,
++        out: &mut String,
++        resolver: &mut F,
++    ) -> anyhow::Result<usize>
++    where
++        F: FnMut(&InjectReference) -> anyhow::Result<String>,
++    {
++        let end = self.raw_reference_end(idx);
++        let candidate = self
++            .src
++            .get(idx..end)
++            .expect("raw reference range should be valid");
++        let reference = InjectReference::parse(candidate)?;
++        out.push_str(&resolver(&reference)?);
++        Ok(end)
++    }
++
++    fn resolve_variable_at<G>(
++        &self,
++        idx: usize,
++        lookup_variable: &mut G,
++    ) -> anyhow::Result<Option<(String, usize)>>
++    where
++        G: FnMut(&str) -> Option<String>,
++    {
++        let rest = self
++            .src
++            .get(idx + '$'.len_utf8()..)
++            .expect("variable suffix range should be valid");
++        match rest.chars().next() {
++            Some('{') => self.resolve_braced_variable(idx, lookup_variable),
++            Some(ch) if Self::is_valid_variable_start(ch) => {
++                let name_len = rest
++                    .char_indices()
++                    .take_while(|(_, ch)| {
++                        Self::is_valid_variable_continue(*ch)
++                    })
++                    .last()
++                    .map_or(0, |(offset, ch)| offset + ch.len_utf8());
++                let name = rest
++                    .get(..name_len)
++                    .expect("raw variable name range should be valid");
++                if let Some(value) = lookup_variable(name) {
++                    Ok(Some((value, idx + '$'.len_utf8() + name_len)))
++                } else {
++                    anyhow::bail!(
++                        "inject template variable '{name}' is not set"
++                    );
++                }
++            }
++            _ => Ok(None),
++        }
++    }
++
++    fn resolve_braced_variable<G>(
++        &self,
++        idx: usize,
++        lookup_variable: &mut G,
++    ) -> anyhow::Result<Option<(String, usize)>>
++    where
++        G: FnMut(&str) -> Option<String>,
++    {
++        let expr_start = idx + "${".len();
++        let rest = self
++            .src
++            .get(expr_start..)
++            .expect("braced variable start should be valid");
++        let mut depth = 1usize;
++        let mut end = None;
++        let mut offset = 0;
++        while offset < rest.len() {
++            let tail = rest
++                .get(offset..)
++                .expect("braced variable tail range should be valid");
++            if tail.starts_with("\\}") {
++                offset += "\\}".len();
++                continue;
++            }
++            if tail.starts_with("${") {
++                depth += 1;
++                offset += "${".len();
++                continue;
++            }
++            let ch = tail
++                .chars()
++                .next()
++                .expect("braced variable tail should not be empty");
++            if ch == '}' {
++                depth -= 1;
++                if depth == 0 {
++                    end = Some(expr_start + offset);
++                    break;
++                }
++            }
++            offset += ch.len_utf8();
++        }
++        let end = end.context("unterminated inject template variable")?;
++        let expr = self
++            .src
++            .get(expr_start..end)
++            .expect("braced variable expression range should be valid");
++        let (name, default) = match expr.split_once(":-") {
++            Some((name, default)) => (name.trim(), Some(default)),
++            None => (expr.trim(), None),
++        };
++        if !Self::is_valid_variable_name(name) {
++            return Ok(None);
++        }
++        let value = if let Some(value) = lookup_variable(name) {
++            value
++        } else if let Some(default) = default {
++            InjectTemplate::new(default)
++                .expand_variables_with_lookup(lookup_variable)?
++        } else {
++            anyhow::bail!("inject template variable '{name}' is not set");
++        };
++        Ok(Some((value, end + '}'.len_utf8())))
++    }
++
++    fn next_marker(&self, start: usize) -> Option<(usize, InjectMarker)> {
++        let rest = self
++            .src
++            .get(start..)
++            .expect("marker search start should be valid");
++        let braced = rest
++            .find("{{")
++            .map(|offset| (start + offset, InjectMarker::Braced));
++        let raw = rest
++            .match_indices("bw://")
++            .map(|(offset, _)| start + offset)
++            .find(|&idx| Self::raw_reference_can_start(self.src, idx))
++            .map(|idx| (idx, InjectMarker::Raw));
++
++        match (braced, raw) {
++            (Some(braced), Some(raw)) => {
++                Some(if braced.0 <= raw.0 { braced } else { raw })
++            }
++            (Some(braced), None) => Some(braced),
++            (None, Some(raw)) => Some(raw),
++            (None, None) => None,
++        }
++    }
++
++    fn raw_reference_end(&self, start: usize) -> usize {
++        let mut end = start + "bw://".len();
++        let mut seen_query = false;
++        let mut seen_query_equals = false;
++        for (offset, ch) in self
++            .src
++            .get(end..)
++            .expect("raw reference start should be valid")
++            .char_indices()
++        {
++            let is_allowed = if ch.is_ascii_alphanumeric()
++                || matches!(ch, '-' | '_')
++                || (seen_query_equals && matches!(ch, '.' | '%' | '+'))
++            {
++                true
++            } else if ch == '?' && !seen_query {
++                seen_query = true;
++                true
++            } else if ch == '=' && seen_query && !seen_query_equals {
++                seen_query_equals = true;
++                true
++            } else {
++                false
++            };
++            if !is_allowed {
++                break;
++            }
++            end = start + "bw://".len() + offset + ch.len_utf8();
++        }
++        end
++    }
++
++    fn raw_reference_can_start(template: &str, idx: usize) -> bool {
++        template
++            .get(..idx)
++            .and_then(|prefix| prefix.chars().next_back())
++            .is_none_or(|ch| {
++                !ch.is_ascii_alphanumeric()
++                    && !matches!(ch, '-' | '+' | '\\' | '.')
++            })
++    }
++
++    fn is_valid_variable_name(name: &str) -> bool {
++        let mut chars = name.chars();
++        matches!(chars.next(), Some(ch) if Self::is_valid_variable_start(ch))
++            && chars.all(Self::is_valid_variable_continue)
++    }
++
++    fn is_valid_variable_start(ch: char) -> bool {
++        ch.is_ascii_alphabetic() || ch == '_'
++    }
++
++    fn is_valid_variable_continue(ch: char) -> bool {
++        ch.is_ascii_alphanumeric() || ch == '_'
++    }
 +}
- 
--        assert!(
--            one_match(entries, "codeberg", Some("foo"), None, 9, false),
--            "foo@codeberg"
--        );
--        assert!(
--            one_match(entries, "codeberg", None, None, 10, false),
--            "codeberg"
--        );
--        assert!(
--            no_matches(entries, "codeberg", Some("bar"), None, false),
--            "bar@codeberg"
--        );
-+fn render_inject_input(
-+    input: Option<&std::path::Path>,
-+) -> anyhow::Result<String> {
-+    unlock()?;
- 
--        assert!(
--            many_matches(entries, "1password", None, None, false),
--            "1password"
--        );
-+    let db = load_db()?;
-+    let template = read_inject_template(input)?;
-+    render_inject_template(&template, |reference| {
-+        resolve_inject_reference(&db, reference)
++
++fn lookup_inject_template_variable(name: &str) -> Option<String> {
++    std::env::vars().find_map(|(key, value)| {
++        key.eq_ignore_ascii_case(name).then_some(value)
 +    })
 +}
 +
@@ -347,211 +671,25 @@ index bb49cf2..eda8f9a 100644
 +                .read_to_string(&mut template)
 +                .context("failed to read template from stdin")?;
 +        }
-     }
++    }
 +    Ok(template)
 +}
- 
--    #[test]
--    fn test_find_by_uuid() {
--        let entries = &[
--            make_entry("github", Some("foo"), None, &[]),
--            make_entry("gitlab", Some("foo"), None, &[]),
--            make_entry("gitlab", Some("bar"), None, &[]),
--            make_entry(
--                "12345678-1234-1234-1234-1234567890ab",
--                None,
--                None,
--                &[],
--            ),
--            make_entry(
--                "12345678-1234-1234-1234-1234567890AC",
--                None,
--                None,
--                &[],
--            ),
--            make_entry("123456781234123412341234567890AD", None, None, &[]),
--        ];
-+fn parse_inject_dotenv(
-+    rendered: &str,
-+) -> anyhow::Result<Vec<(String, String)>> {
-+    let mut pairs = Vec::new();
-+    for (idx, raw_line) in rendered.lines().enumerate() {
-+        let line_number = idx + 1;
-+        let line = raw_line.trim();
-+        if line.is_empty() || line.starts_with('#') {
-+            continue;
-+        }
-+        if line.starts_with("export ") {
-+            anyhow::bail!(
-+                "line {line_number}: unsupported shell syntax 'export'; use KEY=value"
-+            );
-+        }
- 
--        assert!(
--            one_match(entries, &entries[0].0.id, None, None, 0, false),
--            "foo@github"
--        );
--        assert!(
--            one_match(entries, &entries[1].0.id, None, None, 1, false),
--            "foo@gitlab"
--        );
--        assert!(
-+        let Some((raw_key, raw_value)) = line.split_once('=') else {
-+            anyhow::bail!(
-+                "line {line_number}: missing '=' in dotenv assignment"
-+            );
-+        };
-+        let key = raw_key.trim();
-+        if key.is_empty() {
-+            anyhow::bail!(
-+                "line {line_number}: dotenv assignment is missing a key"
-+            );
-+        }
-+        if key.contains(char::is_whitespace) {
-+            anyhow::bail!(
-+                "line {line_number}: unsupported whitespace in dotenv key '{key}'"
-+            );
-+        }
 +
-+        let value = parse_inject_dotenv_value(raw_value, line_number)?;
-+        pairs.push((key.to_string(), value));
-+    }
-+    Ok(pairs)
-+}
-+
-+fn parse_inject_run_env<F>(
++fn parse_run_env_file<F>(
 +    template: &str,
 +    mut resolver: F,
 +) -> anyhow::Result<Vec<(String, String)>>
 +where
 +    F: FnMut(&InjectReference) -> anyhow::Result<String>,
 +{
-+    let mut pairs = Vec::new();
-+    for (idx, raw_line) in template.lines().enumerate() {
-+        let line_number = idx + 1;
-+        let line = raw_line.trim();
-+        if line.is_empty() || line.starts_with('#') {
-+            continue;
-+        }
-+        if line.starts_with("export ") {
-+            anyhow::bail!(
-+                "line {line_number}: unsupported shell syntax 'export'; use KEY=value"
-+            );
-+        }
-+
-+        let Some((raw_key, raw_value)) = line.split_once('=') else {
-+            anyhow::bail!(
-+                "line {line_number}: missing '=' in dotenv assignment"
-+            );
-+        };
-+        let key = raw_key.trim();
-+        if key.is_empty() {
-+            anyhow::bail!(
-+                "line {line_number}: dotenv assignment is missing a key"
-+            );
-+        }
-+        if key.contains(char::is_whitespace) {
-+            anyhow::bail!(
-+                "line {line_number}: unsupported whitespace in dotenv key '{key}'"
-+            );
-+        }
-+
-+        let value_template =
-+            parse_inject_dotenv_value(raw_value, line_number)?;
-+        let value = render_inject_template(&value_template, |reference| {
-+            resolver(reference)
-+        })?;
-+        pairs.push((key.to_string(), value));
-+    }
-+    Ok(pairs)
-+}
-+
-+fn parse_inject_dotenv_value(
-+    raw_value: &str,
-+    line_number: usize,
-+) -> anyhow::Result<String> {
-+    let value = raw_value.trim_start();
-+    match value.chars().next() {
-+        Some(quote @ ('\'' | '"')) => {
-+            parse_inject_dotenv_quoted_value(value, quote, line_number)
-+        }
-+        _ => Ok(parse_inject_dotenv_unquoted_value(raw_value)),
-+    }
-+}
-+
-+fn parse_inject_dotenv_unquoted_value(raw_value: &str) -> String {
-+    let Some(start) = raw_value.find(|ch: char| !ch.is_whitespace()) else {
-+        return String::new();
-+    };
-+
-+    for (offset, ch) in raw_value[start..].char_indices() {
-+        let idx = start + offset;
-+        if ch != '#' {
-+            continue;
-+        }
-+
-+        let preceded_by_whitespace = idx > 0
-+            && raw_value[..idx]
-+                .chars()
-+                .next_back()
-+                .is_some_and(char::is_whitespace);
-+        if preceded_by_whitespace {
-+            return raw_value[start..idx].trim_end().to_string();
-+        }
-+    }
-+
-+    raw_value[start..].trim_end().to_string()
-+}
-+
-+fn parse_inject_dotenv_quoted_value(
-+    value: &str,
-+    quote: char,
-+    line_number: usize,
-+) -> anyhow::Result<String> {
-+    let mut chars = value.chars();
-+    let Some(opening) = chars.next() else {
-+        return Ok(String::new());
-+    };
-+    debug_assert_eq!(opening, quote);
-+
-+    let mut parsed = String::new();
-+    let mut chars = chars.as_str().char_indices().peekable();
-+    while let Some((idx, ch)) = chars.next() {
-+        if ch == quote {
-+            let trailing =
-+                &value[idx + opening.len_utf8() + quote.len_utf8()..];
-+            if trailing.trim().is_empty() {
-+                return Ok(parsed);
-+            }
-+            if trailing.starts_with(char::is_whitespace)
-+                && trailing.trim_start().starts_with('#')
-+            {
-+                return Ok(parsed);
-+            }
-+            anyhow::bail!(
-+                "line {line_number}: unsupported trailing characters after quoted dotenv value"
-+            );
-+        }
-+
-+        if quote == '"' && ch == '\\' {
-+            match chars.peek().map(|(_, ch)| *ch) {
-+                Some('\\' | '"') => {
-+                    parsed.push(chars.next().expect("peeked escape char").1);
-+                }
-+                Some(_) => parsed.push('\\'),
-+                None => {
-+                    anyhow::bail!(
-+                        "line {line_number}: unterminated escape sequence in quoted dotenv value"
-+                    );
-+                }
-+            }
-+            continue;
-+        }
-+
-+        parsed.push(ch);
-+    }
-+
-+    anyhow::bail!("line {line_number}: unterminated quoted dotenv value")
++    dotenvy::from_read_iter(std::io::Cursor::new(template))
++        .map(|item| {
++            let (key, value) = item.map_err(anyhow::Error::from)?;
++            InjectTemplate::new(&value)
++                .render_secret_references(|reference| resolver(reference))
++                .map(|rendered| (key, rendered))
++        })
++        .collect()
 +}
 +
 +fn build_inject_run_command(
@@ -579,271 +717,12 @@ index bb49cf2..eda8f9a 100644
 +) -> anyhow::Result<std::process::ExitStatus> {
 +    let mut child = build_inject_run_command(command, env_bindings)?;
 +    child.status().with_context(|| {
-+        let program = command
-+            .first()
-+            .map(|program| program.to_string_lossy().into_owned())
-+            .unwrap_or_else(|| "<missing command>".to_string());
++        let program = command.first().map_or_else(
++            || "<missing command>".to_string(),
++            |program| program.to_string_lossy().into_owned(),
++        );
 +        format!("failed to run child command '{program}'")
 +    })
-+}
-+
-+fn next_inject_marker(
-+    template: &str,
-+    start: usize,
-+) -> Option<(usize, InjectMarker)> {
-+    let rest = &template[start..];
-+    let braced = rest
-+        .find("{{")
-+        .map(|offset| (start + offset, InjectMarker::Braced));
-+    let raw = rest
-+        .match_indices("bw://")
-+        .map(|(offset, _)| start + offset)
-+        .find(|&idx| raw_reference_can_start(template, idx))
-+        .map(|idx| (idx, InjectMarker::Raw));
-+
-+    match (braced, raw) {
-+        (Some(braced), Some(raw)) => {
-+            Some(if braced.0 <= raw.0 { braced } else { raw })
-+        }
-+        (Some(braced), None) => Some(braced),
-+        (None, Some(raw)) => Some(raw),
-+        (None, None) => None,
-+    }
-+}
-+
-+fn raw_reference_can_start(template: &str, idx: usize) -> bool {
-+    template[..idx].chars().next_back().is_none_or(|ch| {
-+        !ch.is_ascii_alphanumeric() && ch != '_' && ch != '-'
-+    })
-+}
-+
-+fn raw_reference_end(template: &str, start: usize) -> usize {
-+    let mut end = start + "bw://".len();
-+    for (offset, ch) in template[end..].char_indices() {
-+        if is_raw_reference_delimiter(ch) {
-+            break;
-+        }
-+        end = start + "bw://".len() + offset + ch.len_utf8();
-+    }
-+    end
-+}
-+
-+fn is_raw_reference_delimiter(ch: char) -> bool {
-+    ch.is_whitespace()
-+        || matches!(
-+            ch,
-+            '"' | '\''
-+                | '`'
-+                | '<'
-+                | '>'
-+                | '('
-+                | ')'
-+                | '['
-+                | ']'
-+                | '{'
-+                | '}'
-+                | ','
-+                | ';'
-+        )
-+}
-+
-+fn parse_raw_inject_reference(
-+    candidate: &str,
-+    allow_at_suffix: bool,
-+    allow_amp_suffix: bool,
-+) -> anyhow::Result<(InjectReference, usize)> {
-+    if allow_at_suffix {
-+        let mut last_valid = None;
-+        for (idx, ch) in candidate.char_indices() {
-+            if ch != '@' {
-+                continue;
-+            }
-+            if let Ok(reference) = parse_inject_reference(&candidate[..idx]) {
-+                last_valid = Some((reference, idx));
-+            }
-+        }
-+        if let Some(split) = last_valid {
-+            return Ok(split);
-+        }
-+    }
-+
-+    let err = match parse_inject_reference(candidate) {
-+        Ok(reference) => return Ok((reference, candidate.len())),
-+        Err(err) => err,
-+    };
-+
-+    let mut last_valid = None;
-+    for (idx, ch) in candidate.char_indices() {
-+        if !is_raw_reference_suffix_delimiter(ch) {
-+            continue;
-+        }
-+        let prefix = &candidate[..idx];
-+        if matches!(ch, '.' | '!') && idx + ch.len_utf8() != candidate.len() {
-+            continue;
-+        }
-+        if ch == '@' && !allow_at_suffix {
-+            continue;
-+        }
-+        if ch == '&' && !allow_amp_suffix {
-+            continue;
-+        }
-+        if let Ok(reference) = parse_inject_reference(prefix) {
-+            last_valid = Some((reference, idx));
-+        }
-+    }
-+
-+    last_valid.ok_or(err)
-+}
-+
-+fn is_raw_reference_suffix_delimiter(ch: char) -> bool {
-+    matches!(ch, '@' | '&' | '.' | '!')
-+}
-+
-+fn is_valid_inject_name(name: &str) -> bool {
-+    !name.is_empty()
-+        && name
-+            .chars()
-+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-+}
-+
-+fn parse_inject_reference(
-+    reference: &str,
-+) -> anyhow::Result<InjectReference> {
-+    let parsed = url::Url::parse(reference)
-+        .with_context(|| format!("invalid inject reference '{reference}'"))?;
-+    if parsed.scheme() != "bw" {
-+        anyhow::bail!(
-+            "invalid inject reference scheme '{}'",
-+            parsed.scheme()
-+        );
-+    }
-+    if parsed.fragment().is_some() {
-+        anyhow::bail!("inject references do not support fragments");
-+    }
-+    if !parsed.username().is_empty() {
-+        anyhow::bail!("inject references do not support usernames");
-+    }
-+    if parsed.password().is_some() {
-+        anyhow::bail!("inject references do not support passwords");
-+    }
-+    if parsed.port().is_some() {
-+        anyhow::bail!("inject references do not support ports");
-+    }
-+    if !parsed.path().is_empty() {
-+        anyhow::bail!("inject references do not support paths");
-+    }
-+
-+    let raw_target = parsed
-+        .host_str()
-+        .context("inject reference is missing an item id or name")?;
-+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(raw_target) {
-+        InjectReferenceTarget::Uuid(uuid.to_string())
-+    } else if is_valid_inject_name(raw_target) {
-+        InjectReferenceTarget::Name(raw_target.to_string())
-+    } else {
-+        anyhow::bail!("invalid item uuid or supported name '{raw_target}'");
-+    };
-+
-+    let mut field = None;
-+    for (key, value) in parsed.query_pairs() {
-+        match key.as_ref() {
-+            "field" => {
-+                if field.replace(value.into_owned()).is_some() {
-+                    anyhow::bail!(
-+                        "inject reference has multiple field parameters"
-+                    );
-+                }
-+            }
-+            _ => {
-+                anyhow::bail!("unsupported inject query parameter '{}'", key)
-+            }
-+        }
-+    }
-+
-+    let field = field
-+        .map(|value| {
-+            let trimmed = value.trim();
-+            if trimmed.is_empty() {
-+                anyhow::bail!("inject field query parameter cannot be empty");
-+            }
-+            Ok(trimmed.to_string())
-+        })
-+        .transpose()?;
-+
-+    Ok(InjectReference {
-+        id: target.as_str().to_string(),
-+        target,
-+        field,
-+    })
-+}
-+
-+fn resolve_inject_reference(
-+    db: &rbw::db::Db,
-+    reference: &InjectReference,
-+) -> anyhow::Result<String> {
-+    let entries: Vec<(rbw::db::Entry, DecryptedSearchCipher)> = db
-+        .entries
-+        .iter()
-+        .map(|entry| {
-+            decrypt_search_cipher(entry)
-+                .map(|decrypted| (entry.clone(), decrypted))
-+        })
-+        .collect::<anyhow::Result<_>>()?;
-+    let (entry, _) = find_inject_entry_raw(&entries, &reference.target)?;
-+    let decrypted = decrypt_cipher(&entry).with_context(|| {
-+        format!("failed to decrypt entry '{}'", reference.id)
-+    })?;
-+    resolve_inject_value(&decrypted, reference.field.as_deref()).with_context(
-+        || format!("failed to resolve inject reference '{}'", reference.id),
-+    )
-+}
-+
-+fn find_inject_entry_raw(
-+    entries: &[(rbw::db::Entry, DecryptedSearchCipher)],
-+    target: &InjectReferenceTarget,
-+) -> anyhow::Result<(rbw::db::Entry, DecryptedSearchCipher)> {
-+    let matches: Vec<(rbw::db::Entry, DecryptedSearchCipher)> = entries
-+        .iter()
-+        .filter(|(entry, decrypted)| match target {
-+            InjectReferenceTarget::Uuid(id) => {
-+                entry.id.eq_ignore_ascii_case(id)
-+            }
-+            InjectReferenceTarget::Name(name) => {
-+                decrypted.name.eq_ignore_ascii_case(name)
-+            }
-+        })
-+        .cloned()
-+        .collect();
-+
-+    if matches.is_empty() {
-+        match target {
-+            InjectReferenceTarget::Uuid(id) => {
-+                anyhow::bail!("no entry found for item id '{}'", id)
-+            }
-+            InjectReferenceTarget::Name(name) => {
-+                anyhow::bail!("no entry found for item name '{}'", name)
-+            }
-+        }
-+    } else if matches.len() == 1 {
-+        Ok(matches[0].clone())
-+    } else {
-+        let entries: Vec<String> = matches
-+            .iter()
-+            .map(|(_, decrypted)| decrypted.display_name())
-+            .collect();
-+        match target {
-+            InjectReferenceTarget::Name(name) => anyhow::bail!(
-+                "multiple entries found for item name '{}': {}; use bw://<uuid> instead",
-+                name,
-+                entries.join(", ")
-+            ),
-+            InjectReferenceTarget::Uuid(id) => anyhow::bail!(
-+                "multiple entries found for item id '{}': {}",
-+                id,
-+                entries.join(", ")
-+            ),
-+        }
-+    }
 +}
 +
 +fn resolve_inject_value(
@@ -867,7 +746,7 @@ index bb49cf2..eda8f9a 100644
 +                anyhow::bail!("entry '{}' is not a login entry", cipher.name)
 +            }
 +        },
-+        Some("username") | Some("user") => match &cipher.data {
++        Some("username" | "user") => match &cipher.data {
 +            DecryptedData::Login {
 +                username: Some(username),
 +                ..
@@ -979,7 +858,7 @@ index bb49cf2..eda8f9a 100644
 +                    parent.display()
 +                )
 +            })?;
-+        return Ok(());
++        Ok(())
 +    }
 +
 +    #[cfg(not(unix))]
@@ -991,20 +870,89 @@ index bb49cf2..eda8f9a 100644
 +    }
 +}
 +
-+#[cfg(test)]
-+mod test {
-+    use super::*;
+ // This function exists for the sake of making the generate_totp function less
+ // densely packed and more readable
+ fn generate_totp_algorithm_type(
+@@ -4175,4 +5028,874 @@ mod test {
+             },
+         )
+     }
++    mod inject_tests {
++        use super::*;
 +
-+    #[test]
-+    fn test_render_inject_template_replaces_braced_and_raw_refs() {
-+        let password_id = uuid::Uuid::new_v4();
-+        let username_id = uuid::Uuid::new_v4();
-+        let template = format!(
-+            "password={{{{ bw://{password_id} }}}}\nuser=bw://{username_id}?field=username"
-+        );
++        fn render_inject_template<F>(
++            template: &str,
++            resolver: F,
++        ) -> anyhow::Result<String>
++        where
++            F: FnMut(&InjectReference) -> anyhow::Result<String>,
++        {
++            InjectTemplate::new(template).render(resolver)
++        }
 +
-+        let rendered =
-+            render_inject_template(&template, |reference| {
++        fn render_inject_template_with_env<F>(
++            template: &str,
++            env: &[(&str, &str)],
++            resolver: F,
++        ) -> anyhow::Result<String>
++        where
++            F: FnMut(&InjectReference) -> anyhow::Result<String>,
++        {
++            InjectTemplate::new(template).render_with_variable_resolver(
++                |name| {
++                    env.iter().find_map(|(key, value)| {
++                        key.eq_ignore_ascii_case(name)
++                            .then(|| (*value).to_string())
++                    })
++                },
++                resolver,
++            )
++        }
++
++        #[test]
++        fn test_take_braced_inject_expression_returns_expression_and_tail() {
++            let template = InjectTemplate::new(
++                "{{ bw://some-api-key?field=username }} and more",
++            );
++            let (expr, next_start) =
++                template.take_braced_expression(0).unwrap();
++
++            assert_eq!(expr, " bw://some-api-key?field=username ");
++            assert_eq!(template.src.get(next_start..).unwrap(), " and more");
++        }
++
++        #[test]
++        fn test_parse_braced_inject_reference_trims_and_parses_bw_urls() {
++            let reference = InjectReference::parse_braced(
++                " bw://some-api-key?field=username ",
++            )
++            .unwrap()
++            .unwrap();
++
++            assert_eq!(
++                reference.target,
++                InjectReferenceTarget::Name("some-api-key".to_string())
++            );
++            assert_eq!(reference.field.as_deref(), Some("username"));
++        }
++
++        #[test]
++        fn test_parse_braced_inject_reference_ignores_non_bw_expressions() {
++            let reference =
++                InjectReference::parse_braced(" not-a-reference ").unwrap();
++
++            assert_eq!(reference, None);
++        }
++
++        #[test]
++        fn test_render_inject_template_replaces_braced_and_raw_refs() {
++            let password_id = uuid::Uuid::new_v4();
++            let username_id = uuid::Uuid::new_v4();
++            let template = format!(
++                "password={{{{ bw://{password_id} }}}}\nuser=bw://{username_id}?field=username"
++            );
++
++            let rendered = render_inject_template(&template, |reference| {
 +                match (reference.id.as_str(), reference.field.as_deref()) {
 +                    (id, None) if id == password_id.to_string() => {
 +                        Ok("hunter2".to_string())
@@ -1019,978 +967,789 @@ index bb49cf2..eda8f9a 100644
 +            })
 +            .unwrap();
 +
-+        assert_eq!(rendered, "password=hunter2\nuser=alice");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_supports_name_refs() {
-+        let template = "token=bw://amp-api-key";
-+
-+        let rendered = render_inject_template(template, |reference| {
-+            assert_eq!(
-+                reference.target,
-+                InjectReferenceTarget::Name("amp-api-key".to_string())
-+            );
-+            assert_eq!(reference.field, None);
-+            Ok("secret".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "token=secret");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_supports_name_refs_with_field_query() {
-+        let template = "user=bw://amp-api-key?field=username";
-+
-+        let rendered = render_inject_template(template, |reference| {
-+            assert_eq!(
-+                reference.target,
-+                InjectReferenceTarget::Name("amp-api-key".to_string())
-+            );
-+            assert_eq!(reference.field.as_deref(), Some("username"));
-+            Ok("alice".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "user=alice");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_preserves_trailing_punctuation() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!("dsn=bw://{entry_id}, done.");
-+
-+        let rendered = render_inject_template(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            assert_eq!(reference.field, None);
-+            Ok("postgres://db".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "dsn=postgres://db, done.");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_preserves_trailing_period_and_exclamation()
-+    {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template =
-+            format!("token=bw://{entry_id}. wow! alert=bw://{entry_id}!");
-+
-+        let rendered = render_inject_template(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            Ok("secret".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "token=secret. wow! alert=secret!");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_rejects_invalid_raw_text_suffixes() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let with_period = format!("bw://{entry_id}.oops");
-+        let with_bang = format!("bw://{entry_id}!oops");
-+
-+        assert!(render_inject_template(&with_period, |_| {
-+            Ok("secret".to_string())
-+        })
-+        .is_err());
-+        assert!(render_inject_template(&with_bang, |_| {
-+            Ok("secret".to_string())
-+        })
-+        .is_err());
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_rejects_invalid_raw_reference_suffixes() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let with_path = format!("dsn=bw://{entry_id}/extra");
-+        let with_fragment = format!("dsn=bw://{entry_id}#prod");
-+
-+        let err = render_inject_template(&with_path, |_| {
-+            Ok("postgres://db".to_string())
-+        })
-+        .unwrap_err();
-+        assert!(format!("{err}").contains("paths"));
-+
-+        let err = render_inject_template(&with_fragment, |_| {
-+            Ok("postgres://db".to_string())
-+        })
-+        .unwrap_err();
-+        assert!(format!("{err}").contains("fragments"));
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_supports_raw_field_names_with_periods() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template =
-+            format!("token=bw://{entry_id}?field=db.password, done");
-+
-+        let rendered = render_inject_template(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            assert_eq!(reference.field.as_deref(), Some("db.password"));
-+            Ok("secret".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "token=secret, done");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_rejects_empty_field_query() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!("token=bw://{entry_id}?field=");
-+
-+        let err =
-+            render_inject_template(&template, |_| Ok("secret".to_string()))
-+                .unwrap_err();
-+
-+        assert!(format!("{err}").contains("empty"));
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_supports_raw_refs_in_dsn_and_query_contexts(
-+    ) {
-+        let dsn_id = uuid::Uuid::new_v4();
-+        let query_id = uuid::Uuid::new_v4();
-+        let template = format!(
-+            "postgres://user:bw://{dsn_id}@db.example/app?token=bw://{query_id}&mode=ro"
-+        );
-+
-+        let rendered = render_inject_template(&template, |reference| {
-+            match reference.id.as_str() {
-+                id if id == dsn_id.to_string() => Ok("pw".to_string()),
-+                id if id == query_id.to_string() => Ok("token".to_string()),
-+                _ => Err(anyhow::anyhow!("unexpected reference")),
-+            }
-+        })
-+        .unwrap();
-+
-+        assert_eq!(
-+            rendered,
-+            "postgres://user:pw@db.example/app?token=token&mode=ro"
-+        );
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_rejects_invalid_raw_authority_suffixes() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let with_port = format!("dsn=bw://{entry_id}:5432");
-+        let with_equals = format!("token=bw://{entry_id}=foo");
-+
-+        assert!(render_inject_template(&with_port, |_| {
-+            Ok("postgres://db".to_string())
-+        })
-+        .is_err());
-+        assert!(render_inject_template(&with_equals, |_| {
-+            Ok("secret".to_string())
-+        })
-+        .is_err());
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_rejects_invalid_raw_query_suffixes() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let with_duplicate_field =
-+            format!("bw://{entry_id}?field=username&field=password");
-+        let with_unsupported_param =
-+            format!("bw://{entry_id}?field=username&bogus=1");
-+
-+        let err = render_inject_template(&with_duplicate_field, |_| {
-+            Ok("secret".to_string())
-+        })
-+        .unwrap_err();
-+        assert!(format!("{err}").contains("multiple field"));
-+
-+        let err = render_inject_template(&with_unsupported_param, |_| {
-+            Ok("secret".to_string())
-+        })
-+        .unwrap_err();
-+        assert!(format!("{err}").contains("unsupported inject query"));
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_supports_raw_field_refs_in_outer_query_contexts(
-+    ) {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!(
-+            "https://example.test?user=bw://{entry_id}?field=username&mode=ro"
-+        );
-+
-+        let rendered = render_inject_template(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            assert_eq!(reference.field.as_deref(), Some("username"));
-+            Ok("alice".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "https://example.test?user=alice&mode=ro");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_supports_raw_field_refs_in_dsn_username_contexts(
-+    ) {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!(
-+            "postgres://bw://{entry_id}?field=username@db.example/app"
-+        );
-+
-+        let rendered = render_inject_template(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            assert_eq!(reference.field.as_deref(), Some("username"));
-+            Ok("alice".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(rendered, "postgres://alice@db.example/app");
-+    }
-+
-+    #[test]
-+    fn test_render_inject_template_rejects_invalid_raw_at_suffixes_outside_dsn_contexts(
-+    ) {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!("value=bw://{entry_id}@evil");
-+
-+        assert!(render_inject_template(&template, |_| {
-+            Ok("secret".to_string())
-+        })
-+        .is_err());
-+    }
-+
-+    #[test]
-+    fn test_find_inject_entry_raw_matches_name_refs_exactly_ignoring_case() {
-+        let entries = &[
-+            make_entry("amp-api-key", None, None, &[]),
-+            make_entry("amp-api-key-prod", None, None, &[]),
-+        ];
-+
-+        let (entry, _) = find_inject_entry_raw(
-+            entries,
-+            &InjectReferenceTarget::Name("AMP-API-KEY".to_string()),
-+        )
-+        .unwrap();
-+
-+        assert_eq!(entry.id, entries[0].0.id);
-+    }
-+
-+    #[test]
-+    fn test_find_inject_entry_raw_rejects_duplicate_name_refs() {
-+        let entries = &[
-+            make_entry("amp-api-key", Some("alice"), None, &[]),
-+            make_entry("amp-api-key", Some("bob"), None, &[]),
-+        ];
-+
-+        let err = find_inject_entry_raw(
-+            entries,
-+            &InjectReferenceTarget::Name("amp-api-key".to_string()),
-+        )
-+        .unwrap_err();
-+
-+        assert!(format!("{err}").contains("multiple entries found"));
-+        assert!(format!("{err}").contains("use bw://<uuid> instead"));
-+    }
-+
-+    #[test]
-+    fn test_find_inject_entry_raw_does_not_fuzzy_match_name_refs() {
-+        let entries = &[make_entry("amp-api-key-prod", None, None, &[])];
-+
-+        let err = find_inject_entry_raw(
-+            entries,
-+            &InjectReferenceTarget::Name("amp-api-key".to_string()),
-+        )
-+        .unwrap_err();
-+
-+        assert!(format!("{err}").contains("no entry found"));
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_reference_rejects_userinfo_ports_and_paths() {
-+        let entry_id = uuid::Uuid::new_v4();
-+
-+        for reference in [
-+            format!("bw://user@{entry_id}"),
-+            format!("bw://user:pass@{entry_id}"),
-+            format!("bw://{entry_id}:5432"),
-+            format!("bw://{entry_id}/"),
-+        ] {
-+            assert!(
-+                parse_inject_reference(&reference).is_err(),
-+                "{reference} should be rejected"
-+            );
++            assert_eq!(rendered, "password=hunter2\nuser=alice");
 +        }
-+    }
 +
-+    #[test]
-+    fn test_parse_inject_dotenv_supports_comments_blank_lines_and_quotes() {
-+        let pairs = parse_inject_dotenv(
-+            "# comment\nAPI_KEY=secret\nUSER=\"alice\"\n\nSHELL='posix'\n",
-+        )
-+        .unwrap();
-+        assert_eq!(
-+            pairs,
-+            vec![
-+                ("API_KEY".to_string(), "secret".to_string()),
-+                ("USER".to_string(), "alice".to_string()),
-+                ("SHELL".to_string(), "posix".to_string()),
-+            ]
-+        );
-+    }
++        #[test]
++        fn test_render_inject_template_supports_name_refs() {
++            let template = "token=bw://some-api-key";
 +
-+    #[test]
-+    fn test_parse_inject_dotenv_preserves_single_quoted_backslashes() {
-+        let pairs = parse_inject_dotenv("KEY='a\\\\b'\n").unwrap();
-+
-+        assert_eq!(pairs, vec![("KEY".to_string(), r"a\\b".to_string())]);
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_preserves_double_quoted_backslashes_for_non_special_sequences(
-+    ) {
-+        let pairs =
-+            parse_inject_dotenv("PATH=\"C:\\temp\\logs\\q\"\n").unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![("PATH".to_string(), r"C:\temp\logs\q".to_string())]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_supports_minimal_double_quoted_escapes() {
-+        let pairs = parse_inject_dotenv(concat!(
-+            r#"ESCAPED="contains \"quote\" and slash \\""#,
-+            "\n"
-+        ))
-+        .unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![(
-+                "ESCAPED".to_string(),
-+                "contains \"quote\" and slash \\".to_string()
-+            )]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_supports_empty_values() {
-+        let pairs =
-+            parse_inject_dotenv("EMPTY=\nDOUBLE=\"\"\nSINGLE=''\n").unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![
-+                ("EMPTY".to_string(), String::new()),
-+                ("DOUBLE".to_string(), String::new()),
-+                ("SINGLE".to_string(), String::new()),
-+            ]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_preserves_additional_equals_characters() {
-+        let pairs =
-+            parse_inject_dotenv("TOKEN=abc==def\nQUERY=foo=bar=baz\n")
-+                .unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![
-+                ("TOKEN".to_string(), "abc==def".to_string()),
-+                ("QUERY".to_string(), "foo=bar=baz".to_string()),
-+            ]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_strips_unquoted_inline_comments_with_separating_whitespace(
-+    ) {
-+        let pairs = parse_inject_dotenv("KEY=value # comment\n").unwrap();
-+
-+        assert_eq!(pairs, vec![("KEY".to_string(), "value".to_string())]);
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_preserves_unquoted_hash_without_separating_whitespace(
-+    ) {
-+        let pairs = parse_inject_dotenv("KEY=value#still-data\n").unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![("KEY".to_string(), "value#still-data".to_string())]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_strips_quoted_inline_comments_after_closing_quote(
-+    ) {
-+        let pairs = parse_inject_dotenv("KEY=\"value\" # comment\n").unwrap();
-+
-+        assert_eq!(pairs, vec![("KEY".to_string(), "value".to_string())]);
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_rejects_trailing_suffix_after_double_quoted_value(
-+    ) {
-+        let err = parse_inject_dotenv("KEY=\"value\"suffix\n").unwrap_err();
-+        let message = format!("{err:#}");
-+        assert!(message.contains("line 1"));
-+        assert!(message.contains("unsupported trailing characters"));
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_rejects_trailing_content_after_single_quoted_value(
-+    ) {
-+        let err = parse_inject_dotenv("KEY='value' extra\n").unwrap_err();
-+        let message = format!("{err:#}");
-+        assert!(message.contains("line 1"));
-+        assert!(message.contains("unsupported trailing characters"));
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_preserves_hash_inside_double_quotes() {
-+        let pairs =
-+            parse_inject_dotenv("KEY=\"value#still-data\"\n").unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![("KEY".to_string(), "value#still-data".to_string())]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_preserves_hash_inside_single_quotes() {
-+        let pairs = parse_inject_dotenv("KEY='value#still-data'\n").unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![("KEY".to_string(), "value#still-data".to_string())]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_rejects_export_syntax() {
-+        let err = parse_inject_dotenv("export API_KEY=secret\n").unwrap_err();
-+        let message = format!("{err:#}");
-+        assert!(message.contains("line 1"));
-+        assert!(message.contains("unsupported"));
-+        assert!(message.contains("export"));
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_rejects_missing_equals() {
-+        let err = parse_inject_dotenv("API_KEY\n").unwrap_err();
-+        let message = format!("{err:#}");
-+        assert!(message.contains("line 1"));
-+        assert!(message.contains("missing '='"));
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_dotenv_rejects_unterminated_quotes() {
-+        let err =
-+            parse_inject_dotenv("API_KEY=\"unterminated\n").unwrap_err();
-+        let message = format!("{err:#}");
-+        assert!(message.contains("line 1"));
-+        assert!(message.contains("unterminated"));
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_run_env_preserves_hash_in_injected_value() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!("TOKEN={{{{ bw://{entry_id} }}}}\n");
-+
-+        let pairs = parse_inject_run_env(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            Ok("abc#not-a-comment".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![("TOKEN".to_string(), "abc#not-a-comment".to_string())]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_run_env_preserves_quotes_in_injected_value() {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!("SECRET='{{{{ bw://{entry_id} }}}}'\n");
-+
-+        let pairs = parse_inject_run_env(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            Ok("value with \"double\" and 'single' quotes".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![(
-+                "SECRET".to_string(),
-+                "value with \"double\" and 'single' quotes".to_string()
-+            )]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_parse_inject_run_env_preserves_newlines_and_trailing_whitespace()
-+    {
-+        let entry_id = uuid::Uuid::new_v4();
-+        let template = format!("MULTILINE=\"{{{{ bw://{entry_id} }}}}\"\n");
-+
-+        let pairs = parse_inject_run_env(&template, |reference| {
-+            assert_eq!(reference.id, entry_id.to_string());
-+            Ok("line 1\nline 2  ".to_string())
-+        })
-+        .unwrap();
-+
-+        assert_eq!(
-+            pairs,
-+            vec![("MULTILINE".to_string(), "line 1\nline 2  ".to_string())]
-+        );
-+    }
-+
-+    #[test]
-+    fn test_build_inject_run_command_overrides_inherited_env_bindings() {
-+        let env_bindings = vec![
-+            ("API_KEY".to_string(), "new-secret".to_string()),
-+            ("EXTRA".to_string(), "value".to_string()),
-+        ];
-+        let command = build_inject_run_command(
-+            &[std::ffi::OsString::from("env")],
-+            &env_bindings,
-+        )
-+        .unwrap();
-+
-+        let envs = command
-+            .get_envs()
-+            .map(|(key, value)| {
-+                (key.to_os_string(), value.map(std::ffi::OsStr::to_os_string))
++            let rendered = render_inject_template(template, |reference| {
++                assert_eq!(
++                    reference.target,
++                    InjectReferenceTarget::Name("some-api-key".to_string())
++                );
++                assert_eq!(reference.field, None);
++                Ok("secret".to_string())
 +            })
-+            .collect::<std::collections::BTreeMap<
-+                std::ffi::OsString,
-+                Option<std::ffi::OsString>,
-+            >>();
-+
-+        assert_eq!(
-+            envs.get(std::ffi::OsStr::new("API_KEY")),
-+            Some(&Some(std::ffi::OsString::from("new-secret")))
-+        );
-+        assert_eq!(
-+            envs.get(std::ffi::OsStr::new("EXTRA")),
-+            Some(&Some(std::ffi::OsString::from("value")))
-+        );
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_inject_run_passes_values_without_shell_evaluation() {
-+        use std::process::Stdio;
-+
-+        let env_bindings =
-+            parse_inject_dotenv("VALUE='$(echo still-literal)'\n").unwrap();
-+        let mut command = build_inject_run_command(
-+            &[
-+                std::ffi::OsString::from("printenv"),
-+                std::ffi::OsString::from("VALUE"),
-+            ],
-+            &env_bindings,
-+        )
-+        .unwrap();
-+        command.stdout(Stdio::piped());
-+
-+        let output = command.output().unwrap();
-+
-+        assert!(output.status.success());
-+        assert_eq!(
-+            String::from_utf8(output.stdout).unwrap(),
-+            "$(echo still-literal)\n"
-+        );
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_run_inject_command_returns_child_exit_status() {
-+        let status =
-+            run_inject_command(&[std::ffi::OsString::from("false")], &[])
-+                .unwrap();
-+
-+        assert_eq!(status.code(), Some(1));
-+    }
-+
-+    #[test]
-+    fn test_resolve_inject_value_uses_password_username_and_custom_fields() {
-+        let cipher = make_decrypted_login(
-+            Some("alice"),
-+            Some("hunter2"),
-+            &[("api-token", "xyz"), ("deployment", "prod")],
-+        );
-+
-+        assert_eq!(resolve_inject_value(&cipher, None).unwrap(), "hunter2");
-+        assert_eq!(
-+            resolve_inject_value(&cipher, Some("username")).unwrap(),
-+            "alice"
-+        );
-+        assert_eq!(
-+            resolve_inject_value(&cipher, Some("api-token")).unwrap(),
-+            "xyz"
-+        );
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_write_rendered_template_file_replaces_existing_file_atomically() {
-+        use std::os::unix::fs::MetadataExt as _;
-+
-+        let dir = tempfile::tempdir().unwrap();
-+        let path = dir.path().join("secret.txt");
-+        std::fs::write(&path, "existing").unwrap();
-+        let original_inode = std::fs::metadata(&path).unwrap().ino();
-+
-+        write_rendered_template_file(&path, "hunter2").unwrap();
-+
-+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "hunter2");
-+        let updated_inode = std::fs::metadata(&path).unwrap().ino();
-+        assert_ne!(updated_inode, original_inode);
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_write_rendered_template_file_accepts_bare_relative_paths() {
-+        use std::os::unix::fs::PermissionsExt as _;
-+
-+        struct CwdGuard(std::path::PathBuf);
-+
-+        impl Drop for CwdGuard {
-+            fn drop(&mut self) {
-+                let _ = std::env::set_current_dir(&self.0);
-+            }
-+        }
-+
-+        let dir = tempfile::tempdir().unwrap();
-+        let cwd = std::env::current_dir().unwrap();
-+        let _guard = CwdGuard(cwd);
-+        std::env::set_current_dir(dir.path()).unwrap();
-+
-+        let path = std::path::Path::new("secret.txt");
-+        write_rendered_template_file(path, "hunter2").unwrap();
-+
-+        assert_eq!(std::fs::read_to_string(path).unwrap(), "hunter2");
-+        let mode =
-+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
-+        assert_eq!(mode, 0o600);
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_write_rendered_template_file_uses_owner_only_permissions() {
-+        use std::os::unix::fs::PermissionsExt as _;
-+
-+        let dir = tempfile::tempdir().unwrap();
-+        let path = dir.path().join("secret.txt");
-+        write_rendered_template_file(&path, "hunter2").unwrap();
-+
-+        let mode =
-+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-+        assert_eq!(mode, 0o600);
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_write_rendered_template_file_rejects_symlinks() {
-+        use std::os::unix::fs::symlink;
-+
-+        let dir = tempfile::tempdir().unwrap();
-+        let target = dir.path().join("target.txt");
-+        std::fs::write(&target, "existing").unwrap();
-+        let link = dir.path().join("secret.txt");
-+        symlink(&target, &link).unwrap();
-+
-+        let err = write_rendered_template_file(&link, "hunter2").unwrap_err();
-+        assert!(format!("{err}").contains("must not be a symlink"));
-+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "existing");
-+    }
-+
-+    #[test]
-+    #[cfg(unix)]
-+    fn test_write_rendered_template_file_rejects_non_regular_files() {
-+        use std::ffi::CString;
-+        use std::os::unix::ffi::OsStrExt as _;
-+        use std::os::unix::fs::OpenOptionsExt as _;
-+
-+        let dir = tempfile::tempdir().unwrap();
-+        let fifo = dir.path().join("secret.fifo");
-+        let fifo_cstr = CString::new(fifo.as_os_str().as_bytes()).unwrap();
-+        let status = unsafe { libc::mkfifo(fifo_cstr.as_ptr(), 0o600) };
-+        assert_eq!(status, 0);
-+
-+        let _reader = std::fs::OpenOptions::new()
-+            .read(true)
-+            .custom_flags(libc::O_NONBLOCK)
-+            .open(&fifo)
 +            .unwrap();
 +
-+        let err = write_rendered_template_file(&fifo, "hunter2").unwrap_err();
-+        assert!(format!("{err}").contains("regular file"));
-+    }
++            assert_eq!(rendered, "token=secret");
++        }
 +
-+    #[test]
-+    fn test_find_entry() {
-+        let entries = &[
-+            make_entry("github", Some("foo"), None, &[]),
-+            make_entry("gitlab", Some("foo"), None, &[]),
-+            make_entry("gitlab", Some("bar"), None, &[]),
-+            make_entry("gitter", Some("baz"), None, &[]),
-+            make_entry("git", Some("foo"), None, &[]),
-+            make_entry("bitwarden", None, None, &[]),
-+            make_entry("github", Some("foo"), Some("websites"), &[]),
-+            make_entry("github", Some("foo"), Some("ssh"), &[]),
-+            make_entry("github", Some("root"), Some("ssh"), &[]),
-+            make_entry("codeberg", Some("foo"), None, &[]),
-+            make_entry("codeberg", None, None, &[]),
-+            make_entry("1password", Some("foo"), None, &[]),
-+            make_entry("1password", None, Some("foo"), &[]),
-+        ];
++        #[test]
++        fn test_render_inject_template_supports_name_refs_with_field_query() {
++            let template = "user=bw://some-api-key?field=username";
 +
-+        assert!(
-+            one_match(entries, "github", Some("foo"), None, 0, false),
-+            "foo@github"
-+        );
-+        assert!(
-+            one_match(entries, "GITHUB", Some("foo"), None, 0, true),
-+            "foo@GITHUB"
-+        );
-+        assert!(one_match(entries, "github", None, None, 0, false), "github");
-+        assert!(one_match(entries, "GITHUB", None, None, 0, true), "GITHUB");
-+        assert!(
-+            one_match(entries, "gitlab", Some("foo"), None, 1, false),
-+            "foo@gitlab"
-+        );
-+        assert!(
-+            one_match(entries, "GITLAB", Some("foo"), None, 1, true),
-+            "foo@GITLAB"
-+        );
-+        assert!(
-+            one_match(entries, "git", Some("bar"), None, 2, false),
-+            "bar@git"
-+        );
-+        assert!(
-+            one_match(entries, "GIT", Some("bar"), None, 2, true),
-+            "bar@GIT"
-+        );
-+        assert!(
-+            one_match(entries, "gitter", Some("ba"), None, 3, false),
-+            "ba@gitter"
-+        );
-+        assert!(
-+            one_match(entries, "GITTER", Some("ba"), None, 3, true),
-+            "ba@GITTER"
-+        );
-+        assert!(
-+            one_match(entries, "git", Some("foo"), None, 4, false),
-+            "foo@git"
-+        );
-+        assert!(
-+            one_match(entries, "GIT", Some("foo"), None, 4, true),
-+            "foo@GIT"
-+        );
-+        assert!(one_match(entries, "git", None, None, 4, false), "git");
-+        assert!(one_match(entries, "GIT", None, None, 4, true), "GIT");
-+        assert!(
-+            one_match(entries, "bitwarden", None, None, 5, false),
-+            "bitwarden"
-+        );
-+        assert!(
-+            one_match(entries, "BITWARDEN", None, None, 5, true),
-+            "BITWARDEN"
-+        );
-+        assert!(
-+            one_match(
-+                entries,
-+                "github",
-+                Some("foo"),
-+                Some("websites"),
-+                6,
-+                false
-+            ),
-+            "websites/foo@github"
-+        );
-+        assert!(
-+            one_match(
-+                entries,
-+                "GITHUB",
-+                Some("foo"),
-+                Some("websites"),
-+                6,
-+                true
-+            ),
-+            "websites/foo@GITHUB"
-+        );
-+        assert!(
-+            one_match(entries, "github", Some("foo"), Some("ssh"), 7, false),
-+            "ssh/foo@github"
-+        );
-+        assert!(
-+            one_match(entries, "GITHUB", Some("foo"), Some("ssh"), 7, true),
-+            "ssh/foo@GITHUB"
-+        );
-+        assert!(
-+            one_match(entries, "github", Some("root"), None, 8, false),
-+            "ssh/root@github"
-+        );
-+        assert!(
-+            one_match(entries, "GITHUB", Some("root"), None, 8, true),
-+            "ssh/root@GITHUB"
-+        );
++            let rendered = render_inject_template(template, |reference| {
++                assert_eq!(
++                    reference.target,
++                    InjectReferenceTarget::Name("some-api-key".to_string())
++                );
++                assert_eq!(reference.field.as_deref(), Some("username"));
++                Ok("alice".to_string())
++            })
++            .unwrap();
 +
-+        assert!(
-+            no_matches(entries, "gitlab", Some("baz"), None, false),
-+            "baz@gitlab"
-+        );
-+        assert!(
-+            no_matches(entries, "GITLAB", Some("baz"), None, true),
-+            "baz@"
-+        );
-+        assert!(
-+            no_matches(entries, "bitbucket", Some("foo"), None, false),
-+            "foo@bitbucket"
-+        );
-+        assert!(
-+            no_matches(entries, "BITBUCKET", Some("foo"), None, true),
-+            "foo@BITBUCKET"
-+        );
-+        assert!(
-+            no_matches(entries, "github", Some("foo"), Some("bar"), false),
-+            "bar/foo@github"
-+        );
-+        assert!(
-+            no_matches(entries, "GITHUB", Some("foo"), Some("bar"), true),
-+            "bar/foo@"
-+        );
-+        assert!(
-+            no_matches(entries, "gitlab", Some("foo"), Some("bar"), false),
-+            "bar/foo@gitlab"
-+        );
-+        assert!(
-+            no_matches(entries, "GITLAB", Some("foo"), Some("bar"), true),
-+            "bar/foo@GITLAB"
-+        );
++            assert_eq!(rendered, "user=alice");
++        }
 +
-+        assert!(many_matches(entries, "gitlab", None, None, false), "gitlab");
-+        assert!(many_matches(entries, "gitlab", None, None, true), "GITLAB");
-+        assert!(
-+            many_matches(entries, "gi", Some("foo"), None, false),
-+            "foo@gi"
-+        );
-+        assert!(
-+            many_matches(entries, "GI", Some("foo"), None, true),
-+            "foo@GI"
-+        );
-+        assert!(
-+            many_matches(entries, "git", Some("ba"), None, false),
-+            "ba@git"
-+        );
-+        assert!(
-+            many_matches(entries, "GIT", Some("ba"), None, true),
-+            "ba@GIT"
-+        );
-+        assert!(
-+            many_matches(entries, "github", Some("foo"), Some("s"), false),
-+            "s/foo@github"
-+        );
-+        assert!(
-+            many_matches(entries, "GITHUB", Some("foo"), Some("s"), true),
-+            "s/foo@GITHUB"
-+        );
++        #[test]
++        fn test_render_inject_template_expands_variables_before_resolving_refs(
++        ) {
++            let template =
++                "user=bw://${ ITEM_NAME }?field=${FIELD:-username}";
 +
-+        assert!(
-+            one_match(entries, "codeberg", Some("foo"), None, 9, false),
-+            "foo@codeberg"
-+        );
-+        assert!(
-+            one_match(entries, "codeberg", None, None, 10, false),
-+            "codeberg"
-+        );
-+        assert!(
-+            no_matches(entries, "codeberg", Some("bar"), None, false),
-+            "bar@codeberg"
-+        );
++            let rendered = render_inject_template_with_env(
++                template,
++                &[("item_name", "some-api-key")],
++                |reference| {
++                    assert_eq!(
++                        reference.target,
++                        InjectReferenceTarget::Name(
++                            "some-api-key".to_string()
++                        )
++                    );
++                    assert_eq!(reference.field.as_deref(), Some("username"));
++                    Ok("alice".to_string())
++                },
++            )
++            .unwrap();
 +
-+        assert!(
-+            many_matches(entries, "1password", None, None, false),
-+            "1password"
-+        );
-+    }
++            assert_eq!(rendered, "user=alice");
++        }
 +
-+    #[test]
-+    fn test_find_by_uuid() {
-+        let entries = &[
-+            make_entry("github", Some("foo"), None, &[]),
-+            make_entry("gitlab", Some("foo"), None, &[]),
-+            make_entry("gitlab", Some("bar"), None, &[]),
-+            make_entry(
-+                "12345678-1234-1234-1234-1234567890ab",
-+                None,
-+                None,
-+                &[],
-+            ),
-+            make_entry(
-+                "12345678-1234-1234-1234-1234567890AC",
-+                None,
-+                None,
-+                &[],
-+            ),
-+            make_entry("123456781234123412341234567890AD", None, None, &[]),
-+        ];
++        #[test]
++        fn test_render_inject_template_supports_nested_default_variables() {
++            let template = "${ITEM_NAME:-${FALLBACK_ITEM:-some-api-key}}";
 +
-+        assert!(
-+            one_match(entries, &entries[0].0.id, None, None, 0, false),
-+            "foo@github"
-+        );
-+        assert!(
-+            one_match(entries, &entries[1].0.id, None, None, 1, false),
-+            "foo@gitlab"
-+        );
-+        assert!(
-             one_match(entries, &entries[2].0.id, None, None, 2, false),
-             "bar@gitlab"
-         );
-@@ -3816,4 +5315,32 @@ mod test {
-             },
-         )
-     }
-+
-+    fn make_decrypted_login(
-+        username: Option<&str>,
-+        password: Option<&str>,
-+        fields: &[(&str, &str)],
-+    ) -> DecryptedCipher {
-+        DecryptedCipher {
-+            id: uuid::Uuid::new_v4().to_string(),
-+            folder: None,
-+            name: "example".to_string(),
-+            data: DecryptedData::Login {
-+                username: username.map(std::string::ToString::to_string),
-+                password: password.map(std::string::ToString::to_string),
-+                totp: None,
-+                uris: None,
-+            },
-+            fields: fields
-+                .iter()
-+                .map(|(name, value)| DecryptedField {
-+                    name: Some((*name).to_string()),
-+                    value: Some((*value).to_string()),
-+                    ty: None,
++            let rendered =
++                render_inject_template_with_env(template, &[], |_| {
++                    anyhow::bail!("unexpected inject reference")
 +                })
-+                .collect(),
-+            notes: None,
-+            history: vec![],
++                .unwrap();
++            assert_eq!(rendered, "some-api-key");
++
++            let rendered = render_inject_template_with_env(
++                template,
++                &[("fallback_item", "fallback-key")],
++                |_| anyhow::bail!("unexpected inject reference"),
++            )
++            .unwrap();
++            assert_eq!(rendered, "fallback-key");
++        }
++
++        #[test]
++        fn test_render_inject_template_treats_invalid_variable_tags_as_literals(
++        ) {
++            let template = "$1BAD ${foo-bar} cost=$5";
++
++            let rendered =
++                render_inject_template_with_env(template, &[], |_| {
++                    anyhow::bail!("unexpected inject reference")
++                })
++                .unwrap();
++
++            assert_eq!(rendered, template);
++        }
++
++        #[test]
++        fn test_render_inject_template_supports_quoted_braced_refs() {
++            let template =
++                r#"password={{ "bw://some-api-key?field=db.password" }}"#;
++
++            let rendered = render_inject_template(template, |reference| {
++                assert_eq!(
++                    reference.target,
++                    InjectReferenceTarget::Name("some-api-key".to_string())
++                );
++                assert_eq!(reference.field.as_deref(), Some("db.password"));
++                Ok("hunter2".to_string())
++            })
++            .unwrap();
++
++            assert_eq!(rendered, "password=hunter2");
++        }
++
++        #[test]
++        fn test_render_inject_template_preserves_quoted_non_reference_expressions(
++        ) {
++            let template = r#"before {{ "not-a-reference" + "x" }} after"#;
++
++            let rendered = render_inject_template(template, |_| {
++                anyhow::bail!("unexpected inject reference")
++            })
++            .unwrap();
++
++            assert_eq!(rendered, template);
++        }
++
++        #[test]
++        fn test_render_inject_template_respects_op_inject_raw_start_boundaries(
++        ) {
++            let entry_id = uuid::Uuid::new_v4();
++
++            let rendered = render_inject_template(
++                &format!("prefix_bw://{entry_id}"),
++                |reference| {
++                    assert_eq!(reference.id, entry_id.to_string());
++                    Ok("secret".to_string())
++                },
++            )
++            .unwrap();
++            assert_eq!(rendered, "prefix_secret");
++
++            for template in [
++                format!("prefix+bw://{entry_id}"),
++                format!(r"prefix\bw://{entry_id}"),
++                format!("prefix.bw://{entry_id}"),
++            ] {
++                let rendered = render_inject_template(&template, |_| {
++                    Ok("secret".to_string())
++                })
++                .unwrap();
++                assert_eq!(rendered, template);
++            }
++        }
++
++        #[test]
++        fn test_render_inject_template_preserves_trailing_punctuation() {
++            let entry_id = uuid::Uuid::new_v4();
++            for (template, resolved, expected) in [
++                (
++                    format!("dsn=bw://{entry_id}, done."),
++                    "postgres://db",
++                    "dsn=postgres://db, done.".to_string(),
++                ),
++                (
++                    format!(
++                        "token=bw://{entry_id}. wow! alert=bw://{entry_id}!"
++                    ),
++                    "secret",
++                    "token=secret. wow! alert=secret!".to_string(),
++                ),
++            ] {
++                let rendered =
++                    render_inject_template(&template, |reference| {
++                        assert_eq!(reference.id, entry_id.to_string());
++                        assert_eq!(reference.field, None);
++                        Ok(resolved.to_string())
++                    })
++                    .unwrap();
++
++                assert_eq!(rendered, expected);
++            }
++        }
++
++        #[test]
++        fn test_render_inject_template_treats_special_characters_as_raw_reference_boundaries(
++        ) {
++            let entry_id = uuid::Uuid::new_v4();
++            for (template, expected, field) in [
++                (
++                    format!("dsn=bw://{entry_id}/extra"),
++                    "dsn=secret/extra".to_string(),
++                    None,
++                ),
++                (
++                    format!("dsn=bw://{entry_id}#prod"),
++                    "dsn=secret#prod".to_string(),
++                    None,
++                ),
++                (
++                    format!("value=bw://{entry_id}:5432"),
++                    "value=secret:5432".to_string(),
++                    None,
++                ),
++                (
++                    format!("value=bw://{entry_id}@host"),
++                    "value=secret@host".to_string(),
++                    None,
++                ),
++                (
++                    format!("value=bw://{entry_id}=suffix"),
++                    "value=secret=suffix".to_string(),
++                    None,
++                ),
++                (
++                    format!("bw://{entry_id}?field=username&field=password"),
++                    "alice&field=password".to_string(),
++                    Some("username"),
++                ),
++                (
++                    format!("bw://{entry_id}?field=username&bogus=1"),
++                    "alice&bogus=1".to_string(),
++                    Some("username"),
++                ),
++            ] {
++                let rendered =
++                    render_inject_template(&template, |reference| {
++                        assert_eq!(reference.id, entry_id.to_string());
++                        assert_eq!(reference.field.as_deref(), field);
++                        Ok(if field.is_some() { "alice" } else { "secret" }
++                            .to_string())
++                    })
++                    .unwrap();
++
++                assert_eq!(rendered, expected);
++            }
++        }
++
++        #[test]
++        fn test_render_inject_template_supports_raw_field_names_with_periods()
++        {
++            let entry_id = uuid::Uuid::new_v4();
++            let template =
++                format!("token=bw://{entry_id}?field=db.password, done");
++
++            let rendered = render_inject_template(&template, |reference| {
++                assert_eq!(reference.id, entry_id.to_string());
++                assert_eq!(reference.field.as_deref(), Some("db.password"));
++                Ok("secret".to_string())
++            })
++            .unwrap();
++
++            assert_eq!(rendered, "token=secret, done");
++        }
++
++        #[test]
++        fn test_render_inject_template_supports_encoded_raw_field_queries() {
++            let entry_id = uuid::Uuid::new_v4();
++            for template in [
++                format!("token=bw://{entry_id}?field=API%20Token"),
++                format!("token=bw://{entry_id}?field=API+Token"),
++            ] {
++                let rendered =
++                    render_inject_template(&template, |reference| {
++                        assert_eq!(reference.id, entry_id.to_string());
++                        assert_eq!(
++                            reference.field.as_deref(),
++                            Some("API Token")
++                        );
++                        Ok("secret".to_string())
++                    })
++                    .unwrap();
++
++                assert_eq!(rendered, "token=secret");
++            }
++        }
++
++        #[test]
++        fn test_render_inject_template_rejects_empty_field_query() {
++            let entry_id = uuid::Uuid::new_v4();
++            let template = format!("token=bw://{entry_id}?field=");
++
++            let err = render_inject_template(&template, |_| {
++                Ok("secret".to_string())
++            })
++            .unwrap_err();
++
++            assert!(format!("{err}").contains("empty"));
++        }
++
++        #[test]
++        fn test_render_inject_template_supports_raw_refs_in_dsn_and_query_contexts(
++        ) {
++            let dsn_id = uuid::Uuid::new_v4();
++            let query_id = uuid::Uuid::new_v4();
++            let template = format!(
++                "postgres://user:bw://{dsn_id}@db.example/app?token=bw://{query_id}&mode=ro"
++            );
++
++            let rendered =
++                render_inject_template(
++                    &template,
++                    |reference| match reference.id.as_str() {
++                        id if id == dsn_id.to_string() => {
++                            Ok("pw".to_string())
++                        }
++                        id if id == query_id.to_string() => {
++                            Ok("token".to_string())
++                        }
++                        _ => Err(anyhow::anyhow!("unexpected reference")),
++                    },
++                )
++                .unwrap();
++
++            assert_eq!(
++                rendered,
++                "postgres://user:pw@db.example/app?token=token&mode=ro"
++            );
++        }
++
++        #[test]
++        fn test_render_inject_template_supports_raw_field_refs_in_outer_query_contexts(
++        ) {
++            let entry_id = uuid::Uuid::new_v4();
++            let template = format!(
++                "https://example.test?user=bw://{entry_id}?field=username&mode=ro"
++            );
++
++            let rendered = render_inject_template(&template, |reference| {
++                assert_eq!(reference.id, entry_id.to_string());
++                assert_eq!(reference.field.as_deref(), Some("username"));
++                Ok("alice".to_string())
++            })
++            .unwrap();
++
++            assert_eq!(rendered, "https://example.test?user=alice&mode=ro");
++        }
++
++        #[test]
++        fn test_render_inject_template_supports_raw_field_refs_in_dsn_username_contexts(
++        ) {
++            let entry_id = uuid::Uuid::new_v4();
++            let template = format!(
++                "postgres://bw://{entry_id}?field=username@db.example/app"
++            );
++
++            let rendered = render_inject_template(&template, |reference| {
++                assert_eq!(reference.id, entry_id.to_string());
++                assert_eq!(reference.field.as_deref(), Some("username"));
++                Ok("alice".to_string())
++            })
++            .unwrap();
++
++            assert_eq!(rendered, "postgres://alice@db.example/app");
++        }
++
++        #[test]
++        fn test_render_inject_template_replaces_unenclosed_refs_in_structured_text(
++        ) {
++            let entry_id = uuid::Uuid::new_v4();
++            for (template, expected) in [
++                (
++                    format!(
++                        "apiVersion: v1\nkind: Secret\nstringData:\n  password: \"{{{{ bw://{entry_id} }}}}\"\n  note: \"bw://{entry_id}\"\n"
++                    ),
++                    "apiVersion: v1\nkind: Secret\nstringData:\n  password: \"hunter2\"\n  note: \"hunter2\"\n"
++                        .to_string(),
++                ),
++                (
++                    format!(
++                        "{{\n  \"password\": \"{{{{ bw://{entry_id} }}}}\",\n  \"note\": \"bw://{entry_id}\"\n}}\n"
++                    ),
++                    "{\n  \"password\": \"hunter2\",\n  \"note\": \"hunter2\"\n}\n"
++                        .to_string(),
++                ),
++            ] {
++                let rendered = render_inject_template(&template, |reference| {
++                    assert_eq!(reference.id, entry_id.to_string());
++                    Ok("hunter2".to_string())
++                })
++                .unwrap();
++
++                assert_eq!(rendered, expected);
++            }
++        }
++
++        #[test]
++        fn test_find_inject_entry_raw_matches_name_refs_exactly_ignoring_case(
++        ) {
++            let entries = &[
++                make_entry("some-api-key", None, None, &[]),
++                make_entry("some-api-key-prod", None, None, &[]),
++            ];
++
++            let (entry, _) =
++                InjectReferenceTarget::Name("SOME-API-KEY".to_string())
++                    .find_entry(entries)
++                    .unwrap();
++
++            assert_eq!(entry.id, entries[0].0.id);
++        }
++
++        #[test]
++        fn test_find_inject_entry_raw_rejects_duplicate_name_refs() {
++            let entries = &[
++                make_entry("some-api-key", Some("alice"), None, &[]),
++                make_entry("some-api-key", Some("bob"), None, &[]),
++            ];
++
++            let err = InjectReferenceTarget::Name("some-api-key".to_string())
++                .find_entry(entries)
++                .unwrap_err();
++
++            assert!(format!("{err}").contains("multiple entries found"));
++            assert!(format!("{err}").contains("use bw://<uuid> instead"));
++        }
++
++        #[test]
++        fn test_find_inject_entry_raw_does_not_fuzzy_match_name_refs() {
++            let entries = &[make_entry("some-api-key-prod", None, None, &[])];
++
++            let err = InjectReferenceTarget::Name("some-api-key".to_string())
++                .find_entry(entries)
++                .unwrap_err();
++
++            assert!(format!("{err}").contains("no entry found"));
++        }
++
++        #[test]
++        fn test_parse_inject_reference_rejects_userinfo_ports_and_paths() {
++            let entry_id = uuid::Uuid::new_v4();
++
++            for reference in [
++                format!("bw://user@{entry_id}"),
++                format!("bw://user:pass@{entry_id}"),
++                format!("bw://{entry_id}:5432"),
++                format!("bw://{entry_id}/"),
++            ] {
++                assert!(
++                    InjectReference::parse(&reference).is_err(),
++                    "{reference} should be rejected"
++                );
++            }
++        }
++
++        #[test]
++        fn test_parse_run_env_matches_dotenvy_parsing_rules() {
++            let pairs = parse_run_env_file(
++                concat!(
++                    "BACKSLASH='a\\\\b'\n",
++                    "PATH='C:\\temp\\logs\\q'\n",
++                    r#"ESCAPED="contains \"quote\" and slash \\ and newline \n""#,
++                    "\n",
++                    "HASH=# comment\n",
++                    "MULTILINE=\"line 1\nline 2\"\n",
++                ),
++                |_| anyhow::bail!("unexpected inject reference"),
++            )
++            .unwrap();
++
++            assert_eq!(
++                pairs,
++                vec![
++                    ("BACKSLASH".to_string(), r"a\\b".to_string()),
++                    ("PATH".to_string(), r"C:\temp\logs\q".to_string()),
++                    (
++                        "ESCAPED".to_string(),
++                        "contains \"quote\" and slash \\ and newline \n"
++                            .to_string()
++                    ),
++                    ("HASH".to_string(), String::new()),
++                    ("MULTILINE".to_string(), "line 1\nline 2".to_string()),
++                ]
++            );
++        }
++
++        #[test]
++        fn test_parse_run_env_expands_then_resolves_raw_references() {
++            use std::sync::{Mutex, OnceLock};
++
++            static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
++
++            let _guard =
++                ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
++            let host_var = "RBW_TEST_HOST_VAR";
++            std::env::set_var(host_var, "expanded-by-host");
++
++            let entry_id = uuid::Uuid::new_v4();
++            let template = format!(
++                "RAW=bw://{entry_id}\nQUOTED=\"bw://{entry_id}\"\nCOPY=$RAW\nHOST=${{{host_var}}}\nMIXED=${{{host_var}}}:$RAW\nLITERAL=__RBW_RUN_BRACED_REF_0__\nEXPANDED=${{LITERAL}}\n"
++            );
++
++            let pairs = parse_run_env_file(&template, |reference| {
++                assert_eq!(reference.id, entry_id.to_string());
++                Ok("secret".to_string())
++            })
++            .unwrap();
++
++            std::env::remove_var(host_var);
++
++            assert_eq!(
++                pairs,
++                vec![
++                    ("RAW".to_string(), "secret".to_string()),
++                    ("QUOTED".to_string(), "secret".to_string()),
++                    ("COPY".to_string(), "secret".to_string()),
++                    ("HOST".to_string(), "expanded-by-host".to_string()),
++                    (
++                        "MIXED".to_string(),
++                        "expanded-by-host:secret".to_string()
++                    ),
++                    (
++                        "LITERAL".to_string(),
++                        "__RBW_RUN_BRACED_REF_0__".to_string()
++                    ),
++                    (
++                        "EXPANDED".to_string(),
++                        "__RBW_RUN_BRACED_REF_0__".to_string()
++                    ),
++                ]
++            );
++        }
++
++        #[test]
++        fn test_parse_run_env_preserves_injected_values_verbatim() {
++            let token_id = uuid::Uuid::new_v4().to_string();
++            let secret_id = uuid::Uuid::new_v4().to_string();
++            let multiline_id = uuid::Uuid::new_v4().to_string();
++            let template = format!(
++                "TOKEN=bw://{token_id}\nSECRET='bw://{secret_id}'\nMULTILINE=\"bw://{multiline_id}\"\n"
++            );
++
++            let pairs = parse_run_env_file(&template, |reference| {
++                match reference.id.as_str() {
++                    id if id == token_id => {
++                        Ok("abc#not-a-comment".to_string())
++                    }
++                    id if id == secret_id => {
++                        Ok("value with \"double\" and 'single' quotes"
++                            .to_string())
++                    }
++                    id if id == multiline_id => {
++                        Ok("line 1\nline 2  ".to_string())
++                    }
++                    _ => anyhow::bail!(
++                        "unexpected inject reference '{}'",
++                        reference.id
++                    ),
++                }
++            })
++            .unwrap();
++
++            assert_eq!(
++                pairs,
++                vec![
++                    ("TOKEN".to_string(), "abc#not-a-comment".to_string()),
++                    (
++                        "SECRET".to_string(),
++                        "value with \"double\" and 'single' quotes"
++                            .to_string()
++                    ),
++                    ("MULTILINE".to_string(), "line 1\nline 2  ".to_string()),
++                ]
++            );
++        }
++
++        #[test]
++        fn test_build_inject_run_command_overrides_inherited_env_bindings() {
++            let env_bindings = vec![
++                ("API_KEY".to_string(), "new-secret".to_string()),
++                ("EXTRA".to_string(), "value".to_string()),
++            ];
++            let command = build_inject_run_command(
++                &[std::ffi::OsString::from("env")],
++                &env_bindings,
++            )
++            .unwrap();
++
++            let envs = command
++                .get_envs()
++                .map(|(key, value)| {
++                    (
++                        key.to_os_string(),
++                        value.map(std::ffi::OsStr::to_os_string),
++                    )
++                })
++                .collect::<std::collections::BTreeMap<
++                    std::ffi::OsString,
++                    Option<std::ffi::OsString>,
++                >>();
++
++            assert_eq!(
++                envs.get(std::ffi::OsStr::new("API_KEY")),
++                Some(&Some(std::ffi::OsString::from("new-secret")))
++            );
++            assert_eq!(
++                envs.get(std::ffi::OsStr::new("EXTRA")),
++                Some(&Some(std::ffi::OsString::from("value")))
++            );
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_inject_run_passes_values_without_shell_evaluation() {
++            use std::process::Stdio;
++
++            let env_bindings =
++                parse_run_env_file("VALUE='$(echo still-literal)'\n", |_| {
++                    anyhow::bail!("unexpected inject reference")
++                })
++                .unwrap();
++            let mut command = build_inject_run_command(
++                &[
++                    std::ffi::OsString::from("printenv"),
++                    std::ffi::OsString::from("VALUE"),
++                ],
++                &env_bindings,
++            )
++            .unwrap();
++            command.stdout(Stdio::piped());
++
++            let output = command.output().unwrap();
++
++            assert!(output.status.success());
++            assert_eq!(
++                String::from_utf8(output.stdout).unwrap(),
++                "$(echo still-literal)\n"
++            );
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_run_inject_command_returns_child_exit_status() {
++            let status =
++                run_inject_command(&[std::ffi::OsString::from("false")], &[])
++                    .unwrap();
++
++            assert_eq!(status.code(), Some(1));
++        }
++
++        #[test]
++        fn test_resolve_inject_value_uses_password_username_and_custom_fields(
++        ) {
++            let cipher = DecryptedCipher {
++                id: uuid::Uuid::new_v4().to_string(),
++                folder: None,
++                name: "example".to_string(),
++                data: DecryptedData::Login {
++                    username: Some("alice".to_string()),
++                    password: Some("hunter2".to_string()),
++                    totp: None,
++                    uris: None,
++                },
++                fields: [("api-token", "xyz"), ("deployment", "prod")]
++                    .iter()
++                    .map(|(name, value)| DecryptedField {
++                        name: Some((*name).to_string()),
++                        value: Some((*value).to_string()),
++                        ty: None,
++                    })
++                    .collect(),
++                notes: None,
++                history: vec![],
++            };
++
++            assert_eq!(
++                resolve_inject_value(&cipher, None).unwrap(),
++                "hunter2"
++            );
++            assert_eq!(
++                resolve_inject_value(&cipher, Some("username")).unwrap(),
++                "alice"
++            );
++            assert_eq!(
++                resolve_inject_value(&cipher, Some("api-token")).unwrap(),
++                "xyz"
++            );
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_write_rendered_template_file_replaces_existing_file_atomically(
++        ) {
++            use std::os::unix::fs::MetadataExt as _;
++
++            let dir = tempfile::tempdir().unwrap();
++            let path = dir.path().join("secret.txt");
++            std::fs::write(&path, "existing").unwrap();
++            let original_inode = std::fs::metadata(&path).unwrap().ino();
++
++            write_rendered_template_file(&path, "hunter2").unwrap();
++
++            assert_eq!(std::fs::read_to_string(&path).unwrap(), "hunter2");
++            let updated_inode = std::fs::metadata(&path).unwrap().ino();
++            assert_ne!(updated_inode, original_inode);
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_write_rendered_template_file_accepts_bare_relative_paths() {
++            use std::os::unix::fs::PermissionsExt as _;
++
++            struct CwdGuard(std::path::PathBuf);
++
++            impl Drop for CwdGuard {
++                fn drop(&mut self) {
++                    let _ = std::env::set_current_dir(&self.0);
++                }
++            }
++
++            let dir = tempfile::tempdir().unwrap();
++            let cwd = std::env::current_dir().unwrap();
++            let _guard = CwdGuard(cwd);
++            std::env::set_current_dir(dir.path()).unwrap();
++
++            let path = std::path::Path::new("secret.txt");
++            write_rendered_template_file(path, "hunter2").unwrap();
++
++            assert_eq!(std::fs::read_to_string(path).unwrap(), "hunter2");
++            let mode =
++                std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
++            assert_eq!(mode, 0o600);
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_write_rendered_template_file_uses_owner_only_permissions() {
++            use std::os::unix::fs::PermissionsExt as _;
++
++            let dir = tempfile::tempdir().unwrap();
++            let path = dir.path().join("secret.txt");
++            write_rendered_template_file(&path, "hunter2").unwrap();
++
++            let mode = std::fs::metadata(&path).unwrap().permissions().mode()
++                & 0o777;
++            assert_eq!(mode, 0o600);
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_write_rendered_template_file_rejects_symlinks() {
++            use std::os::unix::fs::symlink;
++
++            let dir = tempfile::tempdir().unwrap();
++            let target = dir.path().join("target.txt");
++            std::fs::write(&target, "existing").unwrap();
++            let link = dir.path().join("secret.txt");
++            symlink(&target, &link).unwrap();
++
++            let err =
++                write_rendered_template_file(&link, "hunter2").unwrap_err();
++            assert!(format!("{err}").contains("must not be a symlink"));
++            assert_eq!(std::fs::read_to_string(&target).unwrap(), "existing");
++        }
++
++        #[test]
++        #[cfg(unix)]
++        fn test_write_rendered_template_file_rejects_non_regular_files() {
++            use std::ffi::CString;
++            use std::os::unix::ffi::OsStrExt as _;
++            use std::os::unix::fs::OpenOptionsExt as _;
++
++            let dir = tempfile::tempdir().unwrap();
++            let fifo = dir.path().join("secret.fifo");
++            let fifo_cstr =
++                CString::new(fifo.as_os_str().as_bytes()).unwrap();
++            let status = unsafe { libc::mkfifo(fifo_cstr.as_ptr(), 0o600) };
++            assert_eq!(status, 0);
++
++            let _reader = std::fs::OpenOptions::new()
++                .read(true)
++                .custom_flags(libc::O_NONBLOCK)
++                .open(&fifo)
++                .unwrap();
++
++            let err =
++                write_rendered_template_file(&fifo, "hunter2").unwrap_err();
++            assert!(format!("{err}").contains("regular file"));
 +        }
 +    }
  }
 diff --git a/src/bin/rbw/main.rs b/src/bin/rbw/main.rs
-index 47c1adc..ae69751 100644
+index ff2ec74..e68006c 100644
 --- a/src/bin/rbw/main.rs
 +++ b/src/bin/rbw/main.rs
 @@ -1,5 +1,9 @@
@@ -2003,16 +1762,17 @@ index 47c1adc..ae69751 100644
  use anyhow::Context as _;
  use clap::{CommandFactory as _, Parser as _};
  
-@@ -115,6 +119,30 @@ enum Opt {
+@@ -117,6 +121,34 @@ enum Opt {
          clipboard: bool,
      },
  
-+    #[command(
-+        about = "Inject secrets into a template",
-+        override_usage = "rbw inject [OPTIONS]\n       rbw inject [OPTIONS] --run -- <COMMAND> [ARGS...]"
-+    )]
++    #[command(about = "Inject secrets into a template")]
 +    Inject {
-+        #[arg(short = 'i', long = "in-file", help = "Read the template from a file")]
++        #[arg(
++            short = 'i',
++            long = "in-file",
++            help = "Read the template from a file"
++        )]
 +        input: Option<std::path::PathBuf>,
 +        #[arg(
 +            short = 'o',
@@ -2020,245 +1780,49 @@ index 47c1adc..ae69751 100644
 +            help = "Write the rendered template to a file"
 +        )]
 +        output: Option<std::path::PathBuf>,
++    },
++
++    #[command(about = "Run a command with injected values")]
++    Run {
 +        #[arg(
 +            long,
-+            help = "Run a command with injected values",
-+            long_help = "Run a command with injected values\n\nUse as: [OPTIONS] --run -- <COMMAND> [ARGS...]",
-+            requires = "command"
++            default_value = "./.env",
++            help = "Read environment bindings from an env file"
 +        )]
-+        run: bool,
-+        #[arg(last = true, num_args = 1.., requires = "run", hide = true)]
++        env_file: std::path::PathBuf,
++        #[arg(last = true, required = true, num_args = 1..)]
 +        command: Vec<OsString>,
 +    },
 +
      #[command(
          about = "Add a new password to the database",
          long_about = "Add a new password to the database\n\n\
-@@ -252,6 +280,7 @@ impl Opt {
+@@ -254,6 +286,8 @@ impl Opt {
              Self::Get { .. } => "get".to_string(),
              Self::Search { .. } => "search".to_string(),
              Self::Code { .. } => "code".to_string(),
 +            Self::Inject { .. } => "inject".to_string(),
++            Self::Run { .. } => "run".to_string(),
              Self::Add { .. } => "add".to_string(),
              Self::Generate { .. } => "generate".to_string(),
              Self::Edit { .. } => "edit".to_string(),
-@@ -305,6 +334,43 @@ impl Config {
-     }
- }
- 
-+#[derive(Debug)]
-+enum InjectAction<'a> {
-+    RenderTemplate {
-+        input: Option<&'a std::path::Path>,
-+        output: Option<&'a std::path::Path>,
-+    },
-+    RunCommand {
-+        input: Option<&'a std::path::Path>,
-+        command: &'a [OsString],
-+    },
-+}
-+
-+fn prepare_inject_action<'a>(
-+    input: Option<&'a std::path::Path>,
-+    output: Option<&'a std::path::Path>,
-+    run: bool,
-+    command: &'a [OsString],
-+) -> anyhow::Result<InjectAction<'a>> {
-+    if run {
-+        if output.is_some() {
-+            anyhow::bail!("inject --run does not support --out-file/-o");
-+        }
-+        return Ok(InjectAction::RunCommand { input, command });
-+    }
-+
-+    Ok(InjectAction::RenderTemplate { input, output })
-+}
-+
-+fn exit_with_status(status: std::process::ExitStatus) -> ! {
-+    #[cfg(unix)]
-+    if let Some(signal) = status.signal() {
-+        std::process::exit(128 + signal);
-+    }
-+
-+    std::process::exit(status.code().unwrap_or(1));
-+}
-+
- fn main() {
-     let opt = Opt::parse();
- 
-@@ -376,6 +442,30 @@ fn main() {
+@@ -380,6 +414,19 @@ fn main() {
              false,
              find_args.ignorecase,
          ),
-+        Opt::Inject {
-+            input,
-+            output,
-+            run,
-+            command,
-+        } => prepare_inject_action(
-+            input.as_deref(),
-+            output.as_deref(),
-+            run,
-+            &command,
-+        )
-+        .and_then(|action| match action {
-+            InjectAction::RenderTemplate { input, output } => {
-+                commands::inject(input, output)
-+            }
-+            InjectAction::RunCommand { input, command } => {
-+                let status = commands::inject_run(input, command)?;
-+                if status.success() {
-+                    Ok(())
-+                } else {
-+                    exit_with_status(status);
++        Opt::Inject { input, output } => {
++            commands::inject(input.as_deref(), output.as_deref())
++        }
++        Opt::Run { env_file, command } => commands::run(&env_file, &command)
++            .map(|status| {
++                if !status.success() {
++                    #[cfg(unix)]
++                    if let Some(signal) = status.signal() {
++                        std::process::exit(128 + signal);
++                    }
++                    std::process::exit(status.code().unwrap_or(1));
 +                }
-+            }
-+        }),
++            }),
          Opt::Add {
              name,
              user,
-@@ -519,3 +609,144 @@ fn main() {
-         std::process::exit(1);
-     }
- }
-+
-+#[cfg(test)]
-+mod test {
-+    use super::*;
-+
-+    #[test]
-+    fn test_help_mentions_inject_command() {
-+        let mut command = Opt::command();
-+        let mut help = Vec::new();
-+        command.write_long_help(&mut help).unwrap();
-+        let help = String::from_utf8(help).unwrap();
-+        assert!(help.contains("inject"));
-+    }
-+
-+    #[test]
-+    fn test_help_mentions_inject_run_flag() {
-+        let mut command = Opt::command();
-+        let inject = command.find_subcommand_mut("inject").unwrap();
-+        let mut help = Vec::new();
-+        inject.write_long_help(&mut help).unwrap();
-+        let help = String::from_utf8(help).unwrap();
-+        assert!(help.contains("--in-file"));
-+        assert!(help.contains("--out-file"));
-+        assert!(help.contains("--run"));
-+        assert!(help.contains("Use as: [OPTIONS] --run -- <COMMAND> [ARGS...]"));
-+        assert!(help.contains("Usage: rbw inject [OPTIONS]"));
-+        assert!(help.contains("rbw inject [OPTIONS] --run -- <COMMAND> [ARGS...]"));
-+        assert!(!help.contains("--input"));
-+        assert!(!help.contains("--output"));
-+    }
-+
-+    #[test]
-+    fn test_inject_run_requires_child_command() {
-+        let err = Opt::try_parse_from(["rbw", "inject", "--run"]).unwrap_err();
-+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-+        let err = err.to_string();
-+        assert!(err.contains("Usage: rbw inject [OPTIONS]"));
-+        assert!(err.contains("rbw inject [OPTIONS] --run -- <COMMAND> [ARGS...]"));
-+    }
-+
-+    #[test]
-+    fn test_inject_accepts_in_file_and_out_file_long_flags() {
-+        assert!(Opt::try_parse_from(["rbw", "inject", "--in-file", "x"]).is_ok());
-+        assert!(Opt::try_parse_from(["rbw", "inject", "--out-file", "x"]).is_ok());
-+        assert!(Opt::try_parse_from(["rbw", "inject", "--in-file", "x", "--run", "--", "env"])
-+            .is_ok());
-+    }
-+
-+    #[test]
-+    fn test_inject_run_accepts_child_command_after_double_dash() {
-+        let opt =
-+            Opt::try_parse_from(["rbw", "inject", "--run", "--", "env", "-0"]).unwrap();
-+
-+        match opt {
-+            Opt::Inject {
-+                input,
-+                output,
-+                run,
-+                command,
-+            } => {
-+                assert_eq!(input, None);
-+                assert_eq!(output, None);
-+                assert!(run);
-+                assert_eq!(
-+                    command,
-+                    vec![
-+                        std::ffi::OsString::from("env"),
-+                        std::ffi::OsString::from("-0"),
-+                    ]
-+                );
-+            }
-+            _ => panic!("expected inject command"),
-+        }
-+    }
-+
-+    #[test]
-+    fn test_inject_run_rejects_child_command_without_double_dash() {
-+        let err = Opt::try_parse_from(["rbw", "inject", "--run", "env"]).unwrap_err();
-+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
-+    }
-+
-+    #[test]
-+    fn test_inject_rejects_stray_double_dash_without_run() {
-+        let err = Opt::try_parse_from(["rbw", "inject", "--", "env"]).unwrap_err();
-+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-+        let err = err.to_string();
-+        assert!(err.contains("the following required arguments were not provided:"));
-+        assert!(err.contains("--run"));
-+    }
-+
-+    #[test]
-+    fn test_inject_accepts_in_file_and_out_file_short_flags() {
-+        let opt = Opt::try_parse_from([
-+            "rbw", "inject", "-i", "input.tmpl", "-o", "output.env",
-+        ])
-+        .unwrap();
-+
-+        match opt {
-+            Opt::Inject { input, output, .. } => {
-+                assert_eq!(input.unwrap(), std::path::PathBuf::from("input.tmpl"));
-+                assert_eq!(output.unwrap(), std::path::PathBuf::from("output.env"));
-+            }
-+            _ => panic!("expected inject command"),
-+        }
-+    }
-+
-+    #[test]
-+    fn test_prepare_inject_action_rejects_run_with_out_file() {
-+        let err = prepare_inject_action(
-+            None,
-+            Some(std::path::Path::new("output.env")),
-+            true,
-+            &[std::ffi::OsString::from("env")],
-+        )
-+        .unwrap_err();
-+        assert_eq!(
-+            err.to_string(),
-+            "inject --run does not support --out-file/-o"
-+        );
-+    }
-+
-+    #[test]
-+    fn test_prepare_inject_action_returns_run_command_for_run_mode() {
-+        let command = [
-+            std::ffi::OsString::from("env"),
-+            std::ffi::OsString::from("-0"),
-+        ];
-+        let action =
-+            prepare_inject_action(None, None, true, &command).unwrap();
-+
-+        match action {
-+            InjectAction::RunCommand { input, command: actual } => {
-+                assert_eq!(input, None);
-+                assert_eq!(actual, command);
-+            }
-+            InjectAction::RenderTemplate { .. } => {
-+                panic!("expected run command action")
-+            }
-+        }
-+    }
-+}
