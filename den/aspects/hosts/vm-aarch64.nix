@@ -26,6 +26,8 @@
 
               BROKER_SOCKET = "${vmTouchIdBrokerSocket}"
               LOCAL_FALLBACK = "${pkgs.wayprompt}/bin/pinentry-wayprompt"
+              BROKER_CONNECT_TIMEOUT_SECONDS = 2.0
+              BROKER_RESPONSE_TIMEOUT_SECONDS = 60.0
               OK = "OK\n"
 
 
@@ -71,8 +73,9 @@
 
               def broker_get_secret():
                   with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                      client.settimeout(2.0)
+                      client.settimeout(BROKER_CONNECT_TIMEOUT_SECONDS)
                       client.connect(BROKER_SOCKET)
+                      client.settimeout(BROKER_RESPONSE_TIMEOUT_SECONDS)
                       client.sendall(b'{"op":"get-secret"}\n')
 
                       response = bytearray()
