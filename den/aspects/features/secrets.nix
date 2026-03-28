@@ -4,6 +4,10 @@
     nixos = { config, pkgs, lib, ... }:
       let
         bridgePinentry = config.den.secrets.rbwPinentryPackage;
+        bridgePinentryPath =
+          if bridgePinentry != null
+          then toString config.home-manager.users.m.programs.rbw.settings.pinentry
+          else "";
         rbwStaticSettings = builtins.toJSON (
           (builtins.removeAttrs config.home-manager.users.m.programs.rbw.settings [ "email" ])
           // (lib.optionalAttrs (config.home-manager.users.m.programs.rbw.settings ? pinentry) {
@@ -72,9 +76,16 @@
                 script = pkgs.writeShellScript "write-rbw-config" ''
                   set -euo pipefail
                   email_file="/run/secrets/rbw/email"
+                  bridge_pinentry=${lib.escapeShellArg bridgePinentryPath}
                   if [ ! -f "$email_file" ]; then
                     echo "rbw-config: $email_file not found, skipping" >&2
                     exit 0
+                  fi
+                  if [ -n "$bridge_pinentry" ]; then
+                    if [ ! -x "$bridge_pinentry" ]; then
+                      echo "rbw-config: configured pinentry $bridge_pinentry is not executable, skipping" >&2
+                      exit 0
+                    fi
                   fi
                   mkdir -p "$HOME/.config/rbw"
                   tmp_config=$(mktemp "$HOME/.config/rbw/config.json.XXXXXX")

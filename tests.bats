@@ -799,6 +799,102 @@ PY
 }
 
 # bats test_tags=home-manager-core
+@test "vm: vm-aarch64 rbw broker tunnel waits for network-online before starting" {
+  local actual
+
+  actual=$(nix_eval_apply_raw \
+    '.#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services."rbw-pinentry-touchid-broker-tunnel"' \
+    'service: builtins.toJSON {
+      after = service.Unit.After or [];
+      wants = service.Unit.Wants or [];
+      wantedBy = service.Install.WantedBy or [];
+    }')
+
+  run python - "$actual" <<'PY'
+import json
+import sys
+
+(actual,) = sys.argv[1:]
+payload = json.loads(actual)
+
+after = payload.get("after", [])
+wants = payload.get("wants", [])
+wanted_by = payload.get("wantedBy", [])
+
+if "network-online.target" not in after:
+    print(
+        f"rbw broker tunnel should start after network-online.target, got after={after!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if "network-online.target" not in wants:
+    print(
+        f"rbw broker tunnel should want network-online.target, got wants={wants!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if "default.target" not in wanted_by:
+    print(
+        f"rbw broker tunnel should still be installed into default.target, got wantedBy={wanted_by!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "vm-aarch64 rbw broker tunnel should wait for network-online before starting, got: $actual"
+
+  grep -Fq 'systemd.user.services.rbw-pinentry-touchid-broker-tunnel' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm-aarch64 host aspect should own the rbw Touch ID broker tunnel service wiring'
+}
+
+# bats test_tags=home-manager-core
+@test "vm: vm-aarch64 rbw-config guards the configured bridge pinentry" {
+  local actual_drv
+
+  actual_drv=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.systemd.user.services.rbw-config.serviceConfig.ExecStart \
+    'execStart: builtins.head (builtins.attrNames (builtins.getContext execStart))')
+
+  run python - "$actual_drv" <<'PY'
+import json
+import subprocess
+import sys
+
+(drv,) = sys.argv[1:]
+payload = json.loads(
+    subprocess.run(
+        ["nix", "derivation", "show", drv],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+)
+script_text = next(iter(payload["derivations"].values()))["env"]["text"]
+
+required_markers = (
+    'bridge_pinentry=',
+    'if [ ! -x "$bridge_pinentry" ]; then',
+    'rbw-config: configured pinentry',
+)
+
+for marker in required_markers:
+    if marker not in script_text:
+        print(
+            f"rbw-config writer should explicitly guard the configured bridge pinentry with marker {marker!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+PY
+  assert_success \
+    || fail "rbw-config should explicitly guard the configured bridge pinentry helper, got derivation '$actual_drv'"
+
+  grep -Fq 'bridge_pinentry=' den/aspects/features/secrets.nix \
+    || fail 'secrets.nix should make the bridge pinentry dependency explicit in rbw-config generation'
+}
+
+# bats test_tags=home-manager-core
 @test "home-manager-core: vm-aarch64 has Linux pbcopy alias" {
   local zsh_aliases
   zsh_aliases=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases)
@@ -1464,6 +1560,57 @@ PY
     || fail "vm-aarch64 sudo should trust a root-owned tunnel endpoint instead of the legacy user-home broker socket"
 }
 
+# bats test_tags=linux-core
+@test "linux: vm-aarch64 sudo broker tunnel waits for network-online before starting" {
+  local actual
+
+  actual=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.systemd.services.vm-touchid-sudo-broker-tunnel \
+    'service: builtins.toJSON {
+      after = service.after or [];
+      wants = service.wants or [];
+      wantedBy = service.wantedBy or [];
+    }')
+
+  run python - "$actual" <<'PY'
+import json
+import sys
+
+(actual,) = sys.argv[1:]
+payload = json.loads(actual)
+
+after = payload.get("after", [])
+wants = payload.get("wants", [])
+wanted_by = payload.get("wantedBy", [])
+
+if "network-online.target" not in after:
+    print(
+        f"sudo broker tunnel should start after network-online.target, got after={after!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if "network-online.target" not in wants:
+    print(
+        f"sudo broker tunnel should want network-online.target, got wants={wants!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if "multi-user.target" not in wanted_by:
+    print(
+        f"sudo broker tunnel should still be installed into multi-user.target, got wantedBy={wanted_by!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "vm-aarch64 sudo broker tunnel should wait for network-online before starting, got: $actual"
+
+  grep -Fq 'systemd.services.vm-touchid-sudo-broker-tunnel' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm-aarch64 host aspect should own the sudo Touch ID broker tunnel service wiring'
+}
+
 
 # ===========================================================================
 # vm-desktop — linux-desktop and vmware aspects
@@ -1853,6 +2000,45 @@ PY
     'args: builtins.concatStringsSep "\n" args')
   [[ "$actual" == *pinentry-touchid* ]] \
     || fail 'Darwin touchid broker agent should launch a payload that references pinentry-touchid'
+}
+
+# bats test_tags=darwin
+@test "darwin: macOS touchid broker waits for the interactive Aqua session" {
+  local actual
+
+  actual=$(nix_eval_apply_raw \
+    '.#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents."rbw-pinentry-touchid-broker"' \
+    'agent: builtins.toJSON {
+      limitLoadToSessionType = agent.serviceConfig.LimitLoadToSessionType or null;
+      processType = agent.serviceConfig.ProcessType or null;
+    }')
+
+  run python - "$actual" <<'PY'
+import json
+import sys
+
+(actual,) = sys.argv[1:]
+payload = json.loads(actual)
+
+if payload.get("limitLoadToSessionType") != "Aqua":
+    print(
+        f"Touch ID broker should be limited to the Aqua session, got {payload.get('limitLoadToSessionType')!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if payload.get("processType") != "Interactive":
+    print(
+        f"Touch ID broker should be marked interactive for GUI readiness, got {payload.get('processType')!r}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "Darwin touchid broker should wait for the interactive Aqua session, got: $actual"
+
+  grep -Fq 'launchd.user.agents.rbw-pinentry-touchid-broker' den/aspects/features/darwin-core.nix \
+    || fail 'darwin-core.nix should own the macOS Touch ID broker agent wiring'
 }
 
 

@@ -404,7 +404,8 @@
           systemd.services.vm-touchid-sudo-broker-tunnel = {
             description = "Expose the macOS Touch ID sudo broker on a root-owned runtime socket";
             wantedBy = [ "multi-user.target" ];
-            after = [ "network.target" ];
+            wants = [ "network-online.target" ];
+            after = [ "network-online.target" ];
             serviceConfig = {
               ExecStart = "${vmTouchIdSudoBrokerTunnel}/bin/vm-touchid-sudo-broker-tunnel";
               Restart = "always";
@@ -849,7 +850,8 @@ EOF
             systemd.user.services.rbw-pinentry-touchid-broker-tunnel = {
               Unit = {
                 Description = "Forward the macOS Touch ID rbw broker socket into the VM";
-                After = [ "default.target" ];
+                After = [ "default.target" "network-online.target" ];
+                Wants = [ "network-online.target" ];
               };
               Service = {
                 Type = "simple";
