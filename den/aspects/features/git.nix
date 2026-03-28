@@ -35,7 +35,7 @@
 
                   key_id = hashlib.sha1(email.encode("utf-8")).hexdigest()[:8].upper()
                   keyinfo = f"rbw/{key_id}"
-                  desc = f"SETDESC \\\"Bitwarden RBW <{email}>\\\" ID {key_id}, Unlock the local database for 'rbw'"
+                  desc = f"SETDESC \"Bitwarden RBW <{email}>\" ID {key_id}, Unlock the local database for 'rbw'"
 
                   proc = subprocess.Popen(
                       [REAL],
@@ -79,11 +79,11 @@
 
                   for raw in sys.stdin:
                       if raw.startswith("SETDESC "):
-                          send_and_forward(desc + "\\n")
+                          send_and_forward(desc + "\n")
                           continue
-                      if raw == "GETPIN\\n":
-                          send_and_require_ok("OPTION allow-external-password-cache\\n")
-                          send_and_require_ok(f"SETKEYINFO {keyinfo}\\n")
+                      if raw == "GETPIN\n":
+                          send_and_require_ok("OPTION allow-external-password-cache\n")
+                          send_and_require_ok(f"SETKEYINFO {keyinfo}\n")
                           send_and_forward(raw)
                           continue
                       send_and_forward(raw)

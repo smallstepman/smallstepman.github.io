@@ -136,9 +136,6 @@
     # sonar - CLI to manage processes running on localhost ports
     sonar.url = "github:smallstepman/sonar";
 
-    # mac-app-util - macOS application utilities (emacs trampoline, etc.)
-    mac-app-util.url = "github:hraban/mac-app-util";
-
   };
 
   # Den - aspect-oriented context-driven Nix configurations (top-level dotted path

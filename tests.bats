@@ -1473,6 +1473,10 @@ PYEOF
     || fail 'git aspect missing SETKEYINFO adapter shim'
   grep -Fq 'Bitwarden RBW <{email}>' den/aspects/features/git.nix \
     || fail 'git aspect missing stable Bitwarden RBW keychain label'
+  grep -Fq 'if raw == "GETPIN\n":' den/aspects/features/git.nix \
+    || fail 'git aspect missing newline-terminated GETPIN adapter handling'
+  grep -Fq 'send_and_forward(desc + "\n")' den/aspects/features/git.nix \
+    || fail 'git aspect missing newline-terminated SETDESC forwarding'
 }
 
 # bats test_tags=darwin
