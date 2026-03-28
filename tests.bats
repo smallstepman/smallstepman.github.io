@@ -617,7 +617,7 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "vm: vm-aarch64 rbw uses macOS touchid bridge" {
-  local actual actual_basename
+  local actual actual_basename candidate_wrappers
 
   actual=$(nix_eval_apply_raw \
     .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
@@ -630,6 +630,40 @@ PYEOF
   actual_basename=${actual##*/}
   [[ "$actual_basename" != "pinentry-wayprompt" ]] \
     || fail "vm-aarch64 rbw pinentry should evaluate to a wrapper binary instead of pinentry-wayprompt, got '$actual'"
+
+  candidate_wrappers=$(
+    python - <<'PY'
+from pathlib import Path
+import re
+
+root = Path("den")
+bridge_terms = re.compile(r"(touchid|broker)")
+fallback_terms = re.compile(r"(fallback|pinentry-wayprompt|pinentry-tty)")
+candidates = []
+
+for path in root.rglob("*.nix"):
+    text = path.read_text()
+
+    for match in re.finditer(r'destination\s*=\s*"/bin/([^"]+)"', text):
+        name = match.group(1)
+        snippet = text[match.start():match.start() + 2500].lower()
+        if bridge_terms.search(snippet) and fallback_terms.search(snippet):
+            candidates.append(name)
+
+    for match in re.finditer(r'writeShellScriptBin\s+"([^"]+)"', text):
+        name = match.group(1)
+        snippet = text[match.start():match.start() + 2500].lower()
+        if bridge_terms.search(snippet) and fallback_terms.search(snippet):
+            candidates.append(name)
+
+for name in dict.fromkeys(candidates):
+    print(name)
+PY
+  )
+  [[ -n "$candidate_wrappers" ]] \
+    || fail "vm-aarch64 rbw pinentry should evaluate to a checked-in bridge wrapper with local fallback behavior, but no such wrapper script is currently defined under den/"
+  printf '%s\n' "$candidate_wrappers" | grep -Fxq "$actual_basename" \
+    || fail "vm-aarch64 rbw pinentry should evaluate to one of the bridge wrapper scripts with local fallback behavior ($candidate_wrappers), got '$actual'"
 
   if grep -Fq 'programs.rbw.settings.pinentry = pkgs.wayprompt;' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64 still hardcodes pkgs.wayprompt for rbw pinentry'
