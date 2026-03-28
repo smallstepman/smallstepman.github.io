@@ -195,8 +195,76 @@
               done
             '';
           };
+
+          mkVmTouchIdSudoBridge = pkgs: pkgs.writeTextFile {
+            name = "vm-touchid-sudo-bridge";
+            destination = "/bin/vm-touchid-sudo-bridge";
+            executable = true;
+            text = ''
+              #!${pkgs.python3}/bin/python3
+              import json
+              import os
+              import socket
+
+              BROKER_SOCKET = "${vmTouchIdBrokerSocket}"
+              BROKER_CONNECT_TIMEOUT_SECONDS = 2.0
+              BROKER_RESPONSE_TIMEOUT_SECONDS = 60.0
+
+
+              def pam_metadata():
+                  return {
+                      "service": os.getenv("PAM_SERVICE"),
+                      "type": os.getenv("PAM_TYPE"),
+                      "user": os.getenv("PAM_USER"),
+                      "invoking_user": os.getenv("PAM_RUSER") or os.getenv("SUDO_USER"),
+                      "tty": os.getenv("PAM_TTY"),
+                      "command": os.getenv("SUDO_COMMAND"),
+                  }
+
+
+              def broker_approve():
+                  request = {
+                      "op": "approve",
+                      "metadata": {
+                          key: value
+                          for key, value in pam_metadata().items()
+                          if value not in (None, "")
+                      },
+                  }
+
+                  with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                      client.settimeout(BROKER_CONNECT_TIMEOUT_SECONDS)
+                      client.connect(BROKER_SOCKET)
+                      client.settimeout(BROKER_RESPONSE_TIMEOUT_SECONDS)
+                      client.sendall((json.dumps(request) + "\n").encode("utf-8"))
+
+                      response = bytearray()
+                      while not response.endswith(b"\n"):
+                          chunk = client.recv(4096)
+                          if not chunk:
+                              raise EOFError("broker closed connection unexpectedly")
+                          response.extend(chunk)
+
+                  payload = json.loads(response.decode("utf-8"))
+                  return bool(payload.get("ok") and payload.get("approved"))
+
+
+              def main():
+                  try:
+                      return 0 if broker_approve() else 1
+                  except Exception:
+                      return 1
+
+
+              if __name__ == "__main__":
+                  raise SystemExit(main())
+            '';
+          };
         in {
-        nixos = { config, pkgs, lib, ... }: {
+        nixos = { config, pkgs, lib, ... }:
+          let
+            vmTouchIdSudoBridge = mkVmTouchIdSudoBridge pkgs;
+          in {
           imports = [
             inputs.disko.nixosModules.disko
           ];
@@ -305,6 +373,10 @@
               (generated.requireFile "host-authorized-keys")
             ];
           };
+
+          environment.systemPackages = [
+            vmTouchIdSudoBridge
+          ];
 
           den.secrets.rbwPinentryPackage = mkRbwPinentryTouchIdBridge pkgs;
         };
