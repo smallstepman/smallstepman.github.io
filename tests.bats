@@ -677,6 +677,128 @@ PY
 }
 
 # bats test_tags=home-manager-core
+@test "vm: vm-aarch64 touchid bridge waits for a slow broker response after connecting" {
+  local actual_drv
+
+  actual_drv=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
+    'pinentry: builtins.head (builtins.attrNames (builtins.getContext (toString pinentry)))')
+
+  run python - "$actual_drv" <<'PY'
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+(drv,) = sys.argv[1:]
+payload = json.loads(
+    subprocess.run(
+        ["nix", "derivation", "show", drv],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+)
+script_text = next(iter(payload["derivations"].values()))["env"]["text"]
+
+with tempfile.TemporaryDirectory(prefix="touchid-bridge-script-") as script_dir, tempfile.TemporaryDirectory(
+    prefix="touchid-broker-"
+) as sock_dir:
+    script_path = Path(script_dir) / "bridge.py"
+    script_path.write_text(script_text)
+
+    loader = importlib.machinery.SourceFileLoader("bridge_module", str(script_path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+
+    sock_path = os.path.join(sock_dir, "broker.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(1)
+
+    request_seen = []
+    server_error = []
+
+    def serve():
+        try:
+            conn, _ = server.accept()
+            with conn:
+                request = b""
+                while not request.endswith(b"\n"):
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        raise RuntimeError("client closed before broker request completed")
+                    request += chunk
+                request_seen.append(request)
+                time.sleep(3.0)
+                conn.sendall(json.dumps({"ok": True, "secret": "touchid-secret"}).encode("utf-8") + b"\n")
+        except Exception as exc:
+            server_error.append(repr(exc))
+        finally:
+            server.close()
+
+    thread = threading.Thread(target=serve)
+    thread.start()
+
+    module.BROKER_SOCKET = sock_path
+
+    def forbidden_popen(*args, **kwargs):
+        raise RuntimeError("fallback invoked while broker stayed connected")
+
+    module.subprocess.Popen = forbidden_popen
+
+    stdin = io.StringIO("GETPIN\nBYE\n")
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    old_stdin, old_stdout, old_stderr = sys.stdin, sys.stdout, sys.stderr
+    start = time.monotonic()
+    try:
+        sys.stdin, sys.stdout, sys.stderr = stdin, stdout, stderr
+        rc = module.main()
+    finally:
+        elapsed = time.monotonic() - start
+        sys.stdin, sys.stdout, sys.stderr = old_stdin, old_stdout, old_stderr
+        thread.join(timeout=10)
+
+    if thread.is_alive():
+        print("fake broker thread did not finish", file=sys.stderr)
+        sys.exit(1)
+
+    if server_error:
+        print(f"fake broker failed: {server_error}", file=sys.stderr)
+        sys.exit(1)
+
+    if request_seen != [b'{"op":"get-secret"}\n']:
+        print(f"unexpected broker request: {request_seen!r}", file=sys.stderr)
+        sys.exit(1)
+
+    if rc != 0:
+        print(f"bridge exited with rc={rc}", file=sys.stderr)
+        sys.exit(1)
+
+    output = stdout.getvalue()
+    if "D touchid-secret\nOK\n" not in output:
+        print(f"bridge did not emit the broker secret, got: {output!r}", file=sys.stderr)
+        sys.exit(1)
+
+    if elapsed < 2.5:
+        print(f"bridge returned too quickly for the delayed broker response: {elapsed:.3f}s", file=sys.stderr)
+        sys.exit(1)
+PY
+  assert_success \
+    || fail 'vm-aarch64 touchid bridge should keep waiting for a connected broker instead of falling back after the short connect timeout'
+}
+
+# bats test_tags=home-manager-core
 @test "home-manager-core: vm-aarch64 has Linux pbcopy alias" {
   local zsh_aliases
   zsh_aliases=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.zsh.shellAliases)
