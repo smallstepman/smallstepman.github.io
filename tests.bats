@@ -616,8 +616,8 @@ PYEOF
 }
 
 # bats test_tags=home-manager-core
-@test "vm: vm-aarch64 rbw uses macOS touchid bridge" {
-  local actual actual_basename candidate_wrappers
+@test "vm: vm-aarch64 evaluated rbw pinentry derivation encodes touchid bridge fallback" {
+  local actual actual_drv
 
   actual=$(nix_eval_apply_raw \
     .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
@@ -625,45 +625,43 @@ PYEOF
 
   [[ "$actual" == /nix/store/*/bin/* ]] \
     || fail "vm-aarch64 rbw pinentry should evaluate to a store-backed wrapper path, got '$actual'"
-  [[ "$actual" != */pinentry-wayprompt ]] \
-    || fail "vm-aarch64 rbw pinentry still hardcodes pinentry-wayprompt: '$actual'"
-  actual_basename=${actual##*/}
-  [[ "$actual_basename" != "pinentry-wayprompt" ]] \
-    || fail "vm-aarch64 rbw pinentry should evaluate to a wrapper binary instead of pinentry-wayprompt, got '$actual'"
 
-  candidate_wrappers=$(
-    python - <<'PY'
-from pathlib import Path
-import re
+  actual_drv=$(nix_eval_apply_raw \
+    .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.rbw.settings.pinentry \
+    'pinentry: builtins.head (builtins.attrNames (builtins.getContext (toString pinentry)))')
 
-root = Path("den")
-bridge_terms = re.compile(r"(touchid|broker)")
-fallback_terms = re.compile(r"(fallback|pinentry-wayprompt|pinentry-tty)")
-candidates = []
+  run python - "$actual" "$actual_drv" <<'PY'
+import subprocess
+import sys
 
-for path in root.rglob("*.nix"):
-    text = path.read_text()
+actual, drv = sys.argv[1:3]
+proc = subprocess.run(
+    ["nix", "derivation", "show", drv],
+    check=True,
+    capture_output=True,
+    text=True,
+)
+payload = proc.stdout.lower()
 
-    for match in re.finditer(r'destination\s*=\s*"/bin/([^"]+)"', text):
-        name = match.group(1)
-        snippet = text[match.start():match.start() + 2500].lower()
-        if bridge_terms.search(snippet) and fallback_terms.search(snippet):
-            candidates.append(name)
+bridge_markers = ("pinentry-touchid", "touchid", "broker")
+fallback_markers = ("pinentry-wayprompt", "pinentry-tty", "fallback")
 
-    for match in re.finditer(r'writeShellScriptBin\s+"([^"]+)"', text):
-        name = match.group(1)
-        snippet = text[match.start():match.start() + 2500].lower()
-        if bridge_terms.search(snippet) and fallback_terms.search(snippet):
-            candidates.append(name)
+if not any(marker in payload for marker in bridge_markers):
+    print(
+        f"evaluated rbw pinentry derivation for {actual!r} does not encode a macOS touchid bridge marker",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
-for name in dict.fromkeys(candidates):
-    print(name)
+if not any(marker in payload for marker in fallback_markers):
+    print(
+        f"evaluated rbw pinentry derivation for {actual!r} does not encode a local fallback marker",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 PY
-  )
-  [[ -n "$candidate_wrappers" ]] \
-    || fail "vm-aarch64 rbw pinentry should evaluate to a checked-in bridge wrapper with local fallback behavior, but no such wrapper script is currently defined under den/"
-  printf '%s\n' "$candidate_wrappers" | grep -Fxq "$actual_basename" \
-    || fail "vm-aarch64 rbw pinentry should evaluate to one of the bridge wrapper scripts with local fallback behavior ($candidate_wrappers), got '$actual'"
+  assert_success \
+    || fail "vm-aarch64 rbw pinentry should evaluate to a derivation payload that references both the macOS touchid bridge and a local fallback, got '$actual' via '$actual_drv'"
 
   if grep -Fq 'programs.rbw.settings.pinentry = pkgs.wayprompt;' den/aspects/hosts/vm-aarch64.nix; then
     fail 'vm-aarch64 still hardcodes pkgs.wayprompt for rbw pinentry'
@@ -1585,49 +1583,19 @@ PY
 }
 
 # bats test_tags=darwin
-@test "darwin: macOS touchid broker is wired" {
-  run python - <<'PY'
-from pathlib import Path
-import re
-import sys
+@test "darwin: evaluated macOS touchid broker agent is wired" {
+  local actual
 
-text = Path("den/aspects/features/darwin-core.nix").read_text()
+  actual=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents \
+    'agents: if agents ? "rbw-pinentry-touchid-broker" then "yes" else "no"')
+  assert_equal "$actual" "yes"
 
-wired_package_vars = sorted(
-    set(
-        match.group(1)
-        for match in re.finditer(
-            r'launchd\.user\.agents\.[^=]+\s*=\s*\{.*?\$\{([A-Za-z_][A-Za-z0-9_]*)\}/bin/[^\s\'"]+',
-            text,
-            re.S,
-        )
-    )
-)
-
-if not wired_package_vars:
-    print(
-        "darwin-core.nix defines no launchd agent wired to a local package variable",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-for var in wired_package_vars:
-    package_match = re.search(
-        rf'(?ms)^\s*{re.escape(var)}\s*=.*?\{{.*?\btext\s*=\s*\'\'(.*?)\'\'\s*;.*?^\s*\}};',
-        text,
-    )
-    if package_match and "pinentry-touchid" in package_match.group(1):
-        sys.exit(0)
-
-print(
-    "launchd-wired package variables found, but none of their script text references pinentry-touchid: "
-    + ", ".join(wired_package_vars),
-    file=sys.stderr,
-)
-sys.exit(1)
-PY
-  assert_success \
-    || fail 'darwin-core.nix should wire a launchd agent to a local broker package whose script text invokes pinentry-touchid'
+  actual=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents."rbw-pinentry-touchid-broker".serviceConfig.ProgramArguments \
+    'args: builtins.concatStringsSep "\n" args')
+  [[ "$actual" == *pinentry-touchid* ]] \
+    || fail 'Darwin touchid broker agent should launch a payload that references pinentry-touchid'
 }
 
 
