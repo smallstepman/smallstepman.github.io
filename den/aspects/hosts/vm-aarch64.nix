@@ -14,6 +14,9 @@
           macTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
           vmTouchIdUserBridgeKey = "/home/m/.ssh/id_ed25519_touchid_bridge_to_host";
           vmTouchIdSudoBridgeKey = "/var/lib/vm-touchid-sudo-bridge/id_ed25519";
+          vmTouchIdUserKnownHosts = "/home/m/.ssh/known_hosts_touchid_bridge";
+          vmTouchIdSudoKnownHosts = "/var/lib/vm-touchid-sudo-bridge/known_hosts";
+          macTouchIdKnownHostsEntry = "192.168.130.1 ${builtins.readFile (generated.requireFile "mac-host-ssh-ed25519.pub")}";
 
           mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {
             name = "rbw-pinentry-touchid-bridge-fallback";
@@ -414,11 +417,14 @@
                 set -euo pipefail
                 umask 077
                 key="${vmTouchIdSudoBridgeKey}"
+                known_hosts="${vmTouchIdSudoKnownHosts}"
                 mkdir -p "$(dirname "$key")"
                 if [ ! -f "$key" ]; then
                   ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -f "$key"
                 fi
                 chmod 600 "$key"
+                printf '%s' ${lib.escapeShellArg macTouchIdKnownHostsEntry} > "$known_hosts"
+                chmod 600 "$known_hosts"
               ''}";
             };
           };
@@ -439,6 +445,7 @@
             extraGroups = [ "lxd" ];
             openssh.authorizedKeys.keyFiles = [
               (generated.requireFile "host-authorized-keys")
+              (generated.requireFile "touchid-bridge-mac-to-vm.pub")
             ];
           };
 
@@ -828,6 +835,8 @@ EOF
                 serverAliveInterval = 30;
               };
             };
+
+            home.file.".ssh/${builtins.baseNameOf vmTouchIdUserKnownHosts}".text = macTouchIdKnownHostsEntry;
 
             home.activation.ensureHostDockerContext =
               lib.hm.dag.entryAfter [ "writeBoundary" ] ''

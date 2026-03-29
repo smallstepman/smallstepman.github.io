@@ -11,6 +11,8 @@
             vmTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
             vmTouchIdRemoteSocket = "/home/m/.local/run/vm-touchid-broker.sock";
             vmTouchIdBridgeKey = "/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm";
+            vmTouchIdKnownHosts = "/Users/m/.ssh/known_hosts_vm_touchid_bridge";
+            vmTouchIdVmKnownHostsEntry = "192.168.130.3 ${builtins.readFile (generated.requireFile "vm-host-ssh-ed25519.pub")}";
             vmTouchIdPinentry = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid";
 
             orbstackKubeconfigSync = pkgs.writeShellApplication {
@@ -326,6 +328,8 @@
               home = "/Users/m";
               openssh.authorizedKeys.keyFiles = [
                 (generated.requireFile "mac-host-authorized-keys")
+                (generated.requireFile "touchid-bridge-vm-user-to-mac.pub")
+                (generated.requireFile "touchid-bridge-vm-root-to-mac.pub")
               ];
             };
 
@@ -587,7 +591,11 @@
           };
         };
 
-        homeManager = { pkgs, ... }: {
+        homeManager = { pkgs, ... }:
+          let
+            vmTouchIdKnownHosts = "/Users/m/.ssh/known_hosts_vm_touchid_bridge";
+            vmTouchIdVmKnownHostsEntry = "192.168.130.3 ${builtins.readFile (generated.requireFile "vm-host-ssh-ed25519.pub")}";
+          in {
           home.packages = [
             pkgs.ghostty-bin
             pkgs.skhd
@@ -598,6 +606,8 @@
             pkgs.sshpass
             pkgs.keycastr
           ];
+
+          home.file.".ssh/${builtins.baseNameOf vmTouchIdKnownHosts}".text = vmTouchIdVmKnownHostsEntry;
 
           xdg.configFile = {
             "wezterm/wezterm.lua".text = builtins.readFile ../../../dotfiles/by-host/darwin/wezterm.lua;
