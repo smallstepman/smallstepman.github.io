@@ -1661,6 +1661,7 @@ PY
   run python - "$user_tunnel_drv" "$sudo_tunnel_drv" <<'PY'
 import json
 import re
+import shlex
 import subprocess
 import sys
 
@@ -1670,7 +1671,6 @@ COMMON_REQUIRED = (
     "-F /dev/null",
     "-o BatchMode=yes",
     "-o IdentitiesOnly=yes",
-    "-o UserKnownHostsFile=",
     "-o GlobalKnownHostsFile=/dev/null",
     "-o StrictHostKeyChecking=yes",
 )
@@ -1679,8 +1679,15 @@ COMMON_FORBIDDEN = (
     "StrictHostKeyChecking=accept-new",
 )
 ROLE_SPECIFIC = {
-    "rbw": "touchid-bridge-vm-user-to-mac",
-    "sudo": "touchid-bridge-vm-root-to-mac",
+    "rbw": (
+        "~/.ssh/id_ed25519_touchid_bridge_to_host",
+        "$HOME/.ssh/id_ed25519_touchid_bridge_to_host",
+        "${HOME}/.ssh/id_ed25519_touchid_bridge_to_host",
+        "/home/m/.ssh/id_ed25519_touchid_bridge_to_host",
+    ),
+    "sudo": (
+        "/var/lib/vm-touchid-sudo-bridge/id_ed25519",
+    ),
 }
 
 
@@ -1696,38 +1703,173 @@ def derivation_text(drv: str) -> str:
     return next(iter(payload["derivations"].values()))["env"]["text"]
 
 
-def has_identity_option(text: str, identity: str) -> bool:
-    for line in text.splitlines():
-        if identity not in line:
+def logical_commands(text: str) -> list[str]:
+    commands: list[str] = []
+    current: list[str] = []
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            if current:
+                commands.append(" ".join(current))
+                current = []
             continue
-        if re.search(rf"(^|\s)-i\s+\S*{re.escape(identity)}\S*", line):
+
+        current.append(stripped.removesuffix("\\").strip())
+        if not stripped.endswith("\\"):
+            commands.append(" ".join(current))
+            current = []
+
+    if current:
+        commands.append(" ".join(current))
+
+    return commands
+
+
+def extract_bridge_ssh_commands(text: str) -> list[str]:
+    return [
+        command
+        for command in logical_commands(text)
+        if re.search(r"(^|\s)(?:\S*/)?ssh(\s|$)", command)
+    ]
+
+
+def normalize_option_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def extract_option_values(text: str, option_name: str) -> list[str]:
+    values: list[str] = []
+    tokens = shlex.split(text, posix=True)
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+
+        if token == "-o" and index + 1 < len(tokens):
+            payload = tokens[index + 1]
+            if payload.startswith(f"{option_name}="):
+                values.append(payload.split("=", 1)[1])
+                index += 2
+                continue
+            if payload.startswith(f"{option_name} "):
+                values.append(payload.split(None, 1)[1])
+                index += 2
+                continue
+            if payload == option_name and index + 2 < len(tokens):
+                values.append(tokens[index + 2])
+                index += 3
+                continue
+        elif token.startswith(f"-o{option_name}="):
+            values.append(token.split("=", 1)[1])
+        elif token == f"-o{option_name}" and index + 1 < len(tokens):
+            values.append(tokens[index + 1])
+            index += 2
+            continue
+
+        index += 1
+
+    return values
+
+
+def extract_identity_values(text: str) -> list[str]:
+    return extract_option_values(text, "IdentityFile")
+
+
+def normalized_identity_values(text: str) -> list[str]:
+    return [normalize_option_value(value) for value in extract_identity_values(text)]
+
+
+def has_identity_option(text: str, identities: tuple[str, ...] | str) -> bool:
+    candidates = {identities} if isinstance(identities, str) else set(identities)
+    return any(value in candidates for value in normalized_identity_values(text))
+
+
+def unexpected_identity_values(text: str, identities: tuple[str, ...] | str) -> list[str]:
+    candidates = {identities} if isinstance(identities, str) else set(identities)
+    return sorted({value for value in normalized_identity_values(text) if value not in candidates})
+
+
+def has_generic_identity_flag(text: str) -> bool:
+    tokens = shlex.split(text, posix=True)
+    for index, token in enumerate(tokens):
+        if token == "-i" and index + 1 < len(tokens):
             return True
-        if re.search(rf"(^|\s)-o\s+IdentityFile(?:=|\s+)\S*{re.escape(identity)}\S*", line):
+        if token.startswith("-i") and token != "-i":
             return True
     return False
 
 
+def extract_user_known_hosts_values(text: str) -> list[str]:
+    return extract_option_values(text, "UserKnownHostsFile")
+
+
+def has_dedicated_user_known_hosts_option(text: str, allowed_pattern: str) -> bool:
+    defaults = {
+        "/dev/null",
+        "/home/m/.ssh/known_hosts",
+        "/Users/m/.ssh/known_hosts",
+        "~/.ssh/known_hosts",
+        "$HOME/.ssh/known_hosts",
+        "${HOME}/.ssh/known_hosts",
+    }
+    values = extract_user_known_hosts_values(text)
+    if not values:
+        return False
+    effective_value = normalize_option_value(values[-1])
+    return effective_value not in defaults and re.search(allowed_pattern, effective_value) is not None
+
+
 def validate_tunnel(name: str, text: str) -> list[str]:
     failures: list[str] = []
+    ssh_commands = extract_bridge_ssh_commands(text)
 
     for forbidden in COMMON_FORBIDDEN:
         if forbidden in text:
             failures.append(f"{name} tunnel still contains forbidden {forbidden!r}")
 
-    for required in COMMON_REQUIRED:
-        if required not in text:
-            failures.append(f"{name} tunnel is missing required {required!r}")
+    if not ssh_commands:
+        failures.append(f"could not find any bridge ssh invocations in the {name} tunnel")
 
-    expected_identity = ROLE_SPECIFIC[name]
-    if not has_identity_option(text, expected_identity):
-        failures.append(
-            f"{name} tunnel should use a dedicated bridge IdentityFile SSH option for {expected_identity!r}"
-        )
+    for command in ssh_commands:
+        for required in COMMON_REQUIRED:
+            if required not in command:
+                failures.append(f"{name} tunnel is missing required {required!r}: {command}")
 
-    if name == "sudo" and "/home/m/.ssh/id_ed25519" in text:
-        failures.append(
-            f"{name} tunnel should not keep using the ambient user SSH identity"
-        )
+        if has_generic_identity_flag(command):
+            failures.append(
+                f"{name} tunnel should not use generic ssh -i identity flags when the contract requires explicit IdentityFile options: {command}"
+            )
+
+        expected_identity = ROLE_SPECIFIC[name]
+        if not has_identity_option(command, expected_identity):
+            failures.append(
+                f"{name} tunnel should use a dedicated bridge IdentityFile SSH option for {expected_identity[0]!r}"
+            )
+
+        unexpected_identities = unexpected_identity_values(command, expected_identity)
+        if unexpected_identities:
+            failures.append(
+                f"{name} tunnel should not configure additional IdentityFile SSH options beyond the dedicated bridge key: {unexpected_identities!r}"
+            )
+
+        if name == "rbw" and not has_dedicated_user_known_hosts_option(
+            command,
+            r"^(?:~|\$HOME|\$\{HOME\}|/home/m)/\.ssh/\S*known_hosts\S*$",
+        ):
+            failures.append(
+                f"{name} tunnel should point UserKnownHostsFile at a dedicated pinned bridge known_hosts file under the user SSH directory"
+            )
+
+        if name == "sudo" and not has_dedicated_user_known_hosts_option(
+            command,
+            r"^/var/lib/vm-touchid-sudo-bridge/\S*known_hosts\S*$",
+        ):
+            failures.append(
+                f"{name} tunnel should point UserKnownHostsFile at a dedicated pinned root-owned known_hosts file under /var/lib/vm-touchid-sudo-bridge"
+            )
 
     return failures
 
@@ -2230,41 +2372,80 @@ PY
   run python - <<'PY'
 from pathlib import Path
 import re
+import shlex
 import sys
 
 text = Path("den/aspects/features/darwin-core.nix").read_text()
-start = text.index('launchd.user.agents.vm-touchid-broker-tunnel = {')
-end = text.index('launchd.user.agents.openwebui-tunnel = {', start)
-agent_block = text[start:end]
+
+
+def extract_nix_attr_block(text: str, marker: str) -> str:
+    start = text.index(marker)
+    block_lines: list[str] = []
+    brace_depth = 0
+    in_multiline_string = False
+
+    for line in text[start:].splitlines():
+        block_lines.append(line)
+
+        if not in_multiline_string:
+            brace_depth += line.count("{") - line.count("}")
+            if brace_depth == 0:
+                return "\n".join(block_lines)
+
+        if line.count("''") % 2 == 1:
+            in_multiline_string = not in_multiline_string
+
+    raise ValueError(f"could not extract attr block for {marker!r}")
+
+
+agent_block = extract_nix_attr_block(text, 'launchd.user.agents.vm-touchid-broker-tunnel = {')
 
 
 def extract_reverse_tunnel(text: str) -> str:
-    lines = text.splitlines()
-    for idx, line in enumerate(lines):
-        if "/usr/bin/ssh -N" not in line:
+    for command in extract_bridge_ssh_commands(text):
+        if re.search(r"(^|\s)-R(\s|$)", command):
+            return command
+    raise ValueError("could not find the reverse-tunnel ssh invocation")
+
+
+def logical_commands(text: str) -> list[str]:
+    commands: list[str] = []
+    current: list[str] = []
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            if current:
+                commands.append(" ".join(current))
+                current = []
             continue
 
-        command = [line.strip().removesuffix("\\").strip()]
-        for following in lines[idx + 1 :]:
-            stripped = following.strip()
-            if not stripped:
-                break
-            command.append(stripped.removesuffix("\\").strip())
-            if not stripped.endswith("\\"):
-                break
+        current.append(stripped.removesuffix("\\").strip())
+        if not stripped.endswith("\\"):
+            commands.append(" ".join(current))
+            current = []
 
-        return " ".join(command)
+    if current:
+        commands.append(" ".join(current))
 
-    raise ValueError("could not find the reverse-tunnel ssh -N invocation")
+    return commands
+
+
+def extract_bridge_ssh_commands(text: str) -> list[str]:
+    return [
+        command
+        for command in logical_commands(text)
+        if re.search(r"(^|\s)(?:\S*/)?ssh(\s|$)", command)
+    ]
 
 
 reverse_tunnel = extract_reverse_tunnel(agent_block)
+ssh_commands = extract_bridge_ssh_commands(agent_block)
 
 required = (
     "-F /dev/null",
     "-o BatchMode=yes",
     "-o IdentitiesOnly=yes",
-    "-o UserKnownHostsFile=",
     "-o GlobalKnownHostsFile=/dev/null",
     "-o StrictHostKeyChecking=yes",
     "-R ${vmTouchIdRemoteSocket}:${vmTouchIdBrokerSocket}",
@@ -2275,17 +2456,147 @@ forbidden = (
 )
 
 
-def has_identity_option(text: str, identity: str) -> bool:
-    if identity not in text:
-        return False
-    if re.search(rf"(^|\s)-i\s+\S*{re.escape(identity)}\S*", text):
-        return True
-    if re.search(rf"(^|\s)-o\s+IdentityFile(?:=|\s+)\S*{re.escape(identity)}\S*", text):
-        return True
+def normalize_option_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def extract_option_values(text: str, option_name: str) -> list[str]:
+    values: list[str] = []
+    tokens = shlex.split(text, posix=True)
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+
+        if token == "-o" and index + 1 < len(tokens):
+            payload = tokens[index + 1]
+            if payload.startswith(f"{option_name}="):
+                values.append(payload.split("=", 1)[1])
+                index += 2
+                continue
+            if payload.startswith(f"{option_name} "):
+                values.append(payload.split(None, 1)[1])
+                index += 2
+                continue
+            if payload == option_name and index + 2 < len(tokens):
+                values.append(tokens[index + 2])
+                index += 3
+                continue
+        elif token.startswith(f"-o{option_name}="):
+            values.append(token.split("=", 1)[1])
+        elif token == f"-o{option_name}" and index + 1 < len(tokens):
+            values.append(tokens[index + 1])
+            index += 2
+            continue
+
+        index += 1
+
+    return values
+
+
+def extract_identity_values(text: str) -> list[str]:
+    return extract_option_values(text, "IdentityFile")
+
+
+def normalized_identity_values(text: str) -> list[str]:
+    return [normalize_option_value(value) for value in extract_identity_values(text)]
+
+
+def has_identity_option(text: str, identities: tuple[str, ...] | str) -> bool:
+    candidates = {identities} if isinstance(identities, str) else set(identities)
+    return any(value in candidates for value in normalized_identity_values(text))
+
+
+def unexpected_identity_values(text: str, identities: tuple[str, ...] | str) -> list[str]:
+    candidates = {identities} if isinstance(identities, str) else set(identities)
+    return sorted({value for value in normalized_identity_values(text) if value not in candidates})
+
+
+def has_generic_identity_flag(text: str) -> bool:
+    tokens = shlex.split(text, posix=True)
+    for index, token in enumerate(tokens):
+        if token == "-i" and index + 1 < len(tokens):
+            return True
+        if token.startswith("-i") and token != "-i":
+            return True
     return False
 
+
+def extract_user_known_hosts_values(text: str) -> list[str]:
+    return extract_option_values(text, "UserKnownHostsFile")
+
+
+def has_dedicated_user_known_hosts_option(text: str) -> bool:
+    defaults = {
+        "/dev/null",
+        "/home/m/.ssh/known_hosts",
+        "/Users/m/.ssh/known_hosts",
+        "~/.ssh/known_hosts",
+        "$HOME/.ssh/known_hosts",
+        "${HOME}/.ssh/known_hosts",
+    }
+    values = extract_user_known_hosts_values(text)
+    if not values:
+        return False
+    effective_value = normalize_option_value(values[-1])
+    return (
+        effective_value not in defaults
+        and re.search(
+            r"^(?:~|\$HOME|\$\{HOME\}|/Users/m)/\.ssh/\S*known_hosts\S*$",
+            effective_value,
+        )
+        is not None
+    )
+
 failures = []
-if "/usr/bin/ssh -N" not in reverse_tunnel or " -R " not in reverse_tunnel:
+if not ssh_commands:
+    failures.append("could not find any bridge ssh invocations in the Darwin tunnel agent")
+
+for command in ssh_commands:
+    for needle in required[:-1]:
+        if needle not in command:
+            failures.append(f"bridge ssh command is missing required {needle!r}: {command}")
+
+    if has_generic_identity_flag(command):
+        failures.append(
+            f"bridge ssh commands should not use generic ssh -i identity flags when the contract requires explicit IdentityFile options: {command}"
+        )
+
+    if not has_identity_option(
+        command,
+        (
+            "~/.ssh/id_ed25519_touchid_bridge_to_vm",
+            "$HOME/.ssh/id_ed25519_touchid_bridge_to_vm",
+            "${HOME}/.ssh/id_ed25519_touchid_bridge_to_vm",
+            "/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm",
+        ),
+    ):
+        failures.append(
+            "bridge ssh commands should use a dedicated bridge IdentityFile SSH option for '~/.ssh/id_ed25519_touchid_bridge_to_vm'"
+        )
+
+    unexpected_identities = unexpected_identity_values(
+        command,
+        (
+            "~/.ssh/id_ed25519_touchid_bridge_to_vm",
+            "$HOME/.ssh/id_ed25519_touchid_bridge_to_vm",
+            "${HOME}/.ssh/id_ed25519_touchid_bridge_to_vm",
+            "/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm",
+        ),
+    )
+    if unexpected_identities:
+        failures.append(
+            f"bridge ssh commands should not configure additional IdentityFile SSH options beyond the dedicated bridge key: {unexpected_identities!r}"
+        )
+
+    if not has_dedicated_user_known_hosts_option(command):
+        failures.append(
+            "bridge ssh commands should point UserKnownHostsFile at a dedicated pinned bridge known_hosts file"
+        )
+
+if not re.search(r"(^|\s)(?:\S*/)?ssh(\s|$)", reverse_tunnel) or " -R " not in reverse_tunnel or not re.search(r"(^|\s)-N(\s|$)", reverse_tunnel):
     failures.append("could not isolate the actual ssh -N ... -R reverse-tunnel invocation")
 
 for needle in required:
@@ -2299,10 +2610,8 @@ for needle in forbidden:
 if "ssh-keygen -R" in agent_block:
     failures.append("reverse-tunnel implementation should not mutate known_hosts with 'ssh-keygen -R'")
 
-if not has_identity_option(reverse_tunnel, "touchid-bridge-mac-to-vm"):
-    failures.append(
-        "reverse tunnel should use a dedicated bridge IdentityFile SSH option for 'touchid-bridge-mac-to-vm'"
-    )
+if "StrictHostKeyChecking=accept-new" in agent_block and "StrictHostKeyChecking=accept-new" not in reverse_tunnel:
+    failures.append("reverse-tunnel implementation should not re-TOFU with 'StrictHostKeyChecking=accept-new'")
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
@@ -2372,79 +2681,178 @@ PY
 @test "docs: touchid bridge generated artifacts are wired into bootstrap and refresh tooling" {
   run python - <<'PY'
 from pathlib import Path
+import os
 import re
+import shlex
+import subprocess
 import sys
+import tempfile
+import textwrap
 
 macbook = Path("docs/macbook.sh").read_text()
 vm = Path("docs/vm.sh").read_text()
 
 
-def function_body(script: str, name: str) -> str:
-    match = re.search(rf"^{name}\(\) \{{\n(?P<body>.*?)^\}}", script, re.MULTILINE | re.DOTALL)
-    if not match:
-        raise ValueError(f"could not find shell function {name}")
-    return match.group("body")
+FUNCTION_DEFINITION_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*\(\) \{\n.*?^\}",
+    re.MULTILINE | re.DOTALL,
+)
 
 
-macbook_prepare = function_body(macbook, "prepare_generated_dataset")
-vm_refresh = function_body(vm, "cmd_refresh_secrets")
+def function_definitions(script: str, required: set[str]) -> str:
+    definitions = [match.group(0) for match in FUNCTION_DEFINITION_RE.finditer(script)]
+    missing = [name for name in required if not any(defn.startswith(f"{name}()") for defn in definitions)]
+    if missing:
+        raise ValueError(f"missing shell function definitions: {missing}")
+    return "\n\n".join(definitions) + "\n"
 
 failures = []
 
-def maps_source_to_generated_target(body: str, source_pattern: str, artifact: str) -> bool:
-    return re.search(
-        rf'^\s*(?:cp|install)\b[^\n]*{source_pattern}[^\n]*"\$GENERATED_DIR/{re.escape(artifact)}"[^\n]*$',
-        body,
-        re.MULTILINE,
-    ) is not None
+def run_function(definitions: str, function_name: str, prelude: str, env: dict[str, str]) -> None:
+    script = textwrap.dedent(
+        f"""\
+        set -euo pipefail
+        {definitions}
+        {prelude}
+        {function_name} >/dev/null 2>&1
+        """
+    )
+    result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"{function_name} harness failed\\nSTDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
+        )
+
+def expect_file_content(path: Path, expected: str, message: str) -> None:
+    if not path.is_file():
+        failures.append(message)
+        return
+    if path.read_text() != expected:
+        failures.append(message)
 
 
-def ssh_fetches_remote_source_into_generated_target(body: str, source_pattern: str, artifact: str) -> bool:
-    return re.search(
-        rf'ssh \$SSH_OPTIONS -p"\$NIXPORT" "\$\{{NIXUSER\}}@\$\{{addr\}}" "(?:(?!"\s*\|).|\n)*{source_pattern}(?:(?!"\s*\|).|\n)*"\s*\|(?:(?!>\s*"\$GENERATED_DIR/{re.escape(artifact)}").|\n)*>\s*"\$GENERATED_DIR/{re.escape(artifact)}"',
-        body,
-        re.MULTILINE,
-    ) is not None
+with tempfile.TemporaryDirectory() as tmpdir_str:
+    tmpdir = Path(tmpdir_str)
+    home = tmpdir / "home"
+    ssh_dir = home / ".ssh"
+    ssh_dir.mkdir(parents=True)
+    host_ssh_dir = tmpdir / "host-ssh"
+    host_ssh_dir.mkdir()
+    generated_dir = tmpdir / "generated"
+    generated_dir.mkdir()
+    config_dir = tmpdir / "config"
+    config_dir.mkdir()
+    bin_dir = tmpdir / "bin"
+    bin_dir.mkdir()
 
+    mac_host_key = "ssh-ed25519 AAAA mac-host\n"
+    mac_bridge_key = "ssh-ed25519 AAAA mac-bridge\n"
+    vm_host_key = "ssh-ed25519 AAAA vm-host\n"
+    vm_user_bridge_key = "ssh-ed25519 AAAA vm-user-bridge\n"
+    vm_root_bridge_key = "ssh-ed25519 AAAA vm-root-bridge\n"
 
-macbook_required = (
-    (
-        r'"\$HOST_SSH_PUBKEY_FILE"',
-        "mac-host-ssh-ed25519.pub",
-        "docs/macbook.sh should copy $HOST_SSH_PUBKEY_FILE to $GENERATED_DIR/mac-host-ssh-ed25519.pub",
-    ),
-    (
-        r'id_ed25519_touchid_bridge_to_vm\.pub',
-        "touchid-bridge-mac-to-vm.pub",
+    host_ssh_pubkey_file = host_ssh_dir / "ssh_host_ed25519_key.pub"
+    host_ssh_pubkey_file.write_text(mac_host_key)
+    (ssh_dir / "id_ed25519.pub").write_text("ssh-ed25519 AAAA mac-user\n")
+    (ssh_dir / "id_ed25519_touchid_bridge_to_vm.pub").write_text(mac_bridge_key)
+
+    mock_ssh = bin_dir / "ssh"
+    mock_ssh.write_text(
+        "#!/bin/sh\n"
+        "case \"$*\" in\n"
+        "  *age-keygen*) printf 'age1mockkey\\n' ;;\n"
+        f"  *'/etc/ssh/ssh_host_ed25519_key.pub'*) printf {shlex.quote(vm_host_key)} ;;\n"
+        f"  *'id_ed25519_touchid_bridge_to_host.pub'*) printf {shlex.quote(vm_user_bridge_key)} ;;\n"
+        f"  *'/var/lib/vm-touchid-sudo-bridge/id_ed25519.pub'*) printf {shlex.quote(vm_root_bridge_key)} ;;\n"
+        "  *) printf 'unexpected ssh invocation: %s\\n' \"$*\" >&2; exit 1 ;;\n"
+        "esac\n"
+    )
+    mock_ssh.chmod(0o755)
+
+    mock_rbw = bin_dir / "rbw"
+    mock_rbw.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = 'get' ] && [ \"$2\" = 'orbstack-kubeconfig' ]; then\n"
+        "  printf 'apiVersion: v1\\nclusters: []\\n'\n"
+        "  exit 0\n"
+        "fi\n"
+        "printf 'unexpected rbw invocation: %s\\n' \"$*\" >&2\n"
+        "exit 1\n"
+    )
+    mock_rbw.chmod(0o755)
+
+    mock_nix = bin_dir / "nix"
+    mock_nix.write_text(
+        "#!/bin/sh\n"
+        "exit 0\n"
+    )
+    mock_nix.chmod(0o755)
+
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+
+    run_function(
+        function_definitions(macbook, {"prepare_generated_dataset"}),
+        "prepare_generated_dataset",
+        textwrap.dedent(
+            f"""\
+            HOME={shlex.quote(str(home))}
+            GENERATED_DIR={shlex.quote(str(generated_dir))}
+            HOST_SSH_PUBKEY_FILE={shlex.quote(str(host_ssh_pubkey_file))}
+            die() {{ echo "die:$*" >&2; exit 1; }}
+            """
+        ),
+        env,
+    )
+
+    run_function(
+        function_definitions(vm, {"cmd_refresh_secrets"}),
+        "cmd_refresh_secrets",
+        textwrap.dedent(
+            f"""\
+            HOME={shlex.quote(str(home))}
+            GENERATED_DIR={shlex.quote(str(generated_dir))}
+            HOST_SSH_PUBKEY_FILE={shlex.quote(str(host_ssh_pubkey_file))}
+            NIX_CONFIG_DIR={shlex.quote(str(config_dir))}
+            SSH_OPTIONS=
+            NIXPORT=22
+            NIXUSER=m
+            RBW_BIN=rbw
+            vm_detect_ip() {{ printf '%s\\n' '192.0.2.10'; }}
+            ensure_generated_dir() {{ mkdir -p "$GENERATED_DIR"; }}
+            local_wrapper_flake() {{ printf '%s\\n' {shlex.quote(str(tmpdir / 'wrapper'))}; }}
+            die() {{ echo "die:$*" >&2; exit 1; }}
+            """
+        ),
+        env,
+    )
+
+    expect_file_content(
+        generated_dir / "mac-host-ssh-ed25519.pub",
+        mac_host_key,
+        "docs/macbook.sh should export the macOS host SSH public key into $GENERATED_DIR/mac-host-ssh-ed25519.pub",
+    )
+    expect_file_content(
+        generated_dir / "touchid-bridge-mac-to-vm.pub",
+        mac_bridge_key,
         "docs/macbook.sh should copy ~/.ssh/id_ed25519_touchid_bridge_to_vm.pub to $GENERATED_DIR/touchid-bridge-mac-to-vm.pub",
-    ),
-)
-
-for source_pattern, artifact, message in macbook_required:
-    if not maps_source_to_generated_target(macbook_prepare, source_pattern, artifact):
-        failures.append(message)
-
-vm_refresh_required = (
-    (
-        r'/etc/ssh/ssh_host_ed25519_key\.pub',
-        "vm-host-ssh-ed25519.pub",
+    )
+    expect_file_content(
+        generated_dir / "vm-host-ssh-ed25519.pub",
+        vm_host_key,
         "docs/vm.sh cmd_refresh_secrets() should fetch /etc/ssh/ssh_host_ed25519_key.pub into $GENERATED_DIR/vm-host-ssh-ed25519.pub",
-    ),
-    (
-        r'id_ed25519_touchid_bridge_to_host\.pub',
-        "touchid-bridge-vm-user-to-mac.pub",
+    )
+    expect_file_content(
+        generated_dir / "touchid-bridge-vm-user-to-mac.pub",
+        vm_user_bridge_key,
         "docs/vm.sh cmd_refresh_secrets() should fetch the VM user bridge public key into $GENERATED_DIR/touchid-bridge-vm-user-to-mac.pub",
-    ),
-    (
-        r'/var/lib/vm-touchid-sudo-bridge/id_ed25519\.pub',
-        "touchid-bridge-vm-root-to-mac.pub",
+    )
+    expect_file_content(
+        generated_dir / "touchid-bridge-vm-root-to-mac.pub",
+        vm_root_bridge_key,
         "docs/vm.sh cmd_refresh_secrets() should fetch /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub into $GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub",
-    ),
-)
-
-for source_pattern, artifact, message in vm_refresh_required:
-    if not ssh_fetches_remote_source_into_generated_target(vm_refresh, source_pattern, artifact):
-        failures.append(message)
+    )
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
@@ -2816,12 +3224,6 @@ PY
   grep -Fq 'external-input-flake.sh' AGENTS.md
   grep -Fq 'scripts/external-input-flake.sh' AGENTS.md
   grep -Fq 'path:$WRAPPER' AGENTS.md
-}
-
-# bats test_tags=generated-input
-@test "generated-input: docs scripts have default_nix_config_dir helper" {
-  grep -Fq 'default_nix_config_dir()' docs/macbook.sh
-  grep -Fq 'default_nix_config_dir()' docs/vm.sh
 }
 
 # bats test_tags=generated-input
