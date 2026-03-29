@@ -2991,6 +2991,93 @@ PY
   assert_success
 }
 
+# bats test_tags=darwin
+@test "darwin: macOS touchid broker approve helper has sudo NixOS VM bundle identity" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+
+required = [
+    "CFBundleName",
+    "CFBundleDisplayName",
+    "sudo NixOS VM",
+    "LocalAuthentication",
+    "Xcode Command Line Tools",
+    "swiftc not found",
+]
+
+missing = [item for item in required if item not in text]
+if missing:
+    print("Missing sudo NixOS VM helper identity pieces: " + ", ".join(missing), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
+}
+
+# bats test_tags=darwin
+@test "darwin: macOS touchid broker approve formats VM app and command reason" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+start = text.index("def approval_reason(metadata):")
+end = text.index("def approve(pinentry_program):", start)
+approve = text[start:end]
+
+required = [
+    "def approval_reason(metadata):",
+    'metadata.get("invoking_app")',
+    'metadata.get("command")',
+    "execute command '",
+    "as administrator from",
+    "request administrator access from",
+]
+
+missing = [item for item in required if item not in approve]
+if missing:
+    print("Missing approval reason formatting pieces: " + ", ".join(missing), file=sys.stderr)
+    sys.exit(1)
+
+for forbidden in (
+    "is trying to execute command",
+    "is requesting administrator access",
+    "as administrator from {app_name}.",
+    "request administrator access from {app_name}.",
+):
+    if forbidden in approve:
+        print(f"Approval reason should avoid duplicating macOS's built-in lead-in ({forbidden})", file=sys.stderr)
+        sys.exit(1)
+PY
+  assert_success
+}
+
+# bats test_tags=linux-core
+@test "linux: vm-aarch64 sudo touchid bridge sends invoking_app metadata" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/hosts/vm-aarch64.nix").read_text()
+start = text.index("def invoking_app():")
+end = text.index("def broker_approve():", start)
+metadata = text[start:end]
+
+required = [
+    "def invoking_app():",
+    '"invoking_app": invoking_app()',
+]
+
+missing = [item for item in required if item not in metadata]
+if missing:
+    print("Missing invoking_app metadata pieces: " + ", ".join(missing), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
+}
+
 # bats test_tags=darwin,linux-core
 @test "docs: touchid bridge generated artifacts repair incomplete bridge keypairs" {
   run python - <<'PY'

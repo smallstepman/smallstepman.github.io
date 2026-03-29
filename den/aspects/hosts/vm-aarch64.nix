@@ -222,12 +222,53 @@
               BROKER_RESPONSE_TIMEOUT_SECONDS = 60.0
 
 
+              def proc_name(pid):
+                  try:
+                      with open(f"/proc/{pid}/comm", "r", encoding="utf-8") as handle:
+                          return handle.read().strip() or None
+                  except OSError:
+                      return None
+
+
+              def parent_pid(pid):
+                  try:
+                      with open(f"/proc/{pid}/status", "r", encoding="utf-8") as handle:
+                          for line in handle:
+                              if line.startswith("PPid:"):
+                                  return int(line.split()[1])
+                  except (OSError, ValueError, IndexError):
+                      return None
+                  return None
+
+
+              def invoking_app():
+                  ignored = {
+                      "sudo",
+                      "sudoedit",
+                      "vm-touchid-sudo-bridge",
+                      "python",
+                      "python3",
+                  }
+                  pid = os.getppid()
+                  seen = set()
+
+                  while pid and pid > 1 and pid not in seen:
+                      seen.add(pid)
+                      name = proc_name(pid)
+                      if name and name not in ignored:
+                          return name
+                      pid = parent_pid(pid)
+
+                  return None
+
+
               def pam_metadata():
                   return {
                       "service": os.getenv("PAM_SERVICE"),
                       "type": os.getenv("PAM_TYPE"),
                       "user": os.getenv("PAM_USER"),
                       "invoking_user": os.getenv("PAM_RUSER") or os.getenv("SUDO_USER"),
+                      "invoking_app": invoking_app(),
                       "tty": os.getenv("PAM_TTY"),
                       "command": os.getenv("SUDO_COMMAND"),
                   }
