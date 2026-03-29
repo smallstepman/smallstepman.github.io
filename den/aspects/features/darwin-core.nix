@@ -43,6 +43,61 @@
               '';
             };
 
+            vmTouchIdApprove = pkgs.writeTextFile {
+              name = "vm-touchid-approve";
+              destination = "/bin/vm-touchid-approve";
+              executable = true;
+              text = ''
+                #!/usr/bin/swift
+                import Darwin
+                import Dispatch
+                import Foundation
+                import LocalAuthentication
+
+                let fallbackReason = "Approve a sudo request from the NixOS VM"
+                let reason = CommandLine.arguments.dropFirst().joined(separator: " ")
+                let context = LAContext()
+                var error: NSError?
+
+                if #available(macOS 10.12.2, *) {
+                    context.touchIDAuthenticationAllowableReuseDuration = 0
+                }
+
+                guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+                    let message = error?.localizedDescription ?? "Touch ID is unavailable"
+                    FileHandle.standardError.write(Data("vm-touchid-approve: \(message)\n".utf8))
+                    Darwin.exit(2)
+                }
+
+                let semaphore = DispatchSemaphore(value: 0)
+                var approved = false
+                var failureMessage: String?
+
+                context.evaluatePolicy(
+                    .deviceOwnerAuthenticationWithBiometrics,
+                    localizedReason: reason.isEmpty ? fallbackReason : reason
+                ) { success, evalError in
+                    approved = success
+                    if let evalError, !success {
+                        failureMessage = evalError.localizedDescription
+                    }
+                    semaphore.signal()
+                }
+
+                semaphore.wait()
+
+                if approved {
+                    Darwin.exit(0)
+                }
+
+                if let failureMessage {
+                    FileHandle.standardError.write(Data("vm-touchid-approve: \(failureMessage)\n".utf8))
+                }
+
+                Darwin.exit(1)
+              '';
+            };
+
             vmTouchIdBroker = pkgs.writeTextFile {
               name = "vm-touchid-broker";
               destination = "/bin/vm-touchid-broker";
@@ -61,6 +116,7 @@
                 RBW_CONFIG = Path.home() / "Library/Application Support/rbw/config.json"
                 DEFAULT_EMAIL = "rbw@local"
                 APPROVE_DESC = "VM sudo approval <vm-aarch64>"
+                APPROVE_HELPER = "${vmTouchIdApprove}/bin/vm-touchid-approve"
 
 
                 class PinentryFailure(RuntimeError):
@@ -162,27 +218,18 @@
 
 
                 def approve(pinentry_program):
-                    key_id = hashlib.sha1(APPROVE_DESC.encode("utf-8")).hexdigest()[:8].upper()
-                    keyinfo = f"sudo/{key_id}"
-                    desc = f"SETDESC \"{APPROVE_DESC}\" ID {key_id}, Approve a sudo request from the NixOS VM"
-
-                    with PinentrySession(pinentry_program) as pinentry:
-                        pinentry.command("OPTION allow-external-password-cache\n", require_ok=True)
-                        pinentry.command(f"SETKEYINFO {keyinfo}\n", require_ok=True)
-                        pinentry.command(
-                            f"SETTITLE {quote_assuan('VM sudo approval')}\n",
-                            require_ok=True,
-                        )
-                        pinentry.command(
-                            desc + "\n",
-                            require_ok=True,
-                        )
-                        pinentry.command(
-                            f"SETPROMPT {quote_assuan('Touch ID')}\n",
-                            require_ok=True,
-                        )
-                        response = pinentry.command("GETPIN\n")
-                    return not response[-1].startswith("ERR")
+                    result = subprocess.run(
+                        [APPROVE_HELPER, APPROVE_DESC],
+                        capture_output=True,
+                        check=False,
+                        text=True,
+                    )
+                    if result.returncode == 0:
+                        return True
+                    if result.returncode == 1:
+                        return False
+                    details = result.stderr.strip() or result.stdout.strip()
+                    raise RuntimeError(details or "vm-touchid-approve failed")
 
 
                 class ThreadedUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
