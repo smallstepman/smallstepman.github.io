@@ -43,12 +43,42 @@
               '';
             };
 
-            vmTouchIdApprove = pkgs.writeTextFile {
+            vmTouchIdApprove = pkgs.stdenvNoCC.mkDerivation {
               name = "vm-touchid-approve";
-              destination = "/bin/vm-touchid-approve";
-              executable = true;
-              text = ''
-                #!/usr/bin/swift
+              dontUnpack = true;
+              buildCommand = ''
+                set -euo pipefail
+
+                app="$out/Applications/sudo NixOS VM.app"
+                executable="$app/Contents/MacOS/sudo NixOS VM"
+                mkdir -p "$app/Contents/MacOS" "$out/bin"
+
+                cat > "$app/Contents/Info.plist" <<'PLIST'
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                <plist version="1.0">
+                  <dict>
+                    <key>CFBundleDevelopmentRegion</key>
+                    <string>English</string>
+                    <key>CFBundleDisplayName</key>
+                    <string>sudo NixOS VM</string>
+                    <key>CFBundleExecutable</key>
+                    <string>sudo NixOS VM</string>
+                    <key>CFBundleIdentifier</key>
+                    <string>org.nixos.vm-touchid-approve</string>
+                    <key>CFBundleInfoDictionaryVersion</key>
+                    <string>6.0</string>
+                    <key>CFBundleName</key>
+                    <string>sudo NixOS VM</string>
+                    <key>CFBundlePackageType</key>
+                    <string>APPL</string>
+                    <key>LSUIElement</key>
+                    <true/>
+                  </dict>
+                </plist>
+                PLIST
+
+                cat > "$TMPDIR/vm-touchid-approve.swift" <<'SWIFT'
                 import Darwin
                 import Dispatch
                 import Foundation
@@ -95,6 +125,14 @@
                 }
 
                 Darwin.exit(1)
+                SWIFT
+
+                if ! [ -x /usr/bin/swiftc ]; then
+                  echo "vm-touchid-approve: swiftc not found; install Xcode Command Line Tools (docs/macbook.sh bootstraps them)." >&2
+                  exit 1
+                fi
+                /usr/bin/swiftc "$TMPDIR/vm-touchid-approve.swift" -o "$executable"
+                ln -s "$executable" "$out/bin/vm-touchid-approve"
               '';
             };
 
@@ -110,13 +148,15 @@
                 import os
                 import socketserver
                 import subprocess
+                import threading
                 import urllib.parse
                 from pathlib import Path
 
                 RBW_CONFIG = Path.home() / "Library/Application Support/rbw/config.json"
                 DEFAULT_EMAIL = "rbw@local"
                 APPROVE_DESC = "VM sudo approval <vm-aarch64>"
-                APPROVE_HELPER = "${vmTouchIdApprove}/bin/vm-touchid-approve"
+                APPROVE_HELPER = "${vmTouchIdApprove}/Applications/sudo NixOS VM.app/Contents/MacOS/sudo NixOS VM"
+                APPROVE_CONTEXT = threading.local()
 
 
                 class PinentryFailure(RuntimeError):
@@ -217,9 +257,35 @@
                     return "".join(chunks)
 
 
+                def normalize_prompt_text(value):
+                    if value is None:
+                        return None
+                    value = " ".join(str(value).split())
+                    return value or None
+
+
+                def display_command(command):
+                    command = normalize_prompt_text(command)
+                    if command is None:
+                        return None
+                    if len(command) > 120:
+                        return command[:117] + "..."
+                    return command
+
+
+                def approval_reason(metadata):
+                    app_name = normalize_prompt_text(metadata.get("invoking_app")) or "a process on the NixOS VM"
+                    command = display_command(metadata.get("command"))
+                    if command:
+                        return f"execute command '{command}' as administrator from {app_name}"
+                    return f"request administrator access from {app_name}"
+
+
                 def approve(pinentry_program):
+                    metadata = getattr(APPROVE_CONTEXT, "metadata", {})
+                    reason = approval_reason(metadata)
                     result = subprocess.run(
-                        [APPROVE_HELPER, APPROVE_DESC],
+                        [APPROVE_HELPER, reason],
                         capture_output=True,
                         check=False,
                         text=True,
@@ -246,7 +312,11 @@
                             op = request.get("op")
 
                             if op == "approve":
-                                response = {"ok": True, "approved": approve(self.server.pinentry_program)}
+                                APPROVE_CONTEXT.metadata = request.get("metadata") or {}
+                                try:
+                                    response = {"ok": True, "approved": approve(self.server.pinentry_program)}
+                                finally:
+                                    APPROVE_CONTEXT.metadata = {}
                             elif op == "get-secret":
                                 response = {"ok": True, "secret": get_secret(self.server.pinentry_program)}
                             else:
