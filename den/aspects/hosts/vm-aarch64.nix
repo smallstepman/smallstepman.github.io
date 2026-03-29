@@ -188,14 +188,18 @@
 
               while true; do
                 rm -f "$local_socket"
-                ssh-keygen -R "192.168.130.1" >/dev/null 2>&1 || true
                 ssh -N \
+                  -F /dev/null \
+                  -o BatchMode=yes \
+                  -o IdentitiesOnly=yes \
                   -o IdentityFile=${vmTouchIdUserBridgeKey} \
+                  -o UserKnownHostsFile=${vmTouchIdUserKnownHosts} \
+                  -o GlobalKnownHostsFile=/dev/null \
                   -o StreamLocalBindUnlink=yes \
                   -o ServerAliveInterval=30 \
                   -o ServerAliveCountMax=3 \
                   -o ExitOnForwardFailure=yes \
-                  -o StrictHostKeyChecking=accept-new \
+                  -o StrictHostKeyChecking=yes \
                   -L "$local_socket:$remote_socket" \
                   m@192.168.130.1
                 sleep 5
@@ -282,17 +286,18 @@
 
               while true; do
                 rm -f "$local_socket"
-                ssh-keygen -R "192.168.130.1" >/dev/null 2>&1 || true
                 ssh -N \
                   -F /dev/null \
                   -o IdentityFile=${vmTouchIdSudoBridgeKey} \
                   -o BatchMode=yes \
                   -o IdentitiesOnly=yes \
+                  -o UserKnownHostsFile=${vmTouchIdSudoKnownHosts} \
+                  -o GlobalKnownHostsFile=/dev/null \
                   -o StreamLocalBindUnlink=yes \
                   -o ServerAliveInterval=30 \
                   -o ServerAliveCountMax=3 \
                   -o ExitOnForwardFailure=yes \
-                  -o StrictHostKeyChecking=accept-new \
+                  -o StrictHostKeyChecking=yes \
                   -L "$local_socket:$remote_socket" \
                   m@192.168.130.1
                 sleep 5
