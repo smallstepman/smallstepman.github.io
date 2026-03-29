@@ -466,14 +466,18 @@
                     while [ ! -S ${vmTouchIdBrokerSocket} ]; do
                       sleep 1
                     done
-                    /usr/bin/ssh-keygen -R "192.168.130.3" >/dev/null 2>&1 || true
-                    /usr/bin/ssh -o IdentityFile=/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm -o StrictHostKeyChecking=accept-new m@192.168.130.3 \
+                    /usr/bin/ssh -F /dev/null -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityFile=/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm -o UserKnownHostsFile=/Users/m/.ssh/known_hosts_vm_touchid_bridge -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=yes m@192.168.130.3 \
                       "mkdir -p /home/m/.local/run && rm -f ${vmTouchIdRemoteSocket}" >/dev/null 2>&1 || true
                     /usr/bin/ssh -N \
+                      -F /dev/null \
+                      -o BatchMode=yes \
+                      -o IdentitiesOnly=yes \
                       -o IdentityFile=/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm \
+                      -o UserKnownHostsFile=/Users/m/.ssh/known_hosts_vm_touchid_bridge \
+                      -o GlobalKnownHostsFile=/dev/null \
                       -o StreamLocalBindUnlink=yes \
                       -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-                      -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
+                      -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes \
                       -R ${vmTouchIdRemoteSocket}:${vmTouchIdBrokerSocket} \
                       m@192.168.130.3
                     sleep 5
