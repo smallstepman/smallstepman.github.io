@@ -2295,6 +2295,12 @@ PY
 }
 
 # bats test_tags=darwin
+@test "darwin: bws overlay package builds" {
+  run nix_generated_build --no-link .#darwinConfigurations.macbook-pro-m1.pkgs.bws
+  assert_success
+}
+
+# bats test_tags=darwin
 @test "darwin: Darwin launchd agents (uniclip, opencode-serve, opencode-web) present" {
   local actual
 
