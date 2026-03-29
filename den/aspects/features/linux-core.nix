@@ -90,6 +90,7 @@
               modulePath = "${config.security.pam.package}/lib/security/pam_exec.so";
               args = [
                 "quiet"
+                "seteuid"
                 "/run/current-system/sw/bin/vm-touchid-sudo-bridge"
               ];
             };

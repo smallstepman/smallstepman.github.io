@@ -137,13 +137,13 @@
                     email = load_rbw_email()
                     key_id = hashlib.sha1(email.encode("utf-8")).hexdigest()[:8].upper()
                     keyinfo = f"rbw/{key_id}"
-                    desc = f"Bitwarden RBW <{email}> ID {key_id}, Unlock the local database for 'rbw'"
+                    desc = f"SETDESC \"Bitwarden RBW <{email}>\" ID {key_id}, Unlock the local database for 'rbw'"
 
                     with PinentrySession(pinentry_program) as pinentry:
                         pinentry.command("OPTION allow-external-password-cache\n", require_ok=True)
                         pinentry.command(f"SETKEYINFO {keyinfo}\n", require_ok=True)
                         pinentry.command(
-                            f"SETDESC {quote_assuan(desc)}\n",
+                            desc + "\n",
                             require_ok=True,
                         )
                         response = pinentry.command("GETPIN\n")
@@ -159,13 +159,19 @@
 
 
                 def approve(pinentry_program):
+                    key_id = hashlib.sha1(APPROVE_DESC.encode("utf-8")).hexdigest()[:8].upper()
+                    keyinfo = f"sudo/{key_id}"
+                    desc = f"SETDESC \"{APPROVE_DESC}\" ID {key_id}, Approve a sudo request from the NixOS VM"
+
                     with PinentrySession(pinentry_program) as pinentry:
+                        pinentry.command("OPTION allow-external-password-cache\n", require_ok=True)
+                        pinentry.command(f"SETKEYINFO {keyinfo}\n", require_ok=True)
                         pinentry.command(
                             f"SETTITLE {quote_assuan('VM sudo approval')}\n",
                             require_ok=True,
                         )
                         pinentry.command(
-                            f"SETDESC {quote_assuan(APPROVE_DESC)}\n",
+                            desc + "\n",
                             require_ok=True,
                         )
                         pinentry.command(
