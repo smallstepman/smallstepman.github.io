@@ -32,9 +32,12 @@ prepare_generated_dataset() {
     mkdir -p "$GENERATED_DIR"
     cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/host-authorized-keys"
     cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-authorized-keys"
-    if [ ! -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" ]; then
+    if [ ! -f "$MAC_TOUCHID_BRIDGE_KEY_FILE" ]; then
+        rm -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE"
         mkdir -p "$(dirname "$MAC_TOUCHID_BRIDGE_KEY_FILE")"
         /usr/bin/ssh-keygen -q -t ed25519 -N "" -f "$MAC_TOUCHID_BRIDGE_KEY_FILE"
+    elif [ ! -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" ]; then
+        /usr/bin/ssh-keygen -y -f "$MAC_TOUCHID_BRIDGE_KEY_FILE" > "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE"
     fi
     chmod 600 "$MAC_TOUCHID_BRIDGE_KEY_FILE"
     cp "$MAC_HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-ssh-ed25519.pub"

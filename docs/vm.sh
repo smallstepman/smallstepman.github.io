@@ -706,7 +706,7 @@ cmd_refresh_secrets() {
 
     # Get VM age public key (uses normal SSH, not bootstrap)
     ensure_generated_dir
-    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
+    ssh -tt $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         sudo mkdir -p /var/lib/sops-nix &&
         sudo chmod 700 /var/lib/sops-nix &&
         if [ ! -f /var/lib/sops-nix/key.txt ]; then
@@ -714,7 +714,7 @@ cmd_refresh_secrets() {
             sudo chmod 600 /var/lib/sops-nix/key.txt
         fi &&
         sudo nix-shell -p age --run 'age-keygen -y /var/lib/sops-nix/key.txt'
-    " | tr -d '\r' > "$GENERATED_DIR/vm-age-pubkey"
+    " | tr -d '\r' | sed '/^Connection to .* closed\\.$/d' > "$GENERATED_DIR/vm-age-pubkey"
 
     if ! grep -q '^age1' "$GENERATED_DIR/vm-age-pubkey"; then
         die "Failed to fetch VM sops age public key"
@@ -731,7 +731,11 @@ cmd_refresh_secrets() {
     ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         mkdir -p ~/.ssh &&
         if [ ! -f ~/.ssh/id_ed25519_touchid_bridge_to_host ]; then
+            rm -f ~/.ssh/id_ed25519_touchid_bridge_to_host.pub &&
             ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519_touchid_bridge_to_host
+        fi &&
+        if [ ! -f ~/.ssh/id_ed25519_touchid_bridge_to_host.pub ]; then
+            ssh-keygen -y -f ~/.ssh/id_ed25519_touchid_bridge_to_host > ~/.ssh/id_ed25519_touchid_bridge_to_host.pub
         fi &&
         chmod 600 ~/.ssh/id_ed25519_touchid_bridge_to_host &&
         cat ~/.ssh/id_ed25519_touchid_bridge_to_host.pub
@@ -741,15 +745,19 @@ cmd_refresh_secrets() {
         die "Failed to fetch VM user bridge SSH public key"
     fi
 
-    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
+    ssh -tt $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         sudo mkdir -p /var/lib/vm-touchid-sudo-bridge &&
         sudo chmod 700 /var/lib/vm-touchid-sudo-bridge &&
         if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 ]; then
+            sudo rm -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub &&
             sudo ssh-keygen -q -t ed25519 -N '' -f /var/lib/vm-touchid-sudo-bridge/id_ed25519
+        fi &&
+        if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub ]; then
+            sudo sh -c 'ssh-keygen -y -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 > /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub'
         fi &&
         sudo chmod 600 /var/lib/vm-touchid-sudo-bridge/id_ed25519 &&
         sudo cat /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub
-    " | tr -d '\r' > "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"
+    " | tr -d '\r' | sed '/^Connection to .* closed\\.$/d' > "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"
 
     if ! grep -q '^ssh-' "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"; then
         die "Failed to fetch VM root bridge SSH public key"
