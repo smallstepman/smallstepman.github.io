@@ -2973,6 +2973,42 @@ PY
 }
 
 # bats test_tags=darwin,linux-core
+@test "docs: touchid bridge generated artifacts repair incomplete bridge keypairs" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+macbook = Path("docs/macbook.sh").read_text()
+vm = Path("docs/vm.sh").read_text()
+
+failures = []
+
+if 'rm -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE"' not in macbook:
+    failures.append("docs/macbook.sh should discard a stale bridge pubkey when regenerating the macOS bridge private key")
+
+if 'elif [ ! -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" ]; then' not in macbook:
+    failures.append("docs/macbook.sh should repair a missing macOS bridge pubkey when the private key already exists")
+
+if '/usr/bin/ssh-keygen -y -f "$MAC_TOUCHID_BRIDGE_KEY_FILE" > "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE"' not in macbook:
+    failures.append("docs/macbook.sh should derive the missing macOS bridge pubkey from the existing private key")
+
+if vm.count('ssh -tt $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "') < 2:
+    failures.append("docs/vm.sh refresh-secrets should allocate a tty for the remote sudo-backed export steps")
+
+if 'ssh-keygen -y -f ~/.ssh/id_ed25519_touchid_bridge_to_host > ~/.ssh/id_ed25519_touchid_bridge_to_host.pub' not in vm:
+    failures.append("docs/vm.sh should derive the VM user bridge pubkey when only the private key exists")
+
+if "sudo sh -c 'ssh-keygen -y -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 > /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub'" not in vm:
+    failures.append("docs/vm.sh should derive the VM root bridge pubkey when only the private key exists")
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
+}
+
+# bats test_tags=darwin,linux-core
 @test "docs: touchid bridge generated artifacts are wired into bootstrap and refresh tooling" {
   run python - <<'PY'
 from pathlib import Path
