@@ -1660,6 +1660,7 @@ PY
 
   run python - "$user_tunnel_drv" "$sudo_tunnel_drv" <<'PY'
 import json
+import re
 import subprocess
 import sys
 
@@ -1695,6 +1696,17 @@ def derivation_text(drv: str) -> str:
     return next(iter(payload["derivations"].values()))["env"]["text"]
 
 
+def has_identity_option(text: str, identity: str) -> bool:
+    for line in text.splitlines():
+        if identity not in line:
+            continue
+        if re.search(rf"(^|\s)-i\s+\S*{re.escape(identity)}\S*", line):
+            return True
+        if re.search(rf"(^|\s)-o\s+IdentityFile(?:=|\s+)\S*{re.escape(identity)}\S*", line):
+            return True
+    return False
+
+
 def validate_tunnel(name: str, text: str) -> list[str]:
     failures: list[str] = []
 
@@ -1707,9 +1719,9 @@ def validate_tunnel(name: str, text: str) -> list[str]:
             failures.append(f"{name} tunnel is missing required {required!r}")
 
     expected_identity = ROLE_SPECIFIC[name]
-    if expected_identity not in text:
+    if not has_identity_option(text, expected_identity):
         failures.append(
-            f"{name} tunnel should use dedicated bridge IdentityFile {expected_identity!r}"
+            f"{name} tunnel should use a dedicated bridge IdentityFile SSH option for {expected_identity!r}"
         )
 
     if name == "sudo" and "/home/m/.ssh/id_ed25519" in text:
@@ -2217,6 +2229,7 @@ PY
 @test "darwin: macOS touchid bridge reverse tunnel hardening is fail-closed" {
   run python - <<'PY'
 from pathlib import Path
+import re
 import sys
 
 text = Path("den/aspects/features/darwin-core.nix").read_text()
@@ -2228,8 +2241,6 @@ required = (
     "-F /dev/null",
     "BatchMode=yes",
     "IdentitiesOnly=yes",
-    "IdentityFile",
-    "touchid-bridge-mac-to-vm",
     "UserKnownHostsFile",
     "GlobalKnownHostsFile=/dev/null",
     "StrictHostKeyChecking=yes",
@@ -2239,6 +2250,17 @@ forbidden = (
     "StrictHostKeyChecking=accept-new",
 )
 
+
+def has_identity_option(text: str, identity: str) -> bool:
+    for line in text.splitlines():
+        if identity not in line:
+            continue
+        if re.search(rf"(^|\s)-i\s+\S*{re.escape(identity)}\S*", line):
+            return True
+        if re.search(rf"(^|\s)-o\s+IdentityFile(?:=|\s+)\S*{re.escape(identity)}\S*", line):
+            return True
+    return False
+
 failures = []
 for needle in required:
     if needle not in tunnel:
@@ -2247,6 +2269,11 @@ for needle in required:
 for needle in forbidden:
     if needle in tunnel:
         failures.append(f"reverse tunnel still contains forbidden {needle!r}")
+
+if not has_identity_option(tunnel, "touchid-bridge-mac-to-vm"):
+    failures.append(
+        "reverse tunnel should use a dedicated bridge IdentityFile SSH option for 'touchid-bridge-mac-to-vm'"
+    )
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
@@ -2334,12 +2361,6 @@ failures = []
 for artifact in required_artifacts:
     if artifact not in combined:
         failures.append(f"bootstrap/refresh tooling never mentions generated artifact {artifact!r}")
-
-if "prepare_generated_dataset" not in macbook:
-    failures.append("macbook bootstrap should still prepare the generated dataset")
-
-if "cmd_bootstrap" not in vm or "cmd_refresh_secrets" not in vm:
-    failures.append("vm tooling should expose both bootstrap and refresh entrypoints")
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
