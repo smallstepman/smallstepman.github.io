@@ -2270,6 +2270,7 @@ required = (
     "-R ${vmTouchIdRemoteSocket}:${vmTouchIdBrokerSocket}",
 )
 forbidden = (
+    "ssh-keygen -R",
     "StrictHostKeyChecking=accept-new",
 )
 
@@ -2294,6 +2295,9 @@ for needle in required:
 for needle in forbidden:
     if needle in reverse_tunnel:
         failures.append(f"reverse tunnel still contains forbidden {needle!r}")
+
+if "ssh-keygen -R" in agent_block:
+    failures.append("reverse-tunnel implementation should not mutate known_hosts with 'ssh-keygen -R'")
 
 if not has_identity_option(reverse_tunnel, "touchid-bridge-mac-to-vm"):
     failures.append(
@@ -2387,39 +2391,60 @@ vm_refresh = function_body(vm, "cmd_refresh_secrets")
 
 failures = []
 
+def maps_source_to_generated_target(body: str, source_pattern: str, artifact: str) -> bool:
+    return re.search(
+        rf'^\s*(?:cp|install)\b[^\n]*{source_pattern}[^\n]*"\$GENERATED_DIR/{re.escape(artifact)}"[^\n]*$',
+        body,
+        re.MULTILINE,
+    ) is not None
+
+
+def ssh_fetches_remote_source_into_generated_target(body: str, source_pattern: str, artifact: str) -> bool:
+    return re.search(
+        rf'ssh \$SSH_OPTIONS -p"\$NIXPORT" "\$\{{NIXUSER\}}@\$\{{addr\}}" "(?:(?!"\s*\|).|\n)*{source_pattern}(?:(?!"\s*\|).|\n)*"\s*\|(?:(?!>\s*"\$GENERATED_DIR/{re.escape(artifact)}").|\n)*>\s*"\$GENERATED_DIR/{re.escape(artifact)}"',
+        body,
+        re.MULTILINE,
+    ) is not None
+
+
 macbook_required = (
     (
-        r'cp\s+"\$HOST_SSH_PUBKEY_FILE"\s+"\$GENERATED_DIR/mac-host-ssh-ed25519\.pub"',
-        "docs/macbook.sh should export the mac host SSH public key into $GENERATED_DIR/mac-host-ssh-ed25519.pub",
+        r'"\$HOST_SSH_PUBKEY_FILE"',
+        "mac-host-ssh-ed25519.pub",
+        "docs/macbook.sh should copy $HOST_SSH_PUBKEY_FILE to $GENERATED_DIR/mac-host-ssh-ed25519.pub",
     ),
     (
-        r'cp\s+[^\n]*"\$GENERATED_DIR/touchid-bridge-mac-to-vm\.pub"',
-        "docs/macbook.sh should copy the mac-to-VM bridge public key into $GENERATED_DIR/touchid-bridge-mac-to-vm.pub",
+        r'id_ed25519_touchid_bridge_to_vm\.pub',
+        "touchid-bridge-mac-to-vm.pub",
+        "docs/macbook.sh should copy ~/.ssh/id_ed25519_touchid_bridge_to_vm.pub to $GENERATED_DIR/touchid-bridge-mac-to-vm.pub",
     ),
 )
 
-for pattern, message in macbook_required:
-    if not re.search(pattern, macbook_prepare):
+for source_pattern, artifact, message in macbook_required:
+    if not maps_source_to_generated_target(macbook_prepare, source_pattern, artifact):
         failures.append(message)
 
-if "id_ed25519_touchid_bridge_to_vm.pub" not in macbook:
-    failures.append(
-        "docs/macbook.sh should source the mac-to-VM bridge public key from ~/.ssh/id_ed25519_touchid_bridge_to_vm.pub"
-    )
+vm_refresh_required = (
+    (
+        r'/etc/ssh/ssh_host_ed25519_key\.pub',
+        "vm-host-ssh-ed25519.pub",
+        "docs/vm.sh cmd_refresh_secrets() should fetch /etc/ssh/ssh_host_ed25519_key.pub into $GENERATED_DIR/vm-host-ssh-ed25519.pub",
+    ),
+    (
+        r'id_ed25519_touchid_bridge_to_host\.pub',
+        "touchid-bridge-vm-user-to-mac.pub",
+        "docs/vm.sh cmd_refresh_secrets() should fetch the VM user bridge public key into $GENERATED_DIR/touchid-bridge-vm-user-to-mac.pub",
+    ),
+    (
+        r'/var/lib/vm-touchid-sudo-bridge/id_ed25519\.pub',
+        "touchid-bridge-vm-root-to-mac.pub",
+        "docs/vm.sh cmd_refresh_secrets() should fetch /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub into $GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub",
+    ),
+)
 
-if "ssh $SSH_OPTIONS" not in vm_refresh:
-    failures.append("docs/vm.sh refresh-secrets should fetch VM trust artifacts over SSH")
-
-for artifact in (
-    "vm-host-ssh-ed25519.pub",
-    "touchid-bridge-vm-user-to-mac.pub",
-    "touchid-bridge-vm-root-to-mac.pub",
-):
-    target_pattern = rf'(?:>\s*"\$GENERATED_DIR/{re.escape(artifact)}"|(?:cp|install)\b[^\n]*"\$GENERATED_DIR/{re.escape(artifact)}")'
-    if not re.search(target_pattern, vm_refresh):
-        failures.append(
-            f'docs/vm.sh refresh-secrets should write {artifact!r} into "$GENERATED_DIR/{artifact}"'
-        )
+for source_pattern, artifact, message in vm_refresh_required:
+    if not ssh_fetches_remote_source_into_generated_target(vm_refresh, source_pattern, artifact):
+        failures.append(message)
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
