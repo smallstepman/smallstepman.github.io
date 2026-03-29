@@ -2621,6 +2621,230 @@ PY
     || fail "darwin reverse touchid bridge tunnel should pin dedicated bridge SSH trust instead of re-TOFU"
 }
 
+# bats test_tags=darwin,home-manager-core,linux-core
+@test "touchid bridge local ssh identities are created with dedicated paths" {
+  run python - <<'PY'
+from pathlib import Path
+import re
+import sys
+
+
+def extract_nix_attr_block(text: str, marker: str) -> str | None:
+    try:
+        start = text.index(marker)
+    except ValueError:
+        return None
+
+    block_lines: list[str] = []
+    brace_depth = 0
+    in_multiline_string = False
+
+    for line in text[start:].splitlines():
+        block_lines.append(line)
+
+        if not in_multiline_string:
+            brace_depth += line.count("{") - line.count("}")
+            if brace_depth == 0:
+                return "\n".join(block_lines)
+
+        if line.count("''") % 2 == 1:
+            in_multiline_string = not in_multiline_string
+
+    return None
+
+
+def extract_shell_snippet(text: str, marker: str) -> str | None:
+    match = re.search(rf"{re.escape(marker)}.*?''(.*?)'';", text, re.S)
+    return match.group(1) if match else None
+
+
+def expect_contains(block: str | None, needle: str, message: str, failures: list[str]) -> None:
+    if block is None or needle not in block:
+        failures.append(message)
+
+
+def expect_any_contains(block: str | None, needles: tuple[str, ...], message: str, failures: list[str]) -> None:
+    if block is None or not any(needle in block for needle in needles):
+        failures.append(message)
+
+
+darwin = Path("den/aspects/features/darwin-core.nix").read_text()
+vm = Path("den/aspects/hosts/vm-aarch64.nix").read_text()
+failures: list[str] = []
+
+darwin_key_block = extract_nix_attr_block(darwin, "launchd.user.agents.vm-touchid-bridge-key = {")
+expect_contains(
+    darwin_key_block,
+    "id_ed25519_touchid_bridge_to_vm",
+    "darwin should create a dedicated local bridge key at ~/.ssh/id_ed25519_touchid_bridge_to_vm",
+    failures,
+)
+expect_contains(
+    darwin_key_block,
+    "ssh-keygen",
+    "darwin should generate the bridge key with ssh-keygen when it is missing",
+    failures,
+)
+expect_contains(
+    darwin_key_block,
+    "if [ ! -f",
+    "darwin should guard bridge key generation so an existing key is not overwritten",
+    failures,
+)
+expect_contains(
+    darwin_key_block,
+    "chmod 600",
+    "darwin should keep the dedicated bridge key at mode 0600",
+    failures,
+)
+
+vm_user_key_block = extract_shell_snippet(vm, "home.activation.ensureVmTouchIdBridgeUserKey")
+expect_contains(
+    vm_user_key_block,
+    "id_ed25519_touchid_bridge_to_host",
+    "vm Home Manager activation should create ~/.ssh/id_ed25519_touchid_bridge_to_host",
+    failures,
+)
+expect_contains(
+    vm_user_key_block,
+    "ssh-keygen",
+    "vm Home Manager activation should generate the dedicated user bridge key when it is missing",
+    failures,
+)
+expect_contains(
+    vm_user_key_block,
+    "if [ ! -f",
+    "vm Home Manager activation should avoid overwriting an existing user bridge key",
+    failures,
+)
+expect_contains(
+    vm_user_key_block,
+    "chmod 600",
+    "vm Home Manager activation should keep the user bridge key at mode 0600",
+    failures,
+)
+
+vm_root_key_block = extract_nix_attr_block(vm, "systemd.services.vm-touchid-sudo-bridge-key = {")
+expect_any_contains(
+    vm_root_key_block,
+    ("/var/lib/vm-touchid-sudo-bridge/id_ed25519", "vmTouchIdSudoBridgeKey"),
+    "vm should provision a root-owned bridge key at /var/lib/vm-touchid-sudo-bridge/id_ed25519",
+    failures,
+)
+expect_contains(
+    vm_root_key_block,
+    "ssh-keygen",
+    "vm should generate the dedicated root bridge key with ssh-keygen when it is missing",
+    failures,
+)
+expect_contains(
+    vm_root_key_block,
+    "if [ ! -f",
+    "vm root bridge key provisioning should avoid overwriting an existing key",
+    failures,
+)
+expect_contains(
+    vm_root_key_block,
+    "chmod 600",
+    "vm should keep the root bridge key at mode 0600",
+    failures,
+)
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "touchid bridge should provision dedicated local ssh identities on Darwin and the VM"
+}
+
+# bats test_tags=darwin,home-manager-core,linux-core
+@test "touchid bridge tunnels use dedicated ssh identities" {
+  local user_tunnel_drv sudo_tunnel_drv
+
+  user_tunnel_drv=$(nix_eval_apply_raw \
+    '.#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services."rbw-pinentry-touchid-broker-tunnel".Service.ExecStart' \
+    'execStart:
+      let
+        command = builtins.elemAt execStart 0;
+      in
+      builtins.head (builtins.attrNames (builtins.getContext command))')
+
+  sudo_tunnel_drv=$(nix_eval_apply_raw \
+    '.#nixosConfigurations.vm-aarch64.config.systemd.services.vm-touchid-sudo-broker-tunnel.serviceConfig.ExecStart' \
+    'execStart: builtins.head (builtins.attrNames (builtins.getContext execStart))')
+
+  run python - "$user_tunnel_drv" "$sudo_tunnel_drv" <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import sys
+
+
+def derivation_text(drv: str) -> str:
+    payload = json.loads(
+        subprocess.run(
+            ["nix", "derivation", "show", drv],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    return next(iter(payload["derivations"].values()))["env"]["text"]
+
+
+def extract_nix_attr_block(text: str, marker: str) -> str | None:
+    try:
+        start = text.index(marker)
+    except ValueError:
+        return None
+
+    block_lines: list[str] = []
+    brace_depth = 0
+    in_multiline_string = False
+
+    for line in text[start:].splitlines():
+        block_lines.append(line)
+
+        if not in_multiline_string:
+            brace_depth += line.count("{") - line.count("}")
+            if brace_depth == 0:
+                return "\n".join(block_lines)
+
+        if line.count("''") % 2 == 1:
+            in_multiline_string = not in_multiline_string
+
+    return None
+
+
+user_tunnel_drv, sudo_tunnel_drv = sys.argv[1:3]
+user_tunnel = derivation_text(user_tunnel_drv)
+sudo_tunnel = derivation_text(sudo_tunnel_drv)
+darwin = Path("den/aspects/features/darwin-core.nix").read_text()
+darwin_tunnel = extract_nix_attr_block(darwin, "launchd.user.agents.vm-touchid-broker-tunnel = {")
+
+failures: list[str] = []
+
+if "/home/m/.ssh/id_ed25519_touchid_bridge_to_host" not in user_tunnel:
+    failures.append("vm user touchid tunnel should use ~/.ssh/id_ed25519_touchid_bridge_to_host")
+
+if "/var/lib/vm-touchid-sudo-bridge/id_ed25519" not in sudo_tunnel:
+    failures.append("vm root touchid tunnel should use /var/lib/vm-touchid-sudo-bridge/id_ed25519")
+
+if "-i /home/m/.ssh/id_ed25519" in sudo_tunnel:
+    failures.append("vm root touchid tunnel should stop using the legacy generic /home/m/.ssh/id_ed25519 key")
+
+if darwin_tunnel is None or darwin_tunnel.count("IdentityFile=/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm") < 2:
+    failures.append("darwin touchid bridge tunnel should use /Users/m/.ssh/id_ed25519_touchid_bridge_to_vm for both bridge ssh invocations")
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "touchid bridge tunnels should be rewired onto the dedicated ssh identities"
+}
+
 # bats test_tags=darwin
 @test "darwin: macOS touchid broker get-secret reuses the proven rbw description shape" {
   run python - <<'PY'

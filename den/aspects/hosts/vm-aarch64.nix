@@ -12,6 +12,8 @@
           vmTouchIdUserBrokerSocket = "/home/m/.local/run/vm-touchid-broker.sock";
           vmTouchIdSudoBrokerSocket = "/run/vm-touchid-sudo-broker.sock";
           macTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
+          vmTouchIdUserBridgeKey = "/home/m/.ssh/id_ed25519_touchid_bridge_to_host";
+          vmTouchIdSudoBridgeKey = "/var/lib/vm-touchid-sudo-bridge/id_ed25519";
 
           mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {
             name = "rbw-pinentry-touchid-bridge-fallback";
@@ -185,6 +187,7 @@
                 rm -f "$local_socket"
                 ssh-keygen -R "192.168.130.1" >/dev/null 2>&1 || true
                 ssh -N \
+                  -o IdentityFile=${vmTouchIdUserBridgeKey} \
                   -o StreamLocalBindUnlink=yes \
                   -o ServerAliveInterval=30 \
                   -o ServerAliveCountMax=3 \
@@ -279,7 +282,7 @@
                 ssh-keygen -R "192.168.130.1" >/dev/null 2>&1 || true
                 ssh -N \
                   -F /dev/null \
-                  -i /home/m/.ssh/id_ed25519 \
+                  -o IdentityFile=${vmTouchIdSudoBridgeKey} \
                   -o BatchMode=yes \
                   -o IdentitiesOnly=yes \
                   -o StreamLocalBindUnlink=yes \
@@ -401,11 +404,30 @@
             };
           };
 
+          systemd.services.vm-touchid-sudo-bridge-key = {
+            description = "Create the dedicated root SSH key for the macOS Touch ID sudo bridge";
+            wantedBy = [ "multi-user.target" ];
+            before = [ "vm-touchid-sudo-broker-tunnel.service" ];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = "${pkgs.writeShellScript "vm-touchid-sudo-bridge-key" ''
+                set -euo pipefail
+                umask 077
+                key="${vmTouchIdSudoBridgeKey}"
+                mkdir -p "$(dirname "$key")"
+                if [ ! -f "$key" ]; then
+                  ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -f "$key"
+                fi
+                chmod 600 "$key"
+              ''}";
+            };
+          };
+
           systemd.services.vm-touchid-sudo-broker-tunnel = {
             description = "Expose the macOS Touch ID sudo broker on a root-owned runtime socket";
             wantedBy = [ "multi-user.target" ];
-            wants = [ "network-online.target" ];
-            after = [ "network-online.target" ];
+            wants = [ "network-online.target" "vm-touchid-sudo-bridge-key.service" ];
+            after = [ "network-online.target" "vm-touchid-sudo-bridge-key.service" ];
             serviceConfig = {
               ExecStart = "${vmTouchIdSudoBrokerTunnel}/bin/vm-touchid-sudo-broker-tunnel";
               Restart = "always";
@@ -818,6 +840,16 @@ EOF
             home.activation.ensureSharedGitFileMode =
               lib.hm.dag.entryAfter [ "writeBoundary" ] ''
                 run ${repairSharedGitFileMode}/bin/repair-shared-git-filemode /nixos-config
+              '';
+
+            home.activation.ensureVmTouchIdBridgeUserKey =
+              lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+                key="$HOME/.ssh/id_ed25519_touchid_bridge_to_host"
+                run mkdir -p "$HOME/.ssh"
+                if [ ! -f "$key" ]; then
+                  run ${pkgs.openssh}/bin/ssh-keygen -q -t ed25519 -N "" -f "$key"
+                fi
+                run chmod 600 "$key"
               '';
 
             systemd.user.services."repair-shared-git-filemode" = {
