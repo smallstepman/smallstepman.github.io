@@ -2235,42 +2235,67 @@ import sys
 text = Path("den/aspects/features/darwin-core.nix").read_text()
 start = text.index('launchd.user.agents.vm-touchid-broker-tunnel = {')
 end = text.index('launchd.user.agents.openwebui-tunnel = {', start)
-tunnel = text[start:end]
+agent_block = text[start:end]
+
+
+def extract_reverse_tunnel(text: str) -> str:
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        if "/usr/bin/ssh -N" not in line:
+            continue
+
+        command = [line.strip().removesuffix("\\").strip()]
+        for following in lines[idx + 1 :]:
+            stripped = following.strip()
+            if not stripped:
+                break
+            command.append(stripped.removesuffix("\\").strip())
+            if not stripped.endswith("\\"):
+                break
+
+        return " ".join(command)
+
+    raise ValueError("could not find the reverse-tunnel ssh -N invocation")
+
+
+reverse_tunnel = extract_reverse_tunnel(agent_block)
 
 required = (
     "-F /dev/null",
-    "BatchMode=yes",
-    "IdentitiesOnly=yes",
-    "UserKnownHostsFile",
-    "GlobalKnownHostsFile=/dev/null",
-    "StrictHostKeyChecking=yes",
+    "-o BatchMode=yes",
+    "-o IdentitiesOnly=yes",
+    "-o UserKnownHostsFile=",
+    "-o GlobalKnownHostsFile=/dev/null",
+    "-o StrictHostKeyChecking=yes",
+    "-R ${vmTouchIdRemoteSocket}:${vmTouchIdBrokerSocket}",
 )
 forbidden = (
-    "ssh-keygen -R",
     "StrictHostKeyChecking=accept-new",
 )
 
 
 def has_identity_option(text: str, identity: str) -> bool:
-    for line in text.splitlines():
-        if identity not in line:
-            continue
-        if re.search(rf"(^|\s)-i\s+\S*{re.escape(identity)}\S*", line):
-            return True
-        if re.search(rf"(^|\s)-o\s+IdentityFile(?:=|\s+)\S*{re.escape(identity)}\S*", line):
-            return True
+    if identity not in text:
+        return False
+    if re.search(rf"(^|\s)-i\s+\S*{re.escape(identity)}\S*", text):
+        return True
+    if re.search(rf"(^|\s)-o\s+IdentityFile(?:=|\s+)\S*{re.escape(identity)}\S*", text):
+        return True
     return False
 
 failures = []
+if "/usr/bin/ssh -N" not in reverse_tunnel or " -R " not in reverse_tunnel:
+    failures.append("could not isolate the actual ssh -N ... -R reverse-tunnel invocation")
+
 for needle in required:
-    if needle not in tunnel:
+    if needle not in reverse_tunnel:
         failures.append(f"reverse tunnel is missing required {needle!r}")
 
 for needle in forbidden:
-    if needle in tunnel:
+    if needle in reverse_tunnel:
         failures.append(f"reverse tunnel still contains forbidden {needle!r}")
 
-if not has_identity_option(tunnel, "touchid-bridge-mac-to-vm"):
+if not has_identity_option(reverse_tunnel, "touchid-bridge-mac-to-vm"):
     failures.append(
         "reverse tunnel should use a dedicated bridge IdentityFile SSH option for 'touchid-bridge-mac-to-vm'"
     )
@@ -2343,24 +2368,58 @@ PY
 @test "docs: touchid bridge generated artifacts are wired into bootstrap and refresh tooling" {
   run python - <<'PY'
 from pathlib import Path
+import re
 import sys
 
-vm = Path("docs/vm.sh").read_text()
 macbook = Path("docs/macbook.sh").read_text()
-combined = vm + "\n" + macbook
+vm = Path("docs/vm.sh").read_text()
 
-required_artifacts = (
-    "mac-host-ssh-ed25519.pub",
-    "vm-host-ssh-ed25519.pub",
-    "touchid-bridge-mac-to-vm.pub",
-    "touchid-bridge-vm-user-to-mac.pub",
-    "touchid-bridge-vm-root-to-mac.pub",
-)
+
+def function_body(script: str, name: str) -> str:
+    match = re.search(rf"^{name}\(\) \{{\n(?P<body>.*?)^\}}", script, re.MULTILINE | re.DOTALL)
+    if not match:
+        raise ValueError(f"could not find shell function {name}")
+    return match.group("body")
+
+
+macbook_prepare = function_body(macbook, "prepare_generated_dataset")
+vm_refresh = function_body(vm, "cmd_refresh_secrets")
 
 failures = []
-for artifact in required_artifacts:
-    if artifact not in combined:
-        failures.append(f"bootstrap/refresh tooling never mentions generated artifact {artifact!r}")
+
+macbook_required = (
+    (
+        r'cp\s+"\$HOST_SSH_PUBKEY_FILE"\s+"\$GENERATED_DIR/mac-host-ssh-ed25519\.pub"',
+        "docs/macbook.sh should export the mac host SSH public key into $GENERATED_DIR/mac-host-ssh-ed25519.pub",
+    ),
+    (
+        r'cp\s+[^\n]*"\$GENERATED_DIR/touchid-bridge-mac-to-vm\.pub"',
+        "docs/macbook.sh should copy the mac-to-VM bridge public key into $GENERATED_DIR/touchid-bridge-mac-to-vm.pub",
+    ),
+)
+
+for pattern, message in macbook_required:
+    if not re.search(pattern, macbook_prepare):
+        failures.append(message)
+
+if "id_ed25519_touchid_bridge_to_vm.pub" not in macbook:
+    failures.append(
+        "docs/macbook.sh should source the mac-to-VM bridge public key from ~/.ssh/id_ed25519_touchid_bridge_to_vm.pub"
+    )
+
+if "ssh $SSH_OPTIONS" not in vm_refresh:
+    failures.append("docs/vm.sh refresh-secrets should fetch VM trust artifacts over SSH")
+
+for artifact in (
+    "vm-host-ssh-ed25519.pub",
+    "touchid-bridge-vm-user-to-mac.pub",
+    "touchid-bridge-vm-root-to-mac.pub",
+):
+    target_pattern = rf'(?:>\s*"\$GENERATED_DIR/{re.escape(artifact)}"|(?:cp|install)\b[^\n]*"\$GENERATED_DIR/{re.escape(artifact)}")'
+    if not re.search(target_pattern, vm_refresh):
+        failures.append(
+            f'docs/vm.sh refresh-secrets should write {artifact!r} into "$GENERATED_DIR/{artifact}"'
+        )
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
