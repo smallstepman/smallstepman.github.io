@@ -709,7 +709,7 @@ cmd_refresh_secrets() {
     ssh -tt $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         sudo mkdir -p /var/lib/sops-nix &&
         sudo chmod 700 /var/lib/sops-nix &&
-        if [ ! -f /var/lib/sops-nix/key.txt ]; then
+        if ! sudo test -f /var/lib/sops-nix/key.txt; then
             sudo nix-shell -p age --run 'age-keygen -o /var/lib/sops-nix/key.txt'
             sudo chmod 600 /var/lib/sops-nix/key.txt
         fi &&
@@ -748,11 +748,11 @@ cmd_refresh_secrets() {
     ssh -tt $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         sudo mkdir -p /var/lib/vm-touchid-sudo-bridge &&
         sudo chmod 700 /var/lib/vm-touchid-sudo-bridge &&
-        if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 ]; then
+        if ! sudo test -f /var/lib/vm-touchid-sudo-bridge/id_ed25519; then
             sudo rm -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub &&
             sudo ssh-keygen -q -t ed25519 -N '' -f /var/lib/vm-touchid-sudo-bridge/id_ed25519
         fi &&
-        if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub ]; then
+        if ! sudo test -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub; then
             sudo sh -c 'ssh-keygen -y -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 > /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub'
         fi &&
         sudo chmod 600 /var/lib/vm-touchid-sudo-bridge/id_ed25519 &&

@@ -3009,6 +3009,44 @@ PY
 }
 
 # bats test_tags=darwin,linux-core
+@test "docs: refresh-secrets checks root-owned files with sudo" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+vm = Path("docs/vm.sh").read_text()
+start = vm.index("cmd_refresh_secrets() {")
+end = vm.index("\n}\n\n# ─── Standalone install", start)
+refresh = vm[start:end]
+
+failures = []
+
+if 'if ! sudo test -f /var/lib/sops-nix/key.txt; then' not in refresh:
+    failures.append("docs/vm.sh should check /var/lib/sops-nix/key.txt with sudo before deciding to regenerate it")
+
+if 'if ! sudo test -f /var/lib/vm-touchid-sudo-bridge/id_ed25519; then' not in refresh:
+    failures.append("docs/vm.sh should check the root bridge private key with sudo before deciding to regenerate it")
+
+if 'if ! sudo test -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub; then' not in refresh:
+    failures.append("docs/vm.sh should check the root bridge public key with sudo before deciding to regenerate it")
+
+if 'if [ ! -f /var/lib/sops-nix/key.txt ]; then' in refresh:
+    failures.append("docs/vm.sh should not check /var/lib/sops-nix/key.txt without sudo")
+
+if 'if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 ]; then' in refresh:
+    failures.append("docs/vm.sh should not check the root bridge private key without sudo")
+
+if 'if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub ]; then' in refresh:
+    failures.append("docs/vm.sh should not check the root bridge public key without sudo")
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
+}
+
+# bats test_tags=darwin,linux-core
 @test "docs: touchid bridge generated artifacts are wired into bootstrap and refresh tooling" {
   run python - <<'PY'
 from pathlib import Path
