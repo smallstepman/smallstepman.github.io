@@ -10,6 +10,7 @@
             kubeconfigTarget = "${kubeconfigGeneratedDir}/kubeconfig";
             vmTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
             vmTouchIdRemoteSocket = "/home/m/.local/run/vm-touchid-broker.sock";
+            vmTouchIdBridgeKey = "/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm";
             vmTouchIdPinentry = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid";
 
             orbstackKubeconfigSync = pkgs.writeShellApplication {
@@ -431,6 +432,26 @@
             };
           };
 
+          launchd.user.agents.vm-touchid-bridge-key = {
+            serviceConfig = {
+              ProgramArguments = [
+                "/bin/bash" "-c"
+                ''
+                  set -euo pipefail
+                  key="$HOME/.ssh/id_ed25519_touchid_bridge_to_vm"
+                  mkdir -p "$HOME/.ssh"
+                  if [ ! -f "$key" ]; then
+                    /usr/bin/ssh-keygen -q -t ed25519 -N "" -f "$key"
+                  fi
+                  chmod 600 "$key"
+                ''
+              ];
+              RunAtLoad = true;
+              StandardOutPath = "/tmp/vm-touchid-bridge-key.log";
+              StandardErrorPath = "/tmp/vm-touchid-bridge-key.log";
+            };
+          };
+
           launchd.user.agents.vm-touchid-broker-tunnel = {
             serviceConfig = {
               ProgramArguments = [
@@ -442,9 +463,10 @@
                       sleep 1
                     done
                     /usr/bin/ssh-keygen -R "192.168.130.3" >/dev/null 2>&1 || true
-                    /usr/bin/ssh -o StrictHostKeyChecking=accept-new m@192.168.130.3 \
+                    /usr/bin/ssh -o IdentityFile=/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm -o StrictHostKeyChecking=accept-new m@192.168.130.3 \
                       "mkdir -p /home/m/.local/run && rm -f ${vmTouchIdRemoteSocket}" >/dev/null 2>&1 || true
                     /usr/bin/ssh -N \
+                      -o IdentityFile=/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm \
                       -o StreamLocalBindUnlink=yes \
                       -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
                       -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
