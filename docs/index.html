@@ -335,7 +335,7 @@
                 <div class="feature-card">
                     <span class="overline"><a href="https://github.com/Mic92/sops-nix">sops-nix</a> + <a href="https://github.com/doy/rbw">Bitwarden</a></span>
                     <h4>Encrypted Secrets</h4>
-                    <p><a href="https://github.com/Mic92/sops-nix">sops-nix</a> + <a href="https://github.com/timewave-computer/sopsidy">sopsidy</a> keep boot-time secrets in an external generated dataset outside git, shared into the VM at <code>/nixos-generated</code>. Runtime tokens stay in Bitwarden/rbw and are injected per-process.</p>
+                    <p><a href="https://github.com/Mic92/sops-nix">sops-nix</a> + <a href="https://github.com/timewave-computer/sopsidy">sopsidy</a> keep boot-time secrets in an external generated dataset outside git, shared into the VM at <code>/nixos-generated</code>. That dataset now also carries pinned host SSH keys and Touch ID bridge public keys, while runtime tokens stay in Bitwarden/rbw and are injected per-process.</p>
                 </div>
                 <div class="feature-card">
                     <span class="overline">Cross-Platform</span>
@@ -439,7 +439,8 @@ den/aspects/
             <div class="reveal drop-cap" style="max-width: 40rem; margin-bottom: 3rem; color: var(--muted-fg); font-size: 0.95rem;">
                 Secret <em>values</em> never touch version control &mdash;
                 the repo keeps only declarative wiring, while boot-time secrets live in an
-                external generated dataset outside git and the VM keeps the matching age
+                external generated dataset outside git; it now includes the age pubkey,
+                pinned bridge host keys, and bridge client public keys, while the VM keeps the matching age
                 private key. Runtime tokens stay in a EU-based Bitwarden vault
                 and are injected only into the process that needs them. 
             </div>
@@ -548,7 +549,7 @@ macOS (host)                                    NixOS VM (guest)
                                     <tr><td>vm down</td><td>Graceful shutdown</td></tr>
                                     <tr><td>vm ssh [cmd]</td><td>SSH into the VM, or run a remote command</td></tr>
                                     <tr><td>vm ip</td><td>Print the VM's current IP address</td></tr>
-                                    <tr><td>vm refresh-secrets</td><td>Refresh the external generated dataset (age pubkey, SSH pubkeys, encrypted secrets)</td></tr>
+                                    <tr><td>vm refresh-secrets</td><td>Refresh the external generated dataset (age pubkey, pinned host keys, bridge pubkeys, encrypted secrets)</td></tr>
                                 </tbody>
                             </table>
                         </div>

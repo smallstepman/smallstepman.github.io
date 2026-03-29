@@ -2978,6 +2978,7 @@ with tempfile.TemporaryDirectory() as tmpdir_str:
     host_ssh_pubkey_file = host_ssh_dir / "ssh_host_ed25519_key.pub"
     host_ssh_pubkey_file.write_text(mac_host_key)
     (ssh_dir / "id_ed25519.pub").write_text("ssh-ed25519 AAAA mac-user\n")
+    (ssh_dir / "id_ed25519_touchid_bridge_to_vm").write_text("PRIVATE KEY PLACEHOLDER\n")
     (ssh_dir / "id_ed25519_touchid_bridge_to_vm.pub").write_text(mac_bridge_key)
 
     mock_ssh = bin_dir / "ssh"
@@ -3024,6 +3025,9 @@ with tempfile.TemporaryDirectory() as tmpdir_str:
             HOME={shlex.quote(str(home))}
             GENERATED_DIR={shlex.quote(str(generated_dir))}
             HOST_SSH_PUBKEY_FILE={shlex.quote(str(host_ssh_pubkey_file))}
+            MAC_HOST_SSH_PUBKEY_FILE={shlex.quote(str(host_ssh_pubkey_file))}
+            MAC_TOUCHID_BRIDGE_KEY_FILE={shlex.quote(str(ssh_dir / 'id_ed25519_touchid_bridge_to_vm'))}
+            MAC_TOUCHID_BRIDGE_PUBKEY_FILE={shlex.quote(str(ssh_dir / 'id_ed25519_touchid_bridge_to_vm.pub'))}
             die() {{ echo "die:$*" >&2; exit 1; }}
             """
         ),
@@ -3038,6 +3042,7 @@ with tempfile.TemporaryDirectory() as tmpdir_str:
             HOME={shlex.quote(str(home))}
             GENERATED_DIR={shlex.quote(str(generated_dir))}
             HOST_SSH_PUBKEY_FILE={shlex.quote(str(host_ssh_pubkey_file))}
+            MAC_HOST_SSH_PUBKEY_FILE={shlex.quote(str(host_ssh_pubkey_file))}
             NIX_CONFIG_DIR={shlex.quote(str(config_dir))}
             SSH_OPTIONS=
             NIXPORT=22

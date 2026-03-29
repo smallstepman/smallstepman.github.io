@@ -20,14 +20,25 @@ default_nix_config_dir() {
 NIX_CONFIG_DIR="${NIX_CONFIG_DIR:-$(default_nix_config_dir)}"
 GENERATED_DIR="${GENERATED_DIR:-$HOME/.local/share/nix-config-generated}"
 HOST_SSH_PUBKEY_FILE="${HOST_SSH_PUBKEY_FILE:-$HOME/.ssh/id_ed25519.pub}"
+MAC_HOST_SSH_PUBKEY_FILE="${MAC_HOST_SSH_PUBKEY_FILE:-/etc/ssh/ssh_host_ed25519_key.pub}"
+MAC_TOUCHID_BRIDGE_KEY_FILE="${MAC_TOUCHID_BRIDGE_KEY_FILE:-$HOME/.ssh/id_ed25519_touchid_bridge_to_vm}"
+MAC_TOUCHID_BRIDGE_PUBKEY_FILE="${MAC_TOUCHID_BRIDGE_PUBKEY_FILE:-$MAC_TOUCHID_BRIDGE_KEY_FILE.pub}"
 
 die() { echo "error: $*" >&2; exit 1; }
 
 prepare_generated_dataset() {
     [ -f "$HOST_SSH_PUBKEY_FILE" ] || die "SSH public key not found: $HOST_SSH_PUBKEY_FILE"
+    [ -f "$MAC_HOST_SSH_PUBKEY_FILE" ] || die "macOS host SSH public key not found: $MAC_HOST_SSH_PUBKEY_FILE"
     mkdir -p "$GENERATED_DIR"
     cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/host-authorized-keys"
     cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-authorized-keys"
+    if [ ! -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" ]; then
+        mkdir -p "$(dirname "$MAC_TOUCHID_BRIDGE_KEY_FILE")"
+        /usr/bin/ssh-keygen -q -t ed25519 -N "" -f "$MAC_TOUCHID_BRIDGE_KEY_FILE"
+    fi
+    chmod 600 "$MAC_TOUCHID_BRIDGE_KEY_FILE"
+    cp "$MAC_HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-ssh-ed25519.pub"
+    cp "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" "$GENERATED_DIR/touchid-bridge-mac-to-vm.pub"
     [ -f "$GENERATED_DIR/secrets.yaml" ] || : > "$GENERATED_DIR/secrets.yaml"
 }
 
