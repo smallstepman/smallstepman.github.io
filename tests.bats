@@ -1642,6 +1642,96 @@ PY
     || fail "vm-aarch64 sudo should trust a root-owned tunnel endpoint instead of the legacy user-home broker socket"
 }
 
+# bats test_tags=linux-core,home-manager-core
+@test "linux: vm-aarch64 touchid bridge ssh hardening is fail-closed" {
+  local user_tunnel_drv sudo_tunnel_drv
+
+  user_tunnel_drv=$(nix_eval_apply_raw \
+    '.#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services."rbw-pinentry-touchid-broker-tunnel".Service.ExecStart' \
+    'execStart:
+      let
+        command = builtins.elemAt execStart 0;
+      in
+      builtins.head (builtins.attrNames (builtins.getContext command))')
+
+  sudo_tunnel_drv=$(nix_eval_apply_raw \
+    '.#nixosConfigurations.vm-aarch64.config.systemd.services.vm-touchid-sudo-broker-tunnel.serviceConfig.ExecStart' \
+    'execStart: builtins.head (builtins.attrNames (builtins.getContext execStart))')
+
+  run python - "$user_tunnel_drv" "$sudo_tunnel_drv" <<'PY'
+import json
+import subprocess
+import sys
+
+user_tunnel_drv, sudo_tunnel_drv = sys.argv[1:3]
+
+COMMON_REQUIRED = (
+    "-F /dev/null",
+    "-o BatchMode=yes",
+    "-o IdentitiesOnly=yes",
+    "-o UserKnownHostsFile=",
+    "-o GlobalKnownHostsFile=/dev/null",
+    "-o StrictHostKeyChecking=yes",
+)
+COMMON_FORBIDDEN = (
+    "ssh-keygen -R",
+    "StrictHostKeyChecking=accept-new",
+)
+ROLE_SPECIFIC = {
+    "rbw": "touchid-bridge-vm-user-to-mac",
+    "sudo": "touchid-bridge-vm-root-to-mac",
+}
+
+
+def derivation_text(drv: str) -> str:
+    payload = json.loads(
+        subprocess.run(
+            ["nix", "derivation", "show", drv],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    return next(iter(payload["derivations"].values()))["env"]["text"]
+
+
+def validate_tunnel(name: str, text: str) -> list[str]:
+    failures: list[str] = []
+
+    for forbidden in COMMON_FORBIDDEN:
+        if forbidden in text:
+            failures.append(f"{name} tunnel still contains forbidden {forbidden!r}")
+
+    for required in COMMON_REQUIRED:
+        if required not in text:
+            failures.append(f"{name} tunnel is missing required {required!r}")
+
+    expected_identity = ROLE_SPECIFIC[name]
+    if expected_identity not in text:
+        failures.append(
+            f"{name} tunnel should use dedicated bridge IdentityFile {expected_identity!r}"
+        )
+
+    if name == "sudo" and "/home/m/.ssh/id_ed25519" in text:
+        failures.append(
+            f"{name} tunnel should not keep using the ambient user SSH identity"
+        )
+
+    return failures
+
+
+failures = []
+for tunnel_name, tunnel_drv in (("rbw", user_tunnel_drv), ("sudo", sudo_tunnel_drv)):
+    failures.extend(validate_tunnel(tunnel_name, derivation_text(tunnel_drv)))
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "vm-aarch64 touchid bridge tunnels should fail closed with dedicated bridge SSH trust"
+}
+
 # bats test_tags=linux-core
 @test "linux: vm-aarch64 sudo broker tunnel waits for network-online before starting" {
   local actual
@@ -2124,6 +2214,49 @@ PY
 }
 
 # bats test_tags=darwin
+@test "darwin: macOS touchid bridge reverse tunnel hardening is fail-closed" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+start = text.index('launchd.user.agents.vm-touchid-broker-tunnel = {')
+end = text.index('launchd.user.agents.openwebui-tunnel = {', start)
+tunnel = text[start:end]
+
+required = (
+    "-F /dev/null",
+    "BatchMode=yes",
+    "IdentitiesOnly=yes",
+    "IdentityFile",
+    "touchid-bridge-mac-to-vm",
+    "UserKnownHostsFile",
+    "GlobalKnownHostsFile=/dev/null",
+    "StrictHostKeyChecking=yes",
+)
+forbidden = (
+    "ssh-keygen -R",
+    "StrictHostKeyChecking=accept-new",
+)
+
+failures = []
+for needle in required:
+    if needle not in tunnel:
+        failures.append(f"reverse tunnel is missing required {needle!r}")
+
+for needle in forbidden:
+    if needle in tunnel:
+        failures.append(f"reverse tunnel still contains forbidden {needle!r}")
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "darwin reverse touchid bridge tunnel should pin dedicated bridge SSH trust instead of re-TOFU"
+}
+
+# bats test_tags=darwin
 @test "darwin: macOS touchid broker get-secret reuses the proven rbw description shape" {
   run python - <<'PY'
 from pathlib import Path
@@ -2177,6 +2310,43 @@ if 'f"SETDESC {quote_assuan(APPROVE_DESC)}\\n"' in approve:
     sys.exit(1)
 PY
   assert_success
+}
+
+# bats test_tags=darwin,linux-core
+@test "docs: touchid bridge generated artifacts are wired into bootstrap and refresh tooling" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+vm = Path("docs/vm.sh").read_text()
+macbook = Path("docs/macbook.sh").read_text()
+combined = vm + "\n" + macbook
+
+required_artifacts = (
+    "mac-host-ssh-ed25519.pub",
+    "vm-host-ssh-ed25519.pub",
+    "touchid-bridge-mac-to-vm.pub",
+    "touchid-bridge-vm-user-to-mac.pub",
+    "touchid-bridge-vm-root-to-mac.pub",
+)
+
+failures = []
+for artifact in required_artifacts:
+    if artifact not in combined:
+        failures.append(f"bootstrap/refresh tooling never mentions generated artifact {artifact!r}")
+
+if "prepare_generated_dataset" not in macbook:
+    failures.append("macbook bootstrap should still prepare the generated dataset")
+
+if "cmd_bootstrap" not in vm or "cmd_refresh_secrets" not in vm:
+    failures.append("vm tooling should expose both bootstrap and refresh entrypoints")
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success \
+    || fail "bootstrap and refresh tooling should produce the new touchid bridge trust artifacts"
 }
 
 
