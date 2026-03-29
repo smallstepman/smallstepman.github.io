@@ -1539,6 +1539,18 @@ PY
   assert_success || fail "vm-aarch64 sudo PAM bridge ordering is wrong, got: $actual"
 }
 
+# bats test_tags=linux-core
+@test "linux: vm-aarch64 sudo touchid bridge runs pam_exec with seteuid" {
+  local actual
+
+  actual=$(nix_eval_apply_raw \
+    '.#nixosConfigurations.vm-aarch64.config.security.pam.services.sudo.rules.auth."vm-touchid-bridge".args' \
+    'args: builtins.concatStringsSep "\n" args')
+
+  printf '%s\n' "$actual" | grep -Fxq 'seteuid' \
+    || fail "vm-aarch64 sudo PAM bridge should include seteuid, got: $actual"
+}
+
 
 # bats test_tags=linux-core
 @test "linux: vm-aarch64 sudo touchid bridge uses a root-trusted broker tunnel" {
@@ -2109,6 +2121,62 @@ PY
 
   grep -Fq 'launchd.user.agents.rbw-pinentry-touchid-broker' den/aspects/features/darwin-core.nix \
     || fail 'darwin-core.nix should own the macOS Touch ID broker agent wiring'
+}
+
+# bats test_tags=darwin
+@test "darwin: macOS touchid broker get-secret reuses the proven rbw description shape" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+
+required = 'desc = f"SETDESC \\"Bitwarden RBW <{email}>\\" ID {key_id}, Unlock the local database for \'rbw\'"'
+if required not in text:
+    print("Darwin touchid broker should reuse the working rbw SETDESC shape", file=sys.stderr)
+    sys.exit(1)
+
+forbidden = 'f"SETDESC {quote_assuan(desc)}\\n"'
+if forbidden in text:
+    print("Darwin touchid broker should not wrap the entire rbw SETDESC payload in quote_assuan", file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
+}
+
+# bats test_tags=darwin
+@test "darwin: macOS touchid broker approve uses touchid cache prerequisites" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+start = text.index("def approve(pinentry_program):")
+end = text.index("class ThreadedUnixServer", start)
+approve = text[start:end]
+
+if 'pinentry.command("OPTION allow-external-password-cache\\n", require_ok=True)' not in approve:
+    print("Darwin touchid broker approve should enable allow-external-password-cache", file=sys.stderr)
+    sys.exit(1)
+
+if 'SETKEYINFO' not in approve:
+    print("Darwin touchid broker approve should send a stable SETKEYINFO before GETPIN", file=sys.stderr)
+    sys.exit(1)
+
+required_desc = 'desc = f"SETDESC \\"{APPROVE_DESC}\\" ID {key_id}, Approve a sudo request from the NixOS VM"'
+if required_desc not in approve:
+    print("Darwin touchid broker approve should keep the stable SETDESC shape", file=sys.stderr)
+    sys.exit(1)
+
+if 'desc + "\\n"' not in approve:
+    print("Darwin touchid broker approve should send the pre-shaped SETDESC payload directly", file=sys.stderr)
+    sys.exit(1)
+
+if 'f"SETDESC {quote_assuan(APPROVE_DESC)}\\n"' in approve:
+    print("Darwin touchid broker approve should not regress to quoting the plain APPROVE_DESC payload", file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
 }
 
 
