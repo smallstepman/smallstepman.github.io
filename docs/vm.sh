@@ -596,7 +596,8 @@ Commands:
                     SSH, install NixOS. --redo destroys existing VM first
   switch            Run nixos-rebuild switch on the VM via shared folder
   refresh-kubeconfig Refresh the Bitwarden-backed kubeconfig cache
-  refresh-secrets   Regenerate sops keys and re-encrypt secrets
+  refresh-secrets   Refresh the generated dataset (age pubkey, pinned host keys,
+                    bridge pubkeys, encrypted secrets)
   up                Start the VM
   down              Stop the VM (graceful shutdown)
   ip                Print the VM's IP address
@@ -717,6 +718,41 @@ cmd_refresh_secrets() {
 
     if ! grep -q '^age1' "$GENERATED_DIR/vm-age-pubkey"; then
         die "Failed to fetch VM sops age public key"
+    fi
+
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
+        cat /etc/ssh/ssh_host_ed25519_key.pub
+    " | tr -d '\r' > "$GENERATED_DIR/vm-host-ssh-ed25519.pub"
+
+    if ! grep -q '^ssh-' "$GENERATED_DIR/vm-host-ssh-ed25519.pub"; then
+        die "Failed to fetch VM SSH host public key"
+    fi
+
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
+        mkdir -p ~/.ssh &&
+        if [ ! -f ~/.ssh/id_ed25519_touchid_bridge_to_host ]; then
+            ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519_touchid_bridge_to_host
+        fi &&
+        chmod 600 ~/.ssh/id_ed25519_touchid_bridge_to_host &&
+        cat ~/.ssh/id_ed25519_touchid_bridge_to_host.pub
+    " | tr -d '\r' > "$GENERATED_DIR/touchid-bridge-vm-user-to-mac.pub"
+
+    if ! grep -q '^ssh-' "$GENERATED_DIR/touchid-bridge-vm-user-to-mac.pub"; then
+        die "Failed to fetch VM user bridge SSH public key"
+    fi
+
+    ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
+        sudo mkdir -p /var/lib/vm-touchid-sudo-bridge &&
+        sudo chmod 700 /var/lib/vm-touchid-sudo-bridge &&
+        if [ ! -f /var/lib/vm-touchid-sudo-bridge/id_ed25519 ]; then
+            sudo ssh-keygen -q -t ed25519 -N '' -f /var/lib/vm-touchid-sudo-bridge/id_ed25519
+        fi &&
+        sudo chmod 600 /var/lib/vm-touchid-sudo-bridge/id_ed25519 &&
+        sudo cat /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub
+    " | tr -d '\r' > "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"
+
+    if ! grep -q '^ssh-' "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"; then
+        die "Failed to fetch VM root bridge SSH public key"
     fi
 
     vm_prepare_host_authorized_keys

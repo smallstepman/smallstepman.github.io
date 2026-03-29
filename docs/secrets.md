@@ -70,10 +70,25 @@ demand. Self-contained kubeconfig blobs follow the same rule.
 | `den/aspects/features/git.nix` | Owns Linux `programs.rbw` settings and GitHub credential-helper wiring |
 | `den/aspects/features/shell.nix` | Owns runtime rbw-backed shell helpers (`gh`, `claude`, `codex`, `with-openai`, `with-amp`) |
 | `den/aspects/hosts/vm-aarch64.nix` | Reads the VM age public key from the generated input via `sops.hostPubKey` |
-| `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS (`secrets.yaml`, SSH pubkeys, age pubkey) |
+| `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS (`secrets.yaml`, age pubkey, authorization keys, pinned host keys, bridge pubkeys) |
 | `docs/vm.sh` | VM provisioning/switch helper, including `refresh-secrets` |
 | `/nixos-generated` | VMware shared-folder mount exposing the same dataset inside the VM |
 | `WRAPPER=$(bash scripts/external-input-flake.sh) && nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file` | Regenerates the external `secrets.yaml` dataset locally |
+
+## Generated dataset contents
+
+The shared generated dataset at `~/.local/share/nix-config-generated/` now includes:
+
+- `secrets.yaml` - encrypted boot-time secrets collected via sopsidy
+- `vm-age-pubkey` - the VM age public key used to encrypt `secrets.yaml`
+- `host-authorized-keys` - the macOS user SSH public key authorized on the VM
+- `mac-host-authorized-keys` - the macOS-side authorized key used for VM Docker/SSH access
+- `mac-host-ssh-ed25519.pub` - the macOS host SSH public key pinned by VM bridge clients
+- `vm-host-ssh-ed25519.pub` - the VM SSH host public key pinned by the Darwin reverse tunnel
+- `touchid-bridge-mac-to-vm.pub` - the Darwin bridge client public key trusted by the VM
+- `touchid-bridge-vm-user-to-mac.pub` - the VM user bridge client public key trusted by macOS
+- `touchid-bridge-vm-root-to-mac.pub` - the VM root bridge client public key trusted by macOS
+- `kubeconfig` - the synced OrbStack kubeconfig blob fetched from Bitwarden
 
 ## Bitwarden entries
 
@@ -96,7 +111,7 @@ These Bitwarden item names are consumed directly by the current config:
 ### Initial setup
 
 ```bash
-# 1. Ensure the VM age key and generated SSH pubkeys are synced
+# 1. Ensure the VM age key, pinned host keys, and bridge public keys are synced
 bash docs/vm.sh refresh-secrets
 
 # 2. Populate Bitwarden with the entries listed above
@@ -225,7 +240,7 @@ What is stored in the repo?
 
 What is not stored in the repo?
   -> ~/.local/share/nix-config-generated/secrets.yaml
-  -> ~/.local/share/nix-config-generated/{vm-age-pubkey,host-authorized-keys,mac-host-authorized-keys}
+  -> ~/.local/share/nix-config-generated/{vm-age-pubkey,host-authorized-keys,mac-host-authorized-keys,mac-host-ssh-ed25519.pub,vm-host-ssh-ed25519.pub,touchid-bridge-mac-to-vm.pub,touchid-bridge-vm-user-to-mac.pub,touchid-bridge-vm-root-to-mac.pub}
   -> the VM age private key
   -> Bitwarden runtime secrets
 ```
