@@ -2845,6 +2845,77 @@ PY
     || fail "touchid bridge tunnels should be rewired onto the dedicated ssh identities"
 }
 
+# bats test_tags=darwin,home-manager-core,linux-core
+@test "touchid bridge trust artifacts are authorized and installed" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+darwin = Path("den/aspects/features/darwin-core.nix").read_text()
+vm = Path("den/aspects/hosts/vm-aarch64.nix").read_text()
+
+checks = [
+    (
+        'generated.requireFile "mac-host-authorized-keys"',
+        darwin,
+        "Darwin should keep the existing mac-host-authorized-keys authorization",
+    ),
+    (
+        'generated.requireFile "touchid-bridge-vm-user-to-mac.pub"',
+        darwin,
+        "Darwin should authorize the VM user touchid bridge key",
+    ),
+    (
+        'generated.requireFile "touchid-bridge-vm-root-to-mac.pub"',
+        darwin,
+        "Darwin should authorize the VM root touchid bridge key",
+    ),
+    (
+        'generated.requireFile "host-authorized-keys"',
+        vm,
+        "vm-aarch64 should keep the existing host-authorized-keys authorization",
+    ),
+    (
+        'generated.requireFile "touchid-bridge-mac-to-vm.pub"',
+        vm,
+        "vm-aarch64 should authorize the Darwin touchid bridge key",
+    ),
+    (
+        'known_hosts_vm_touchid_bridge',
+        darwin,
+        "Darwin should install a dedicated bridge known_hosts file under ~/.ssh",
+    ),
+    (
+        '192.168.130.3 ${builtins.readFile (generated.requireFile "vm-host-ssh-ed25519.pub")}',
+        darwin,
+        "Darwin should pin the VM SSH host key for the reverse tunnel",
+    ),
+    (
+        'known_hosts_touchid_bridge',
+        vm,
+        "vm-aarch64 should install a dedicated user bridge known_hosts file under ~/.ssh",
+    ),
+    (
+        '/var/lib/vm-touchid-sudo-bridge/known_hosts',
+        vm,
+        "vm-aarch64 should install a root-owned bridge known_hosts file under /var/lib/vm-touchid-sudo-bridge",
+    ),
+    (
+        '192.168.130.1 ${builtins.readFile (generated.requireFile "mac-host-ssh-ed25519.pub")}',
+        vm,
+        "vm-aarch64 should pin the macOS host SSH key for both bridge clients",
+    ),
+]
+
+failures = [message for needle, text, message in checks if needle not in text]
+
+if failures:
+    print("\n".join(failures), file=sys.stderr)
+    sys.exit(1)
+PY
+  assert_success
+}
+
 # bats test_tags=darwin
 @test "darwin: macOS touchid broker get-secret reuses the proven rbw description shape" {
   run python - <<'PY'
