@@ -2938,7 +2938,7 @@ PY
 }
 
 # bats test_tags=darwin
-@test "darwin: macOS touchid broker approve uses touchid cache prerequisites" {
+@test "darwin: macOS touchid broker approve avoids pinentry cache-backed GETPIN" {
   run python - <<'PY'
 from pathlib import Path
 import sys
@@ -2948,25 +2948,44 @@ start = text.index("def approve(pinentry_program):")
 end = text.index("class ThreadedUnixServer", start)
 approve = text[start:end]
 
-if 'pinentry.command("OPTION allow-external-password-cache\\n", require_ok=True)' not in approve:
-    print("Darwin touchid broker approve should enable allow-external-password-cache", file=sys.stderr)
+if "APPROVE_HELPER" not in approve:
+    print("Darwin touchid broker approve should delegate to a dedicated helper", file=sys.stderr)
     sys.exit(1)
 
-if 'SETKEYINFO' not in approve:
-    print("Darwin touchid broker approve should send a stable SETKEYINFO before GETPIN", file=sys.stderr)
+if "subprocess.run(" not in approve:
+    print("Darwin touchid broker approve should invoke the dedicated helper via subprocess.run", file=sys.stderr)
     sys.exit(1)
 
-required_desc = 'desc = f"SETDESC \\"{APPROVE_DESC}\\" ID {key_id}, Approve a sudo request from the NixOS VM"'
-if required_desc not in approve:
-    print("Darwin touchid broker approve should keep the stable SETDESC shape", file=sys.stderr)
-    sys.exit(1)
+for forbidden in (
+    "PinentrySession(",
+    "allow-external-password-cache",
+    "SETKEYINFO",
+    "GETPIN",
+):
+    if forbidden in approve:
+        print(f"Darwin touchid broker approve should not use pinentry cache plumbing ({forbidden})", file=sys.stderr)
+        sys.exit(1)
+PY
+  assert_success
+}
 
-if 'desc + "\\n"' not in approve:
-    print("Darwin touchid broker approve should send the pre-shaped SETDESC payload directly", file=sys.stderr)
-    sys.exit(1)
+@test "darwin: macOS touchid broker defines a dedicated biometric approve helper" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
 
-if 'f"SETDESC {quote_assuan(APPROVE_DESC)}\\n"' in approve:
-    print("Darwin touchid broker approve should not regress to quoting the plain APPROVE_DESC payload", file=sys.stderr)
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+
+required = [
+    'name = "vm-touchid-approve";',
+    'import LocalAuthentication',
+    'touchIDAuthenticationAllowableReuseDuration = 0',
+    'deviceOwnerAuthenticationWithBiometrics',
+]
+
+missing = [item for item in required if item not in text]
+if missing:
+    print("Missing dedicated sudo biometric helper pieces: " + ", ".join(missing), file=sys.stderr)
     sys.exit(1)
 PY
   assert_success
