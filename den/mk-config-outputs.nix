@@ -88,6 +88,17 @@ PYEOF
         meta.description = "Universal clipboard - copy on one device, paste on another";
       };
 
+      bws = prev.bws.overrideAttrs (old: {
+        version = "2.0.0";
+        src = final.fetchFromGitHub {
+          owner = "bitwarden";
+          repo = "sdk";
+          rev = "bws-v2.0.0";
+          hash = "sha256-NjnLoa4UjPzTejjEwc5LIrHqeqncXoMICJM2eUesoIM=";
+        };
+        cargoHash = "sha256-lfnCUWf9MM1Yynxza7Fz1qxNyDbPNMOcbVHkvZx32bk=";
+      });
+
       wayprompt = prev.wayprompt.overrideAttrs (old: {
         patches = (old.patches or []) ++ [ ../patches/wayprompt-wayland-clipboard-paste.patch ];
         nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.makeWrapper ];
