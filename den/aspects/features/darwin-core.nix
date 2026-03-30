@@ -369,15 +369,16 @@
                                 return
                             request = json.loads(raw.decode("utf-8"))
                             op = request.get("op")
+                            metadata = request.get("metadata") or {}
 
                             if op == "approve":
-                                APPROVE_CONTEXT.metadata = request.get("metadata") or {}
+                                APPROVE_CONTEXT.metadata = metadata
                                 try:
                                     response = {"ok": True, "approved": approve(self.server.pinentry_program)}
                                 finally:
                                     APPROVE_CONTEXT.metadata = {}
                             elif op == "get-gpg-secret":
-                                response = get_gpg_secret(request.get("metadata") or {})
+                                response = get_gpg_secret(metadata)
                             elif op == "get-secret":
                                 response = {"ok": True, "secret": get_secret(self.server.pinentry_program)}
                             else:
