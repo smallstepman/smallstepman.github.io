@@ -3667,6 +3667,8 @@ EOF
   assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND" "commit"
   assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT" "feat: tighten signing prompt metadata"
   assert_equal "$GPG_TOUCHID_SIGNING_TAG_NAME" ""
+  assert_equal "$GPG_TOUCHID_SIGNING_SIGNER_NAME" "Example Committer"
+  assert_equal "$GPG_TOUCHID_SIGNING_SIGNER_EMAIL" "committer@example.com"
 }
 
 # bats test_tags=gpg

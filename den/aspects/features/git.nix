@@ -98,20 +98,49 @@
               };
               darwinGitSigningWrapper = pkgs.writeShellScriptBin "gpg-touchid-signing-prompt" ''
                 # gpg-touchid-signing-prompt helpers start
+                gpg_touchid_parse_identity() {
+                  local identity="$1"
+                  local parsed_name=""
+                  local parsed_email=""
+
+                  if [ "$identity" != "${identity#* <}" ]; then
+                    parsed_name="${identity%% <*}"
+                    parsed_email="${identity#*<}"
+                    parsed_email="${parsed_email%%>*}"
+                  fi
+
+                  printf '%s\n%s\n' "$parsed_name" "$parsed_email"
+                }
+
                 gpg_touchid_parse_signing_payload() {
                   local payload="$1"
                   local line
                   local in_headers=1
+                  local author_name=""
+                  local author_email=""
+                  local parsed_identity
 
                   GPG_TOUCHID_SIGNING_PAYLOAD_KIND="unknown"
                   GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT=""
                   GPG_TOUCHID_SIGNING_TAG_NAME=""
+                  GPG_TOUCHID_SIGNING_SIGNER_NAME=""
+                  GPG_TOUCHID_SIGNING_SIGNER_EMAIL=""
 
                   while IFS= read -r line || [ -n "$line" ]; do
                     if [ "$in_headers" -eq 1 ]; then
                       case "$line" in
                         tree\ *)
                           GPG_TOUCHID_SIGNING_PAYLOAD_KIND="commit"
+                          ;;
+                        author\ *)
+                          parsed_identity=$(gpg_touchid_parse_identity "''${line#author }")
+                          author_name=$(printf '%s\n' "$parsed_identity" | sed -n '1p')
+                          author_email=$(printf '%s\n' "$parsed_identity" | sed -n '2p')
+                          ;;
+                        committer\ *)
+                          parsed_identity=$(gpg_touchid_parse_identity "''${line#committer }")
+                          GPG_TOUCHID_SIGNING_SIGNER_NAME=$(printf '%s\n' "$parsed_identity" | sed -n '1p')
+                          GPG_TOUCHID_SIGNING_SIGNER_EMAIL=$(printf '%s\n' "$parsed_identity" | sed -n '2p')
                           ;;
                         object\ *)
                           if [ "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND" = "unknown" ]; then
@@ -133,6 +162,11 @@
                       break
                     fi
                   done <<< "$payload"
+
+                  if [ -z "$GPG_TOUCHID_SIGNING_SIGNER_NAME" ] && [ -z "$GPG_TOUCHID_SIGNING_SIGNER_EMAIL" ]; then
+                    GPG_TOUCHID_SIGNING_SIGNER_NAME="$author_name"
+                    GPG_TOUCHID_SIGNING_SIGNER_EMAIL="$author_email"
+                  fi
                 }
 
                 gpg_touchid_derive_repo_context() {
