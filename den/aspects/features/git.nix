@@ -19,6 +19,7 @@
                   #!${pkgs.python3}/bin/python3
                   import hashlib
                   import json
+                  import os
                   import subprocess
                   import sys
                   from pathlib import Path
@@ -36,6 +37,55 @@
                   key_id = hashlib.sha1(email.encode("utf-8")).hexdigest()[:8].upper()
                   keyinfo = f"rbw/{key_id}"
                   desc = f"SETDESC \"Bitwarden RBW <{email}>\" ID {key_id}, Unlock the local database for 'rbw'"
+
+                  def quote_assuan(value):
+                      return value.replace("\\", "\\\\").replace('"', '\\"')
+
+                  def load_git_signing_prompt():
+                      metadata_path = os.environ.get("PINENTRY_USER_DATA") or ""
+                      if not metadata_path:
+                          return None
+
+                      try:
+                          pairs = {}
+                          for raw_line in Path(metadata_path).read_text().splitlines():
+                              if "=" not in raw_line:
+                                  continue
+                              key, value = raw_line.split("=", 1)
+                              pairs[key] = value
+                      except Exception:
+                          return None
+
+                      payload_kind = pairs.get("payload_kind") or "commit"
+                      payload_subject = pairs.get("payload_subject") or ""
+                      signer_name = pairs.get("signer_name") or ""
+                      signer_email = pairs.get("signer_email") or ""
+                      repo_name = pairs.get("repo_name") or ""
+                      repo_branch = pairs.get("repo_branch") or ""
+
+                      desc_parts = [part for part in [payload_subject] if part]
+                      if signer_name and signer_email:
+                          desc_parts.append(f"{signer_name} <{signer_email}>")
+                      elif signer_name or signer_email:
+                          desc_parts.append(signer_name or signer_email)
+
+                      if not repo_name and not repo_branch and not desc_parts:
+                          return None
+
+                      repo_context = repo_name or "repository"
+                      if repo_branch:
+                          repo_context = f"{repo_context}@{repo_branch}"
+
+                      title = f'SETTITLE "Git {quote_assuan(payload_kind)} signature for {quote_assuan(repo_context)}"'
+                      desc_text = " — ".join(desc_parts) or f"Git {payload_kind} signature"
+                      prompt_desc = f'SETDESC "{quote_assuan(desc_text)}"'
+                      return {
+                          "title": title,
+                          "desc": prompt_desc,
+                      }
+
+                  def is_rbw_desc(command):
+                      return "local database for 'rbw'" in command or "Bitwarden" in command
 
                   proc = subprocess.Popen(
                       [REAL],
@@ -77,11 +127,21 @@
                       sys.stdout.write(line)
                   sys.stdout.flush()
 
+                  git_signing_prompt = load_git_signing_prompt()
+                  session_kind = "git" if git_signing_prompt is not None else None
+
                   for raw in sys.stdin:
-                      if raw.startswith("SETDESC "):
+                      if session_kind == "git" and raw.startswith("SETTITLE "):
+                          send_and_forward(git_signing_prompt["title"] + "\n")
+                          continue
+                      if session_kind == "git" and raw.startswith("SETDESC "):
+                          send_and_forward(git_signing_prompt["desc"] + "\n")
+                          continue
+                      if raw.startswith("SETDESC ") and is_rbw_desc(raw):
+                          session_kind = "rbw"
                           send_and_forward(desc + "\n")
                           continue
-                      if raw == "GETPIN\n":
+                      if raw == "GETPIN\n" and session_kind == "rbw":
                           send_and_require_ok("OPTION allow-external-password-cache\n")
                           send_and_require_ok(f"SETKEYINFO {keyinfo}\n")
                           send_and_forward(raw)
@@ -335,7 +395,9 @@
               enable = true;
               defaultCacheTtl = lib.mkDefault 31536000;
               maxCacheTtl = lib.mkDefault 31536000;
-            };
+            } // (lib.optionalAttrs isDarwin {
+              extraConfig = "pinentry-program ${darwinRbwPinentryWrapper}/bin/rbw-pinentry-touchid";
+            });
             };
         })
     ];

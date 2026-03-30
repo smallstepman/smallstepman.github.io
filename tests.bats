@@ -119,6 +119,67 @@ load_gpg_touchid_signing_helpers() {
   rm -f "$helper_file"
 }
 
+extract_darwin_touchid_pinentry_wrapper() {
+  python3 - <<'PY'
+from pathlib import Path
+import textwrap
+
+text = Path("den/aspects/features/git.nix").read_text()
+anchor = 'darwinRbwPinentryWrapper = pkgs.writeTextFile {'
+start = text.index(anchor)
+start = text.index("text = ''\n", start) + len("text = ''\n")
+end = text.index("\n                '';", start)
+print(textwrap.dedent(text[start:end]), end="")
+PY
+}
+
+materialize_darwin_touchid_pinentry_wrapper() {
+  local wrapper_path="$1"
+  local fake_real="$2"
+  local extracted
+
+  extracted=$(mktemp)
+  extract_darwin_touchid_pinentry_wrapper >"$extracted"
+
+  python3 - "$wrapper_path" "$fake_real" "$extracted" <<'PY'
+from pathlib import Path
+import sys
+
+wrapper_path = Path(sys.argv[1])
+fake_real = sys.argv[2]
+extracted = Path(sys.argv[3])
+text = extracted.read_text()
+text = text.replace("#!${pkgs.python3}/bin/python3", "#!/usr/bin/env python3", 1)
+text = text.replace(
+    'REAL = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid"',
+    f"REAL = {fake_real!r}",
+    1,
+)
+wrapper_path.write_text(text)
+wrapper_path.chmod(0o755)
+PY
+
+  rm -f "$extracted"
+}
+
+create_fake_touchid_pinentry_backend() {
+  local fake_real="$1"
+
+  cat >"$fake_real" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'OK fake-pinentry ready\n'
+
+while IFS= read -r line; do
+  printf '%s\n' "$line" >>"$FAKE_TOUCHID_PINENTRY_LOG"
+  printf 'OK forwarded: %s\n' "$line"
+done
+EOF
+
+  chmod +x "$fake_real"
+}
+
 create_fake_gpg_touchid_signing_wrapper_probe() {
   local fake_gpg="$1"
 
@@ -3583,6 +3644,18 @@ PY
 }
 
 # bats test_tags=gpg
+@test "gpg: macbook-pro-m1 gpg-agent pinentry-program uses the repo-managed pinentry wrapper" {
+  local actual
+
+  actual=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.services.gpg-agent.extraConfig)
+
+  [[ "$actual" == *'pinentry-program /nix/store/'*'/bin/rbw-pinentry-touchid'* ]] \
+    || fail "macbook-pro-m1 gpg-agent pinentry-program should use the repo-managed wrapper, got '$actual'"
+  [[ "$actual" != *'/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid'* ]] \
+    || fail "macbook-pro-m1 gpg-agent pinentry-program should not point directly at Homebrew pinentry-touchid, got '$actual'"
+}
+
+# bats test_tags=gpg
 @test "gpg: macbook-pro-m1 gpg-agent cache TTLs are 1 second" {
   local actual
 
@@ -3845,6 +3918,86 @@ EOF
   metadata_path=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
 
   assert_file_not_exists "$metadata_path"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: repo-managed pinentry wrapper rewrites git signing title and description from metadata" {
+  local tmpdir wrapper fake_real metadata command_log
+  tmpdir=$(mktemp -d)
+  wrapper="$tmpdir/pinentry-touchid-wrapper"
+  fake_real="$tmpdir/fake-pinentry-touchid"
+  metadata="$tmpdir/signing-metadata"
+  command_log="$tmpdir/fake-pinentry.log"
+
+  cat >"$metadata" <<'EOF'
+payload_kind=commit
+payload_subject=feat: tighten signing prompt metadata
+tag_name=
+signer_name=Example Committer
+signer_email=committer@example.com
+repo_name=nix
+repo_branch=gpg-touchid-signing-prompt
+EOF
+
+  create_fake_touchid_pinentry_backend "$fake_real"
+  materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
+
+  : >"$command_log"
+  PINENTRY_USER_DATA="$metadata" \
+  FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
+    "$wrapper" <<'EOF' >/dev/null
+SETTITLE "Passphrase Required"
+SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
+GETPIN
+EOF
+
+  grep -Fqx 'SETTITLE "Git commit signature for nix@gpg-touchid-signing-prompt"' "$command_log" \
+    || fail "expected git-aware SETTITLE rewrite, got: $(cat "$command_log")"
+  grep -Fqx 'SETDESC "feat: tighten signing prompt metadata — Example Committer <committer@example.com>"' "$command_log" \
+    || fail "expected git-aware SETDESC rewrite, got: $(cat "$command_log")"
+  if grep -Fq 'allow-external-password-cache' "$command_log"; then
+    fail 'git signing pinentry flow should not inject the rbw external password cache option'
+  fi
+  if grep -Fq 'SETKEYINFO rbw/' "$command_log"; then
+    fail 'git signing pinentry flow should not inject the rbw keychain keyinfo'
+  fi
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: repo-managed pinentry wrapper falls back to forwarded prompts when signing metadata is absent" {
+  local tmpdir wrapper fake_real command_log
+  tmpdir=$(mktemp -d)
+  wrapper="$tmpdir/pinentry-touchid-wrapper"
+  fake_real="$tmpdir/fake-pinentry-touchid"
+  command_log="$tmpdir/fake-pinentry.log"
+
+  create_fake_touchid_pinentry_backend "$fake_real"
+  materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
+
+  : >"$command_log"
+  FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
+    "$wrapper" <<'EOF' >/dev/null
+SETTITLE "Passphrase Required"
+SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
+GETPIN
+EOF
+
+  grep -Fqx 'SETTITLE "Passphrase Required"' "$command_log" \
+    || fail "expected title to pass through unchanged without signing metadata, got: $(cat "$command_log")"
+  grep -Fqx 'SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"' "$command_log" \
+    || fail "expected description to pass through unchanged without signing metadata, got: $(cat "$command_log")"
+  grep -Fqx 'GETPIN' "$command_log" \
+    || fail "expected GETPIN to be forwarded unchanged without signing metadata, got: $(cat "$command_log")"
+  if grep -Fq 'allow-external-password-cache' "$command_log"; then
+    fail 'non-rbw pinentry flow should not inject the rbw external password cache option'
+  fi
+  if grep -Fq 'SETKEYINFO rbw/' "$command_log"; then
+    fail 'non-rbw pinentry flow should not inject the rbw keychain keyinfo'
+  fi
 
   rm -rf "$tmpdir"
 }
