@@ -3802,6 +3802,8 @@ EOF
   assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND" "tag"
   assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT" "Release v1.2.3"
   assert_equal "$GPG_TOUCHID_SIGNING_TAG_NAME" "v1.2.3"
+  assert_equal "$GPG_TOUCHID_SIGNING_SIGNER_NAME" "Example Tagger"
+  assert_equal "$GPG_TOUCHID_SIGNING_SIGNER_EMAIL" "tagger@example.com"
 }
 
 # bats test_tags=gpg
@@ -3814,13 +3816,39 @@ EOF
   else
     expected_repo_name=$(basename "$expected_common_dir")
   fi
-  expected_branch=$(git symbolic-ref --quiet --short HEAD)
+  expected_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached')
 
   load_gpg_touchid_signing_helpers
   gpg_touchid_derive_repo_context
 
   assert_equal "$GPG_TOUCHID_SIGNING_REPO_NAME" "$expected_repo_name"
   assert_equal "$GPG_TOUCHID_SIGNING_REPO_BRANCH" "$expected_branch"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper helper falls back to detached when HEAD is not symbolic" {
+  local tmpdir original_pwd
+  tmpdir=$(mktemp -d)
+  original_pwd=$PWD
+  load_gpg_touchid_signing_helpers
+
+  cd "$tmpdir"
+  git init detached-repo >/dev/null
+  cd detached-repo
+  git config user.name "Example Committer"
+  git config user.email "committer@example.com"
+  printf 'hello\n' >README.md
+  git add README.md
+  git commit -m "initial commit" >/dev/null
+  git checkout --detach >/dev/null 2>&1
+
+  gpg_touchid_derive_repo_context
+
+  assert_equal "$GPG_TOUCHID_SIGNING_REPO_NAME" "detached-repo"
+  assert_equal "$GPG_TOUCHID_SIGNING_REPO_BRANCH" "detached"
+
+  cd "$original_pwd"
+  rm -rf "$tmpdir"
 }
 
 # bats test_tags=gpg
@@ -3924,7 +3952,7 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper rewrites git signing title and description from metadata" {
-  local tmpdir wrapper fake_real metadata command_log
+  local tmpdir wrapper fake_real metadata command_log expected_log actual_log
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
@@ -3953,10 +3981,69 @@ SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
 GETPIN
 EOF
 
-  grep -Fqx 'SETTITLE "Git commit signature for nix@gpg-touchid-signing-prompt"' "$command_log" \
-    || fail "expected git-aware SETTITLE rewrite, got: $(cat "$command_log")"
-  grep -Fqx 'SETDESC "feat: tighten signing prompt metadata — Example Committer <committer@example.com>"' "$command_log" \
-    || fail "expected git-aware SETDESC rewrite, got: $(cat "$command_log")"
+  expected_log=$(cat <<'EOF'
+SETTITLE "GPG commit signing"
+SETDESC "Repo: nix
+Branch: gpg-touchid-signing-prompt
+Commit: feat: tighten signing prompt metadata
+Signer: Example Committer <committer@example.com>"
+GETPIN
+EOF
+)
+  actual_log=$(cat "$command_log")
+  assert_equal "$actual_log" "$expected_log"
+  if grep -Fq 'allow-external-password-cache' "$command_log"; then
+    fail 'git signing pinentry flow should not inject the rbw external password cache option'
+  fi
+  if grep -Fq 'SETKEYINFO rbw/' "$command_log"; then
+    fail 'git signing pinentry flow should not inject the rbw keychain keyinfo'
+  fi
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: repo-managed pinentry wrapper rewrites git tag signing title and description from metadata" {
+  local tmpdir wrapper fake_real metadata command_log expected_log actual_log
+  tmpdir=$(mktemp -d)
+  wrapper="$tmpdir/pinentry-touchid-wrapper"
+  fake_real="$tmpdir/fake-pinentry-touchid"
+  metadata="$tmpdir/signing-metadata"
+  command_log="$tmpdir/fake-pinentry.log"
+
+  cat >"$metadata" <<'EOF'
+payload_kind=tag
+payload_subject=Release v1.2.3
+tag_name=v1.2.3
+signer_name=Example Tagger
+signer_email=tagger@example.com
+repo_name=nix
+repo_branch=detached
+EOF
+
+  create_fake_touchid_pinentry_backend "$fake_real"
+  materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
+
+  : >"$command_log"
+  PINENTRY_USER_DATA="$metadata" \
+  FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
+    "$wrapper" <<'EOF' >/dev/null
+SETTITLE "Passphrase Required"
+SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
+GETPIN
+EOF
+
+  expected_log=$(cat <<'EOF'
+SETTITLE "GPG tag signing"
+SETDESC "Repo: nix
+Branch: detached
+Tag: Release v1.2.3
+Signer: Example Tagger <tagger@example.com>"
+GETPIN
+EOF
+)
+  actual_log=$(cat "$command_log")
+  assert_equal "$actual_log" "$expected_log"
   if grep -Fq 'allow-external-password-cache' "$command_log"; then
     fail 'git signing pinentry flow should not inject the rbw external password cache option'
   fi

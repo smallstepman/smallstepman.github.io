@@ -61,23 +61,26 @@
                       signer_name = pairs.get("signer_name") or ""
                       signer_email = pairs.get("signer_email") or ""
                       repo_name = pairs.get("repo_name") or ""
-                      repo_branch = pairs.get("repo_branch") or ""
+                      repo_branch = pairs.get("repo_branch") or "detached"
 
-                      desc_parts = [part for part in [payload_subject] if part]
-                      if signer_name and signer_email:
-                          desc_parts.append(f"{signer_name} <{signer_email}>")
-                      elif signer_name or signer_email:
-                          desc_parts.append(signer_name or signer_email)
-
-                      if not repo_name and not repo_branch and not desc_parts:
+                      if not repo_name and not payload_subject and not signer_name and not signer_email:
                           return None
 
-                      repo_context = repo_name or "repository"
-                      if repo_branch:
-                          repo_context = f"{repo_context}@{repo_branch}"
+                      if payload_kind == "tag":
+                          title_text = "GPG tag signing"
+                          subject_label = "Tag"
+                      else:
+                          title_text = "GPG commit signing"
+                          subject_label = "Commit"
 
-                      title = f'SETTITLE "Git {quote_assuan(payload_kind)} signature for {quote_assuan(repo_context)}"'
-                      desc_text = " — ".join(desc_parts) or f"Git {payload_kind} signature"
+                      signer = f"{signer_name} <{signer_email}>".strip()
+                      desc_text = "\n".join([
+                          f"Repo: {repo_name or 'repository'}",
+                          f"Branch: {repo_branch}",
+                          f"{subject_label}: {payload_subject}",
+                          f"Signer: {signer}",
+                      ])
+                      title = f'SETTITLE "{quote_assuan(title_text)}"'
                       prompt_desc = f'SETDESC "{quote_assuan(desc_text)}"'
                       return {
                           "title": title,
@@ -210,10 +213,15 @@
                         tag\ *)
                           GPG_TOUCHID_SIGNING_TAG_NAME="''${line#tag }"
                           ;;
-                        "")
-                          in_headers=0
+                        tagger\ *)
+                          parsed_identity=$(gpg_touchid_parse_identity "''${line#tagger }")
+                          GPG_TOUCHID_SIGNING_SIGNER_NAME=$(printf '%s\n' "$parsed_identity" | sed -n '1p')
+                          GPG_TOUCHID_SIGNING_SIGNER_EMAIL=$(printf '%s\n' "$parsed_identity" | sed -n '2p')
                           ;;
-                      esac
+                         "")
+                           in_headers=0
+                           ;;
+                       esac
                       continue
                     fi
 
@@ -254,6 +262,9 @@
                   fi
 
                   GPG_TOUCHID_SIGNING_REPO_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+                  if [ -z "$GPG_TOUCHID_SIGNING_REPO_BRANCH" ]; then
+                    GPG_TOUCHID_SIGNING_REPO_BRANCH="detached"
+                  fi
                 }
 
                 gpg_touchid_cleanup_file() {
