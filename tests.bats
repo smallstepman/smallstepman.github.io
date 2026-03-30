@@ -3696,11 +3696,21 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: signing wrapper helper derives repo name and branch for this worktree" {
+  local expected_repo_name expected_branch expected_common_dir
+
+  expected_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+  if [[ "$expected_common_dir" == */.git ]]; then
+    expected_repo_name=$(basename "$(dirname "$expected_common_dir")")
+  else
+    expected_repo_name=$(basename "$expected_common_dir")
+  fi
+  expected_branch=$(git symbolic-ref --quiet --short HEAD)
+
   load_gpg_touchid_signing_helpers
   gpg_touchid_derive_repo_context
 
-  assert_equal "$GPG_TOUCHID_SIGNING_REPO_NAME" "nix"
-  assert_equal "$GPG_TOUCHID_SIGNING_REPO_BRANCH" "gpg-touchid-signing-prompt"
+  assert_equal "$GPG_TOUCHID_SIGNING_REPO_NAME" "$expected_repo_name"
+  assert_equal "$GPG_TOUCHID_SIGNING_REPO_BRANCH" "$expected_branch"
 }
 
 
