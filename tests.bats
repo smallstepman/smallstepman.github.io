@@ -3813,10 +3813,6 @@ PY
     || fail "vm gpg-agent should use a broker-aware pinentry wrapper, got '$actual'"
   [[ "$actual" != *pinentry-tty* ]] \
     || fail "vm gpg-agent should not point directly at pinentry-tty, got '$actual'"
-  grep -Fq '{"op":"get-gpg-secret"}' den/aspects/hosts/vm-aarch64.nix \
-    || fail 'vm commit-time pinentry bridge should ask the broker for get-gpg-secret before falling back'
-  grep -Fq 'LOCAL_FALLBACK =' den/aspects/hosts/vm-aarch64.nix \
-    || fail 'vm commit-time pinentry bridge should keep a local fallback pinentry'
 }
 
 # bats test_tags=gpg
@@ -3831,6 +3827,8 @@ PY
     || fail 'vm commit-time pinentry bridge should define a broker get-gpg-secret helper'
   grep -Fq '{"op":"get-gpg-secret"}' den/aspects/hosts/vm-aarch64.nix \
     || fail 'vm commit-time pinentry bridge should request get-gpg-secret from the broker'
+  grep -Fq 'LOCAL_FALLBACK =' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm commit-time pinentry bridge should keep a local fallback pinentry'
   grep -Fq 'fallback = activate_fallback(history)' den/aspects/hosts/vm-aarch64.nix \
     || fail 'vm commit-time pinentry bridge should preserve a local fallback path'
 }
