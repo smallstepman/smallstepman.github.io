@@ -103,10 +103,10 @@
                   local parsed_name=""
                   local parsed_email=""
 
-                  if [ "$identity" != "${identity#* <}" ]; then
-                    parsed_name="${identity%% <*}"
-                    parsed_email="${identity#*<}"
-                    parsed_email="${parsed_email%%>*}"
+                  if [ "$identity" != "''${identity#* <}" ]; then
+                    parsed_name="''${identity%% <*}"
+                    parsed_email="''${identity#*<}"
+                    parsed_email="''${parsed_email%%>*}"
                   fi
 
                   printf '%s\n%s\n' "$parsed_name" "$parsed_email"
