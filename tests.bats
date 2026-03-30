@@ -3792,6 +3792,50 @@ PY
 }
 
 # bats test_tags=gpg
+@test "gpg: vm-aarch64 git signing uses the broker-aware wrapper" {
+  local actual
+
+  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.git.settings.gpg.program)
+
+  [[ "$actual" == /nix/store/*vm-gpg-touchid-signing* ]] \
+    || fail "vm signing should use the broker-aware wrapper, got '$actual'"
+  [[ "$actual" != /nix/store/*-gnupg-*/bin/gpg ]] \
+    || fail "vm signing should not point directly at gnupg gpg, got '$actual'"
+}
+
+# bats test_tags=gpg
+@test "gpg: vm-aarch64 gpg-agent uses the broker-aware pinentry" {
+  local actual
+
+  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.services.gpg-agent.extraConfig)
+
+  [[ "$actual" == *'pinentry-program /nix/store/'*'vm-gpg-touchid'* ]] \
+    || fail "vm gpg-agent should use a broker-aware pinentry wrapper, got '$actual'"
+  [[ "$actual" != *pinentry-tty* ]] \
+    || fail "vm gpg-agent should not point directly at pinentry-tty, got '$actual'"
+  grep -Fq '{"op":"get-gpg-secret"}' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm commit-time pinentry bridge should ask the broker for get-gpg-secret before falling back'
+  grep -Fq 'LOCAL_FALLBACK =' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm commit-time pinentry bridge should keep a local fallback pinentry'
+}
+
+# bats test_tags=gpg
+@test "gpg: darwin broker exposes get-gpg-secret" {
+  grep -Fq 'op == "get-gpg-secret"' den/aspects/features/darwin-core.nix \
+    || fail 'darwin broker should expose get-gpg-secret for vm commit-time signing'
+}
+
+# bats test_tags=gpg
+@test "gpg: vm-aarch64 commit-time pinentry bridge asks the broker first and keeps a local fallback" {
+  grep -Fq 'def broker_get_gpg_secret()' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm commit-time pinentry bridge should define a broker get-gpg-secret helper'
+  grep -Fq '{"op":"get-gpg-secret"}' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm commit-time pinentry bridge should request get-gpg-secret from the broker'
+  grep -Fq 'fallback = activate_fallback(history)' den/aspects/hosts/vm-aarch64.nix \
+    || fail 'vm commit-time pinentry bridge should preserve a local fallback path'
+}
+
+# bats test_tags=gpg
 @test "gpg: git signing keys are configured correctly on vm-aarch64 and macbook-pro-m1" {
   local actual
 
