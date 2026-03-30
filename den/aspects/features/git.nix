@@ -582,7 +582,9 @@
 
             home.packages = [
               pkgs.tig
-            ] ++ (lib.optionals isNonWSLLinux [
+            ] ++ (lib.optionals isDarwin [
+              darwinGitCommitTouchIdGetPin
+            ]) ++ (lib.optionals isNonWSLLinux [
               (pkgs.writeShellScriptBin "git-credential-github" ''
                 case "$1" in
                   get)

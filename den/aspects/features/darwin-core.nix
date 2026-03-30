@@ -156,6 +156,8 @@
                 DEFAULT_EMAIL = "rbw@local"
                 APPROVE_DESC = "VM sudo approval <vm-aarch64>"
                 APPROVE_HELPER = "${vmTouchIdApprove}/Applications/sudo NixOS VM.app/Contents/MacOS/sudo NixOS VM"
+                GIT_COMMIT_TOUCHID_HELPER = str(Path.home() / ".nix-profile/bin/gpg-touchid-commit-get-pin")
+                VM_GPG_SIGNING_FINGERPRINT = "071F6FE39FC26713930A702401E5F9A947FA8F5C"
                 APPROVE_CONTEXT = threading.local()
 
 
@@ -298,6 +300,63 @@
                     raise RuntimeError(details or "vm-touchid-approve failed")
 
 
+                def gpg_signing_prompt(metadata):
+                    payload_kind = normalize_prompt_text(metadata.get("payload_kind")) or ""
+                    payload_subject = normalize_prompt_text(metadata.get("payload_subject")) or ""
+                    signer_name = normalize_prompt_text(metadata.get("signer_name")) or ""
+                    signer_email = normalize_prompt_text(metadata.get("signer_email")) or ""
+                    repo_name = normalize_prompt_text(metadata.get("repo_name")) or "repository"
+                    repo_branch = normalize_prompt_text(metadata.get("repo_branch")) or "detached"
+
+                    if payload_kind == "tag":
+                        subject_label = "Tag"
+                    elif payload_kind == "commit":
+                        subject_label = "Commit"
+                    else:
+                        raise RuntimeError(f"unsupported gpg payload kind: {payload_kind or 'unknown'}")
+
+                    signer = f"{signer_name} <{signer_email}>".strip()
+                    return "\n".join([
+                        f"Repo: {repo_name}",
+                        f"Branch: {repo_branch}",
+                        f"{subject_label}: {payload_subject}",
+                        f"Signer: {signer}",
+                    ])
+
+
+                def gpg_keychain_label(metadata):
+                    signer_name = normalize_prompt_text(metadata.get("signer_name")) or ""
+                    signer_email = normalize_prompt_text(metadata.get("signer_email")) or ""
+                    if not signer_name or not signer_email:
+                        raise RuntimeError("missing signer identity for gpg secret lookup")
+                    key_id = VM_GPG_SIGNING_FINGERPRINT[-16:].upper()
+                    return f"{signer_name} <{signer_email}> ({key_id})"
+
+
+                def get_gpg_secret(metadata):
+                    helper = os.environ.get("GPG_TOUCHID_COMMIT_HELPER") or GIT_COMMIT_TOUCHID_HELPER
+                    if not os.path.isfile(helper) or not os.access(helper, os.X_OK):
+                        raise RuntimeError(f"gpg touchid helper is unavailable: {helper}")
+
+                    env = os.environ.copy()
+                    env["GPG_TOUCHID_PAYLOAD_KIND"] = normalize_prompt_text(metadata.get("payload_kind")) or ""
+                    env["GPG_TOUCHID_PROMPT_DESC"] = gpg_signing_prompt(metadata)
+                    env["GPG_TOUCHID_KEYCHAIN_LABEL"] = gpg_keychain_label(metadata)
+                    result = subprocess.run(
+                        [helper],
+                        capture_output=True,
+                        check=False,
+                        env=env,
+                        text=True,
+                    )
+                    if result.returncode == 0:
+                        return {"ok": True, "secret": result.stdout}
+                    if result.returncode == 1:
+                        return {"ok": False, "cancelled": True}
+                    details = result.stderr.strip() or result.stdout.strip()
+                    return {"ok": False, "error": details or "gpg-touchid-commit-get-pin failed"}
+
+
                 class ThreadedUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
                     daemon_threads = True
 
@@ -317,6 +376,8 @@
                                     response = {"ok": True, "approved": approve(self.server.pinentry_program)}
                                 finally:
                                     APPROVE_CONTEXT.metadata = {}
+                            elif op == "get-gpg-secret":
+                                response = get_gpg_secret(request.get("metadata") or {})
                             elif op == "get-secret":
                                 response = {"ok": True, "secret": get_secret(self.server.pinentry_program)}
                             else:

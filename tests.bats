@@ -225,6 +225,34 @@ PY
   rm -f "$extracted"
 }
 
+extract_darwin_touchid_broker() {
+  extract_write_textfile_script_by_anchor \
+    "den/aspects/features/darwin-core.nix" \
+    'vmTouchIdBroker = pkgs.writeTextFile {'
+}
+
+materialize_darwin_touchid_broker() {
+  local broker_path="$1"
+  local extracted
+
+  extracted=$(mktemp)
+  extract_darwin_touchid_broker >"$extracted"
+
+  python3 - "$broker_path" "$extracted" <<'PY'
+from pathlib import Path
+import sys
+
+broker_path = Path(sys.argv[1])
+extracted = Path(sys.argv[2])
+text = extracted.read_text()
+text = text.replace("#!${pkgs.python3}/bin/python3", "#!/usr/bin/env python3", 1)
+broker_path.write_text(text)
+broker_path.chmod(0o755)
+PY
+
+  rm -f "$extracted"
+}
+
 materialize_vm_gpg_touchid_bridge() {
   local bridge_path="$1"
   local fake_fallback="$2"
@@ -4018,6 +4046,107 @@ if "get-gpg-secret" not in ops:
 PY
   rm -f "$broker_script"
   [ "$status" -eq 0 ] || fail "$output"
+}
+
+# bats test_tags=gpg
+@test "gpg: darwin broker get-gpg-secret uses the git commit touchid helper contract" {
+  local tmpdir broker helper helper_log expected_helper_log actual_helper_log
+  tmpdir=$(mktemp -d)
+  broker="$tmpdir/vm-touchid-broker.py"
+  helper="$tmpdir/fake-git-touchid-commit-helper"
+  helper_log="$tmpdir/fake-git-touchid-helper.log"
+
+  materialize_darwin_touchid_broker "$broker"
+  create_fake_git_touchid_commit_helper "$helper"
+
+  : >"$helper_log"
+  run python3 - "$broker" "$helper" "$helper_log" <<'PY'
+from pathlib import Path
+import importlib.util
+import os
+import sys
+
+broker_path, helper_path, helper_log = sys.argv[1:4]
+os.environ["GPG_TOUCHID_COMMIT_HELPER"] = helper_path
+os.environ["FAKE_GIT_TOUCHID_HELPER_LOG"] = helper_log
+
+spec = importlib.util.spec_from_file_location("vm_touchid_broker", broker_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+response = module.get_gpg_secret({
+    "payload_kind": "commit",
+    "payload_subject": "feat: broker-aware vm signing",
+    "signer_name": "Example Committer",
+    "signer_email": "committer@example.com",
+    "repo_name": "nix",
+    "repo_branch": "feature/vm-gpg-touchid-signing",
+})
+expected_response = {"ok": True, "secret": "git-commit-secret"}
+if response != expected_response:
+    print(f"expected successful git commit touchid helper response, got {response!r}", file=sys.stderr)
+    sys.exit(1)
+
+expected_log = (
+    "payload_kind=commit\n"
+    "prompt_desc=Repo: nix\n"
+    "Branch: feature/vm-gpg-touchid-signing\n"
+    "Commit: feat: broker-aware vm signing\n"
+    "Signer: Example Committer <committer@example.com>\n"
+    "keychain_label=Example Committer <committer@example.com> (01E5F9A947FA8F5C)\n"
+)
+actual_log = Path(helper_log).read_text()
+if actual_log != expected_log:
+    print(f"expected helper env contract {expected_log!r}, got {actual_log!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: darwin broker get-gpg-secret maps helper cancellation to broker cancellation" {
+  local tmpdir broker helper
+  tmpdir=$(mktemp -d)
+  broker="$tmpdir/vm-touchid-broker.py"
+  helper="$tmpdir/fake-git-touchid-commit-helper-cancel"
+
+  materialize_darwin_touchid_broker "$broker"
+  cat >"$helper" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "$helper"
+
+  run python3 - "$broker" "$helper" <<'PY'
+import importlib.util
+import os
+import sys
+
+broker_path, helper_path = sys.argv[1:3]
+os.environ["GPG_TOUCHID_COMMIT_HELPER"] = helper_path
+
+spec = importlib.util.spec_from_file_location("vm_touchid_broker", broker_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+response = module.get_gpg_secret({
+    "payload_kind": "tag",
+    "payload_subject": "v1.2.3",
+    "signer_name": "Example Committer",
+    "signer_email": "committer@example.com",
+    "repo_name": "nix",
+    "repo_branch": "main",
+})
+expected_response = {"ok": False, "cancelled": True}
+if response != expected_response:
+    print(f"expected broker cancellation payload, got {response!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
 }
 
 # bats test_tags=gpg
