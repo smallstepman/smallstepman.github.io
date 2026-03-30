@@ -160,6 +160,37 @@ print(textwrap.dedent(match.group("body")), end="")
 PY
 }
 
+extract_write_shell_script_bin_by_anchor() {
+  local nix_file="$1"
+  local anchor="$2"
+
+  python3 - "$nix_file" "$anchor" <<'PY'
+from pathlib import Path
+import re
+import sys
+import textwrap
+
+nix_file = Path(sys.argv[1])
+anchor = sys.argv[2]
+text = nix_file.read_text()
+
+try:
+    anchored_text = text[text.index(anchor):]
+except ValueError as exc:
+    raise SystemExit(f"failed to locate anchor {anchor!r} in {nix_file}: {exc}")
+
+match = re.search(
+    r'pkgs\.writeShellScriptBin\s+"[^"]+"\s+\'\'\n(?P<body>.*?)\n[ \t]*\'\';',
+    anchored_text,
+    re.DOTALL,
+)
+if match is None:
+    raise SystemExit(f"failed to isolate writeShellScriptBin ... '' ... ''; block after {anchor!r} in {nix_file}")
+
+print(textwrap.dedent(match.group("body")), end="")
+PY
+}
+
 materialize_darwin_touchid_pinentry_wrapper() {
   local wrapper_path="$1"
   local fake_real="$2"
@@ -3881,6 +3912,37 @@ PY
 }
 
 # bats test_tags=gpg
+@test "gpg: vm signing wrapper execs real gpg after starting cleanup watcher" {
+  local wrapper_script
+  wrapper_script=$(mktemp)
+  extract_write_shell_script_bin_by_anchor \
+    "den/aspects/hosts/vm-aarch64.nix" \
+    'vmGitSigningWrapper = pkgs.writeShellScriptBin "vm-gpg-touchid-signing"' >"$wrapper_script"
+
+  run python3 - "$wrapper_script" <<'PY'
+from pathlib import Path
+import sys
+
+script = Path(sys.argv[1]).read_text()
+
+required_snippets = [
+    'spawn_cleanup_watcher() {',
+    'while kill -0 "$watched_pid" 2>/dev/null; do',
+    'GPG_TOUCHID_METADATA_PATH="$metadata_file" exec "$gpg_bin" "$@" <"$payload_file"',
+]
+
+missing = [snippet for snippet in required_snippets if snippet not in script]
+if missing:
+    raise SystemExit(
+        "vm signing wrapper should start a cleanup watcher and exec the real gpg binary; "
+        f"missing {missing}"
+    )
+PY
+  rm -f "$wrapper_script"
+  [ "$status" -eq 0 ] || fail "$output"
+}
+
+# bats test_tags=gpg
 @test "gpg: darwin broker exposes get-gpg-secret" {
   local broker_script
   broker_script=$(mktemp)
@@ -4062,6 +4124,10 @@ request = request_payloads[0]
 if request.get("op") != "get-gpg-secret":
     print(f"expected get-gpg-secret broker op, got {request!r}", file=sys.stderr)
     sys.exit(1)
+metadata = request.get("metadata")
+if not isinstance(metadata, dict):
+    print(f"expected get-gpg-secret request metadata to be a dict, got {request!r}", file=sys.stderr)
+    sys.exit(1)
 expected_context = {
     "payload_kind": "commit",
     "payload_subject": "feat: broker-aware vm signing",
@@ -4070,8 +4136,8 @@ expected_context = {
     "repo_name": "nix",
     "repo_branch": "feature/vm-gpg-touchid-signing",
 }
-if not contains_mapping(request, expected_context):
-    print(f"broker request should include commit metadata context, got {request!r}", file=sys.stderr)
+if not contains_mapping(metadata, expected_context):
+    print(f"broker request should include commit metadata under metadata=..., got {request!r}", file=sys.stderr)
     sys.exit(1)
 if Path(fallback_log).read_text() != "":
     print(f"fallback pinentry should stay unused on broker success, got log {Path(fallback_log).read_text()!r}", file=sys.stderr)
@@ -4079,6 +4145,192 @@ if Path(fallback_log).read_text() != "":
 output = proc.stdout
 if "D brokered-commit-secret\nOK\n" not in output:
     print(f"bridge should emit broker secret via Assuan data response, got {output!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: vm bridge pinentry without signing metadata skips the broker and falls back locally" {
+  local tmpdir bridge fallback broker_socket fallback_log
+
+  tmpdir=$(mktemp -d)
+  bridge="$tmpdir/bridge.py"
+  fallback="$tmpdir/fallback-pinentry"
+  broker_socket="$tmpdir/broker.sock"
+  fallback_log="$tmpdir/fallback.log"
+
+  create_fake_touchid_pinentry_backend "$fallback"
+  : >"$fallback_log"
+  materialize_vm_gpg_touchid_bridge "$bridge" "$fallback" "$broker_socket"
+
+  run python3 - "$bridge" "$broker_socket" "$fallback_log" "$tmpdir" <<'PY'
+from pathlib import Path
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+
+bridge_path, broker_socket, fallback_log, cache_home = sys.argv[1:5]
+request_payloads = []
+server_errors = []
+
+def serve():
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+            server.bind(broker_socket)
+            server.listen(1)
+            server.settimeout(1.0)
+            try:
+                conn, _ = server.accept()
+            except socket.timeout:
+                return
+            with conn:
+                raw = bytearray()
+                while not raw.endswith(b"\n"):
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        raise SystemExit("bridge closed broker connection unexpectedly")
+                    raw.extend(chunk)
+                request_payloads.append(json.loads(raw.decode("utf-8")))
+                conn.sendall(b'{"ok":true,"secret":"unexpected-broker-secret"}\n')
+    except Exception as exc:
+        server_errors.append(str(exc))
+
+thread = threading.Thread(target=serve, daemon=True)
+thread.start()
+
+env = os.environ.copy()
+env["FAKE_TOUCHID_PINENTRY_LOG"] = fallback_log
+env["XDG_CACHE_HOME"] = cache_home
+
+proc = subprocess.run(
+    [bridge_path],
+    input=(
+        "OPTION ttyname=/dev/pts/7\n"
+        "SETDESC Please enter the passphrase to unlock the OpenPGP secret key:\n"
+        "GETPIN\n"
+        "BYE\n"
+    ),
+    capture_output=True,
+    text=True,
+    env=env,
+    check=False,
+)
+thread.join(timeout=5)
+if thread.is_alive():
+    print("fake broker thread did not finish", file=sys.stderr)
+    sys.exit(1)
+if server_errors and request_payloads:
+    print(f"fake broker failed after receiving a request: {server_errors}", file=sys.stderr)
+    sys.exit(1)
+if proc.returncode != 0:
+    print(proc.stdout, file=sys.stderr)
+    print(proc.stderr, file=sys.stderr)
+    raise SystemExit(proc.returncode)
+if request_payloads:
+    print(f"bridge should not contact the broker without signing metadata, got {request_payloads!r}", file=sys.stderr)
+    sys.exit(1)
+fallback_transcript = Path(fallback_log).read_text()
+if "GETPIN\n" not in fallback_transcript:
+    print(f"fallback pinentry should receive GETPIN, got {fallback_transcript!r}", file=sys.stderr)
+    sys.exit(1)
+if "OK forwarded: GETPIN\n" not in proc.stdout:
+    print(f"bridge should forward fallback pinentry output, got {proc.stdout!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: shared vm touchid bridge returns cancel for rbw broker cancellation" {
+  local tmpdir bridge fallback broker_socket fallback_log
+
+  tmpdir=$(mktemp -d)
+  bridge="$tmpdir/bridge.py"
+  fallback="$tmpdir/fallback-pinentry"
+  broker_socket="$tmpdir/broker.sock"
+  fallback_log="$tmpdir/fallback.log"
+
+  create_fake_touchid_pinentry_backend "$fallback"
+  : >"$fallback_log"
+  materialize_vm_gpg_touchid_bridge "$bridge" "$fallback" "$broker_socket"
+
+  run python3 - "$bridge" "$broker_socket" "$fallback_log" <<'PY'
+from pathlib import Path
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+
+bridge_path, broker_socket, fallback_log = sys.argv[1:4]
+request_payloads = []
+server_errors = []
+
+def serve():
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+            server.bind(broker_socket)
+            server.listen(1)
+            conn, _ = server.accept()
+            with conn:
+                raw = bytearray()
+                while not raw.endswith(b"\n"):
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        raise SystemExit("bridge closed broker connection unexpectedly")
+                    raw.extend(chunk)
+                request_payloads.append(json.loads(raw.decode("utf-8")))
+                conn.sendall(b'{"ok":false,"cancelled":true}\n')
+    except Exception as exc:
+        server_errors.append(str(exc))
+
+thread = threading.Thread(target=serve, daemon=True)
+thread.start()
+
+env = os.environ.copy()
+env["FAKE_TOUCHID_PINENTRY_LOG"] = fallback_log
+
+proc = subprocess.run(
+    [bridge_path],
+    input=(
+        "OPTION ttyname=/dev/pts/7\n"
+        'SETDESC "Bitwarden RBW <m@example.com> ID test, Unlock the local database for \'rbw\'"\n'
+        "GETPIN\n"
+        "BYE\n"
+    ),
+    capture_output=True,
+    text=True,
+    env=env,
+    check=False,
+)
+thread.join(timeout=5)
+if thread.is_alive():
+    print("fake broker thread did not finish", file=sys.stderr)
+    sys.exit(1)
+if server_errors:
+    print(f"fake broker failed: {server_errors}", file=sys.stderr)
+    sys.exit(1)
+if proc.returncode != 0:
+    print(proc.stdout, file=sys.stderr)
+    print(proc.stderr, file=sys.stderr)
+    raise SystemExit(proc.returncode)
+if len(request_payloads) != 1 or request_payloads[0].get("op") != "get-secret":
+    print(f"expected exactly one rbw get-secret request, got {request_payloads!r}", file=sys.stderr)
+    sys.exit(1)
+if Path(fallback_log).read_text() != "":
+    print(f"fallback pinentry should stay unused on broker cancellation, got log {Path(fallback_log).read_text()!r}", file=sys.stderr)
+    sys.exit(1)
+if "ERR 83886179 Operation cancelled <Pinentry>\n" not in proc.stdout:
+    print(f"bridge should surface broker cancellation as an Assuan cancel, got {proc.stdout!r}", file=sys.stderr)
     sys.exit(1)
 PY
   [ "$status" -eq 0 ] || fail "$output"
@@ -4172,19 +4424,6 @@ if not broker_helpers:
     raise SystemExit("vm commit-time pinentry bridge should define a broker secret helper")
 
 broker_helper_names = {fn.name for fn in broker_helpers}
-requested_ops = sorted(
-    {
-        op
-        for fn in broker_helpers
-        for constant in iter_stringish_constants(fn)
-        for op in re.findall(r"get-[a-z-]+", constant)
-    }
-)
-if "get-gpg-secret" not in requested_ops:
-    raise SystemExit(
-        "vm commit-time pinentry bridge should request get-gpg-secret from the broker; "
-        f"helper mentions: {requested_ops}"
-    )
 
 missing_fallback = [
     token

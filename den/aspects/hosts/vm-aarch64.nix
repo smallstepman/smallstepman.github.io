@@ -136,13 +136,19 @@
                   }
 
 
-              def broker_request_payload(signing_context):
-                  if signing_context is None:
+              def is_rbw_desc(command):
+                  return "local database for 'rbw'" in command or "Bitwarden" in command
+
+
+              def broker_request_payload(session_kind, signing_context):
+                  if session_kind == "rbw":
                       return {"op": "get-secret"}
-                  return {
-                      "op": "get-gpg-secret",
-                      "context": signing_context,
-                  }
+                  if session_kind == "gpg-signing" and signing_context is not None:
+                      return {
+                          "op": "get-gpg-secret",
+                          "metadata": signing_context,
+                      }
+                  raise RuntimeError(f"unsupported broker session kind: {session_kind}")
 
 
               def broker_cancelled(payload):
@@ -164,12 +170,12 @@
                   return False
 
 
-              def broker_get_secret(signing_context=None):
+              def broker_get_secret(session_kind, signing_context=None):
                   with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
                       client.settimeout(BROKER_CONNECT_TIMEOUT_SECONDS)
                       client.connect(BROKER_SOCKET)
                       client.settimeout(BROKER_RESPONSE_TIMEOUT_SECONDS)
-                      request = broker_request_payload(signing_context)
+                      request = broker_request_payload(session_kind, signing_context)
                       client.sendall(json.dumps(request).encode("utf-8") + b"\n")
 
                       response = bytearray()
@@ -223,6 +229,7 @@
                   fallback = None
                   history = []
                   signing_context = None
+                  session_kind = None
 
                   sys.stdout.write("OK Pleased to meet you, broker touchid pinentry ready\n")
                   sys.stdout.flush()
@@ -236,23 +243,51 @@
                           if raw.startswith("OPTION ttyname="):
                               tty_name = raw.split("=", 1)[1].rstrip("\n")
                               signing_context = load_signing_context(tty_name)
+                              if signing_context is not None:
+                                  session_kind = "gpg-signing"
+                              history.append(raw)
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
+                          if raw.startswith("SETDESC ") and is_rbw_desc(raw):
+                              session_kind = "rbw"
                               history.append(raw)
                               sys.stdout.write(OK)
                               sys.stdout.flush()
                               continue
 
                           if raw == "GETPIN\n":
-                              try:
-                                  secret = broker_get_secret(signing_context)
-                              except BrokerCancelled:
-                                  write_assuan_cancel()
-                                  continue
-                              except Exception:
-                                  fallback = activate_fallback(history)
-                                  emit(fallback.command(raw))
+                              if session_kind == "gpg-signing":
+                                  try:
+                                      secret = broker_get_secret(session_kind, signing_context)
+                                  except BrokerCancelled:
+                                      write_assuan_cancel()
+                                      continue
+                                  except Exception:
+                                      fallback = activate_fallback(history)
+                                      emit(fallback.command(raw))
+                                      continue
+
+                                  write_assuan_secret(secret)
                                   continue
 
-                              write_assuan_secret(secret)
+                              if session_kind == "rbw":
+                                  try:
+                                      secret = broker_get_secret(session_kind)
+                                  except BrokerCancelled:
+                                      write_assuan_cancel()
+                                      continue
+                                  except Exception:
+                                      fallback = activate_fallback(history)
+                                      emit(fallback.command(raw))
+                                      continue
+
+                                  write_assuan_secret(secret)
+                                  continue
+
+                              fallback = activate_fallback(history)
+                              emit(fallback.command(raw))
                               continue
 
                           if raw == "BYE\n":
@@ -789,11 +824,27 @@
                 local metadata_file=""
                 local payload=""
                 local tty_name=""
-                local status
+                local tracked_pid=""
+                local cleanup_watcher_pid=""
 
                 cleanup() {
                   vm_gpg_touchid_cleanup_file "$metadata_file"
                   vm_gpg_touchid_cleanup_file "$payload_file"
+                }
+
+                spawn_cleanup_watcher() {
+                  local watched_pid="$1"
+                  local watched_metadata="$2"
+                  local watched_payload="$3"
+
+                  (
+                    while kill -0 "$watched_pid" 2>/dev/null; do
+                      sleep 1
+                    done
+                    [ -n "$watched_metadata" ] && rm -f -- "$watched_metadata"
+                    [ -n "$watched_payload" ] && rm -f -- "$watched_payload"
+                  ) >/dev/null 2>&1 &
+                  printf '%s\n' "$!"
                 }
 
                 trap cleanup EXIT HUP INT TERM
@@ -809,11 +860,18 @@
                   metadata_file=$(vm_gpg_touchid_write_signing_metadata_file "$payload" "$tty_name" || true)
                 fi
 
-                GPG_TOUCHID_METADATA_PATH="$metadata_file" "$gpg_bin" "$@" <"$payload_file"
-                status=$?
-
-                cleanup
                 trap - EXIT HUP INT TERM
+                tracked_pid=$$
+                cleanup_watcher_pid=$(spawn_cleanup_watcher "$tracked_pid" "$metadata_file" "$payload_file")
+                GPG_TOUCHID_METADATA_PATH="$metadata_file" exec "$gpg_bin" "$@" <"$payload_file"
+
+                # exec only returns if launching gpg fails.
+                status=$?
+                if [ -n "$cleanup_watcher_pid" ]; then
+                  kill "$cleanup_watcher_pid" 2>/dev/null || true
+                  wait "$cleanup_watcher_pid" 2>/dev/null || true
+                fi
+                cleanup
                 return "$status"
               }
 
