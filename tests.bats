@@ -194,6 +194,44 @@ PY
   rm -f "$extracted"
 }
 
+materialize_vm_gpg_touchid_bridge() {
+  local bridge_path="$1"
+  local fake_fallback="$2"
+  local broker_socket="$3"
+  local extracted
+
+  extracted=$(mktemp)
+  extract_write_textfile_script_by_anchor \
+    "den/aspects/hosts/vm-aarch64.nix" \
+    'mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {' >"$extracted"
+
+  python3 - "$bridge_path" "$fake_fallback" "$broker_socket" "$extracted" <<'PY'
+from pathlib import Path
+import sys
+
+bridge_path = Path(sys.argv[1])
+fake_fallback = sys.argv[2]
+broker_socket = sys.argv[3]
+extracted = Path(sys.argv[4])
+text = extracted.read_text()
+text = text.replace("#!${pkgs.python3}/bin/python3", "#!/usr/bin/env python3", 1)
+text = text.replace(
+    'BROKER_SOCKET = "${vmTouchIdUserBrokerSocket}"',
+    f"BROKER_SOCKET = {broker_socket!r}",
+    1,
+)
+text = text.replace(
+    'LOCAL_FALLBACK = "${pkgs.wayprompt}/bin/pinentry-wayprompt"',
+    f"LOCAL_FALLBACK = {fake_fallback!r}",
+    1,
+)
+bridge_path.write_text(text)
+bridge_path.chmod(0o755)
+PY
+
+  rm -f "$extracted"
+}
+
 create_fake_touchid_pinentry_backend() {
   local fake_real="$1"
 
@@ -3918,6 +3956,134 @@ if "get-gpg-secret" not in ops:
 PY
   rm -f "$broker_script"
   [ "$status" -eq 0 ] || fail "$output"
+}
+
+# bats test_tags=gpg
+@test "gpg: vm bridge pinentry prefers brokered commit-time secret lookup" {
+  local tmpdir bridge fallback broker_socket metadata fallback_log tty_name
+  tmpdir=$(mktemp -d)
+  bridge="$tmpdir/vm-gpg-pinentry-bridge"
+  fallback="$tmpdir/fake-pinentry-fallback"
+  broker_socket="$tmpdir/broker.sock"
+  fallback_log="$tmpdir/fallback.log"
+  tty_name="/dev/ttys-test"
+  metadata=$(gpg_touchid_test_metadata_path_for_tty "$tmpdir/cache" "$tty_name")
+  mkdir -p "$(dirname "$metadata")"
+
+  cat >"$metadata" <<'EOF'
+payload_kind=commit
+payload_subject=feat: broker-aware vm signing
+signer_name=Example Committer
+signer_email=committer@example.com
+repo_name=nix
+repo_branch=feature/vm-gpg-touchid-signing
+EOF
+
+  create_fake_touchid_pinentry_backend "$fallback"
+  : >"$fallback_log"
+  materialize_vm_gpg_touchid_bridge "$bridge" "$fallback" "$broker_socket"
+
+  run python3 - "$bridge" "$broker_socket" "$fallback_log" "$tty_name" <<'PY'
+from pathlib import Path
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+
+bridge_path, broker_socket, fallback_log, tty_name = sys.argv[1:5]
+request_payloads = []
+server_errors = []
+server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+server.bind(broker_socket)
+server.listen(1)
+
+def serve():
+    try:
+        conn, _ = server.accept()
+        with conn:
+            request = b""
+            while not request.endswith(b"\n"):
+                chunk = conn.recv(4096)
+                if not chunk:
+                    raise RuntimeError("bridge closed before sending a complete request")
+                request += chunk
+            request_payloads.append(json.loads(request.decode("utf-8")))
+            conn.sendall(json.dumps({"ok": True, "secret": "brokered-commit-secret"}).encode("utf-8") + b"\n")
+    except Exception as exc:
+        server_errors.append(repr(exc))
+    finally:
+        server.close()
+
+thread = threading.Thread(target=serve)
+thread.start()
+
+def contains_mapping(node, expected):
+    if isinstance(node, dict):
+        if all(node.get(key) == value for key, value in expected.items()):
+            return True
+        return any(contains_mapping(value, expected) for value in node.values())
+    if isinstance(node, list):
+        return any(contains_mapping(value, expected) for value in node)
+    return False
+
+env = os.environ.copy()
+env["XDG_CACHE_HOME"] = str(Path(bridge_path).parent / "cache")
+env["FAKE_TOUCHID_PINENTRY_LOG"] = fallback_log
+proc = subprocess.run(
+    [bridge_path],
+    input=(
+        f"OPTION ttyname={tty_name}\n"
+        'SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"\n'
+        "GETPIN\n"
+        "BYE\n"
+    ),
+    capture_output=True,
+    text=True,
+    env=env,
+    check=False,
+)
+thread.join(timeout=10)
+if thread.is_alive():
+    print("fake broker thread did not finish", file=sys.stderr)
+    sys.exit(1)
+if server_errors:
+    print(f"fake broker failed: {server_errors}", file=sys.stderr)
+    sys.exit(1)
+if proc.returncode != 0:
+    print(proc.stdout, file=sys.stderr)
+    print(proc.stderr, file=sys.stderr)
+    raise SystemExit(proc.returncode)
+if len(request_payloads) != 1:
+    print(f"expected exactly one broker request, got {request_payloads!r}", file=sys.stderr)
+    sys.exit(1)
+request = request_payloads[0]
+if request.get("op") != "get-gpg-secret":
+    print(f"expected get-gpg-secret broker op, got {request!r}", file=sys.stderr)
+    sys.exit(1)
+expected_context = {
+    "payload_kind": "commit",
+    "payload_subject": "feat: broker-aware vm signing",
+    "signer_name": "Example Committer",
+    "signer_email": "committer@example.com",
+    "repo_name": "nix",
+    "repo_branch": "feature/vm-gpg-touchid-signing",
+}
+if not contains_mapping(request, expected_context):
+    print(f"broker request should include commit metadata context, got {request!r}", file=sys.stderr)
+    sys.exit(1)
+if Path(fallback_log).read_text() != "":
+    print(f"fallback pinentry should stay unused on broker success, got log {Path(fallback_log).read_text()!r}", file=sys.stderr)
+    sys.exit(1)
+output = proc.stdout
+if "D brokered-commit-secret\nOK\n" not in output:
+    print(f"bridge should emit broker secret via Assuan data response, got {output!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
 }
 
 # bats test_tags=gpg

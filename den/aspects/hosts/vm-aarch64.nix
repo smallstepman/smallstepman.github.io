@@ -19,12 +19,15 @@
           macTouchIdKnownHostsEntry = "192.168.130.1 ${builtins.readFile (generated.requireFile "mac-host-ssh-ed25519.pub")}";
 
           mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {
-            name = "rbw-pinentry-touchid-bridge-fallback";
-            destination = "/bin/rbw-pinentry-touchid-bridge";
+            name = "vm-gpg-touchid-pinentry-bridge";
+            destination = "/bin/vm-gpg-touchid-pinentry-bridge";
             executable = true;
             text = ''
               #!${pkgs.python3}/bin/python3
               import json
+              import os
+              from pathlib import Path
+              import re
               import socket
               import subprocess
               import sys
@@ -35,6 +38,10 @@
               BROKER_CONNECT_TIMEOUT_SECONDS = 2.0
               BROKER_RESPONSE_TIMEOUT_SECONDS = 60.0
               OK = "OK\n"
+
+
+              class BrokerCancelled(Exception):
+                  pass
 
 
               class PinentryProcess:
@@ -77,12 +84,93 @@
                   return urllib.parse.quote(value, safe="")
 
 
-              def broker_get_secret():
+              def metadata_path_from_tty(tty_name):
+                  if not tty_name:
+                      return None
+
+                  cache_home = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
+                  tty_key = re.sub(r"[^A-Za-z0-9._-]", "_", tty_name)
+                  return cache_home / "gpg-touchid-signing-prompts" / f"{tty_key}.metadata"
+
+
+              def load_signing_context(tty_name):
+                  metadata_path = metadata_path_from_tty(tty_name)
+                  if metadata_path is None or not metadata_path.is_file():
+                      return None
+
+                  try:
+                      pairs = {}
+                      for raw_line in metadata_path.read_text().splitlines():
+                          if "=" not in raw_line:
+                              continue
+                          key, value = raw_line.split("=", 1)
+                          pairs[key] = value
+                  except Exception:
+                      return None
+
+                  payload_kind = pairs.get("payload_kind") or ""
+                  if payload_kind not in {"commit", "tag"}:
+                      return None
+
+                  if not any(
+                      pairs.get(key)
+                      for key in (
+                          "payload_subject",
+                          "signer_name",
+                          "signer_email",
+                          "repo_name",
+                          "repo_branch",
+                          "tag_name",
+                      )
+                  ):
+                      return None
+
+                  return {
+                      "payload_kind": payload_kind,
+                      "payload_subject": pairs.get("payload_subject") or "",
+                      "tag_name": pairs.get("tag_name") or "",
+                      "signer_name": pairs.get("signer_name") or "",
+                      "signer_email": pairs.get("signer_email") or "",
+                      "repo_name": pairs.get("repo_name") or "",
+                      "repo_branch": pairs.get("repo_branch") or "detached",
+                  }
+
+
+              def broker_request_payload(signing_context):
+                  if signing_context is None:
+                      return {"op": "get-secret"}
+                  return {
+                      "op": "get-gpg-secret",
+                      "context": signing_context,
+                  }
+
+
+              def broker_cancelled(payload):
+                  if payload.get("cancelled") is True:
+                      return True
+
+                  for key in ("status", "error", "code"):
+                      value = payload.get(key)
+                      if not isinstance(value, str):
+                          continue
+                      normalized = value.strip().lower().replace("_", "-")
+                      if normalized in {
+                          "cancelled",
+                          "user-cancelled",
+                          "operation-cancelled",
+                      }:
+                          return True
+
+                  return False
+
+
+              def broker_get_secret(signing_context=None):
                   with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
                       client.settimeout(BROKER_CONNECT_TIMEOUT_SECONDS)
                       client.connect(BROKER_SOCKET)
                       client.settimeout(BROKER_RESPONSE_TIMEOUT_SECONDS)
-                      client.sendall(b'{"op":"get-secret"}\n')
+                      request = broker_request_payload(signing_context)
+                      client.sendall(json.dumps(request).encode("utf-8") + b"\n")
 
                       response = bytearray()
                       while not response.endswith(b"\n"):
@@ -92,13 +180,19 @@
                           response.extend(chunk)
 
                   payload = json.loads(response.decode("utf-8"))
+                  if payload.get("ok"):
+                      secret = payload.get("secret")
+                      if not isinstance(secret, str) or secret == "":
+                          raise RuntimeError("broker returned an empty secret")
+                      return secret
+
+                  if broker_cancelled(payload):
+                      raise BrokerCancelled()
+
                   if not payload.get("ok"):
                       raise RuntimeError(payload.get("error") or "broker request failed")
 
-                  secret = payload.get("secret")
-                  if not isinstance(secret, str) or secret == "":
-                      raise RuntimeError("broker returned an empty secret")
-                  return secret
+                  raise RuntimeError("broker request failed")
 
 
               def activate_fallback(history):
@@ -114,11 +208,23 @@
                   sys.stdout.flush()
 
 
+              def write_assuan_secret(secret):
+                  sys.stdout.write(f"D {encode_data(secret)}\n")
+                  sys.stdout.write(OK)
+                  sys.stdout.flush()
+
+
+              def write_assuan_cancel():
+                  sys.stdout.write("ERR 83886179 Operation cancelled <Pinentry>\n")
+                  sys.stdout.flush()
+
+
               def main():
                   fallback = None
                   history = []
+                  signing_context = None
 
-                  sys.stdout.write("OK Pleased to meet you, broker touchid fallback ready\n")
+                  sys.stdout.write("OK Pleased to meet you, broker touchid pinentry ready\n")
                   sys.stdout.flush()
 
                   try:
@@ -127,17 +233,26 @@
                               emit(fallback.command(raw))
                               continue
 
+                          if raw.startswith("OPTION ttyname="):
+                              tty_name = raw.split("=", 1)[1].rstrip("\n")
+                              signing_context = load_signing_context(tty_name)
+                              history.append(raw)
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
                           if raw == "GETPIN\n":
                               try:
-                                  secret = broker_get_secret()
+                                  secret = broker_get_secret(signing_context)
+                              except BrokerCancelled:
+                                  write_assuan_cancel()
+                                  continue
                               except Exception:
                                   fallback = activate_fallback(history)
                                   emit(fallback.command(raw))
                                   continue
 
-                              sys.stdout.write(f"D {encode_data(secret)}\n")
-                              sys.stdout.write(OK)
-                              sys.stdout.flush()
+                              write_assuan_secret(secret)
                               continue
 
                           if raw == "BYE\n":
@@ -506,6 +621,204 @@
           let
             vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";
             rbwPinentryTouchIdBrokerTunnel = mkRbwPinentryTouchIdBrokerTunnel pkgs;
+            vmGpgTouchIdPinentry = mkRbwPinentryTouchIdBridge pkgs;
+
+            vmGitSigningWrapper = pkgs.writeShellScriptBin "vm-gpg-touchid-signing" ''
+              vm_gpg_touchid_parse_identity() {
+                local identity="$1"
+                local parsed_name=""
+                local parsed_email=""
+
+                if [ "$identity" != "''${identity#* <}" ]; then
+                  parsed_name="''${identity%% <*}"
+                  parsed_email="''${identity#*<}"
+                  parsed_email="''${parsed_email%%>*}"
+                fi
+
+                printf '%s\n%s\n' "$parsed_name" "$parsed_email"
+              }
+
+              vm_gpg_touchid_parse_signing_payload() {
+                local payload="$1"
+                local line
+                local in_headers=1
+                local author_name=""
+                local author_email=""
+                local parsed_identity
+
+                VM_GPG_TOUCHID_PAYLOAD_KIND="unknown"
+                VM_GPG_TOUCHID_PAYLOAD_SUBJECT=""
+                VM_GPG_TOUCHID_TAG_NAME=""
+                VM_GPG_TOUCHID_SIGNER_NAME=""
+                VM_GPG_TOUCHID_SIGNER_EMAIL=""
+
+                while IFS= read -r line || [ -n "$line" ]; do
+                  if [ "$in_headers" -eq 1 ]; then
+                    case "$line" in
+                      tree\ *)
+                        VM_GPG_TOUCHID_PAYLOAD_KIND="commit"
+                        ;;
+                      author\ *)
+                        parsed_identity=$(vm_gpg_touchid_parse_identity "''${line#author }")
+                        author_name=$(printf '%s\n' "$parsed_identity" | sed -n '1p')
+                        author_email=$(printf '%s\n' "$parsed_identity" | sed -n '2p')
+                        ;;
+                      committer\ *)
+                        parsed_identity=$(vm_gpg_touchid_parse_identity "''${line#committer }")
+                        VM_GPG_TOUCHID_SIGNER_NAME=$(printf '%s\n' "$parsed_identity" | sed -n '1p')
+                        VM_GPG_TOUCHID_SIGNER_EMAIL=$(printf '%s\n' "$parsed_identity" | sed -n '2p')
+                        ;;
+                      object\ *)
+                        if [ "$VM_GPG_TOUCHID_PAYLOAD_KIND" = "unknown" ]; then
+                          VM_GPG_TOUCHID_PAYLOAD_KIND="tag"
+                        fi
+                        ;;
+                      tag\ *)
+                        VM_GPG_TOUCHID_TAG_NAME="''${line#tag }"
+                        ;;
+                      tagger\ *)
+                        parsed_identity=$(vm_gpg_touchid_parse_identity "''${line#tagger }")
+                        VM_GPG_TOUCHID_SIGNER_NAME=$(printf '%s\n' "$parsed_identity" | sed -n '1p')
+                        VM_GPG_TOUCHID_SIGNER_EMAIL=$(printf '%s\n' "$parsed_identity" | sed -n '2p')
+                        ;;
+                      "")
+                        in_headers=0
+                        ;;
+                    esac
+                    continue
+                  fi
+
+                  if [ -n "$line" ]; then
+                    VM_GPG_TOUCHID_PAYLOAD_SUBJECT="$line"
+                    break
+                  fi
+                done <<< "$payload"
+
+                if [ -z "$VM_GPG_TOUCHID_SIGNER_NAME" ] && [ -z "$VM_GPG_TOUCHID_SIGNER_EMAIL" ]; then
+                  VM_GPG_TOUCHID_SIGNER_NAME="$author_name"
+                  VM_GPG_TOUCHID_SIGNER_EMAIL="$author_email"
+                fi
+              }
+
+              vm_gpg_touchid_derive_repo_context() {
+                local common_dir
+                local repo_root
+
+                VM_GPG_TOUCHID_REPO_NAME=""
+                VM_GPG_TOUCHID_REPO_BRANCH=""
+
+                common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+                case "$common_dir" in
+                  */.git)
+                    VM_GPG_TOUCHID_REPO_NAME=$(basename "$(dirname "$common_dir")")
+                    ;;
+                  ?*)
+                    VM_GPG_TOUCHID_REPO_NAME=$(basename "$common_dir")
+                    ;;
+                esac
+
+                if [ -z "$VM_GPG_TOUCHID_REPO_NAME" ]; then
+                  repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+                  if [ -n "$repo_root" ]; then
+                    VM_GPG_TOUCHID_REPO_NAME=$(basename "$repo_root")
+                  fi
+                fi
+
+                VM_GPG_TOUCHID_REPO_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+                if [ -z "$VM_GPG_TOUCHID_REPO_BRANCH" ]; then
+                  VM_GPG_TOUCHID_REPO_BRANCH="detached"
+                fi
+              }
+
+              vm_gpg_touchid_cleanup_file() {
+                local path="''${1:-}"
+
+                if [ -n "$path" ] && [ -e "$path" ]; then
+                  rm -f -- "$path"
+                fi
+              }
+
+              vm_gpg_touchid_metadata_path_for_tty() {
+                local tty_name="$1"
+                local metadata_dir
+                local tty_key
+
+                if [ -z "$tty_name" ]; then
+                  return 1
+                fi
+
+                metadata_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/gpg-touchid-signing-prompts"
+                tty_key=$(printf '%s' "$tty_name" | LC_ALL=C tr -c 'A-Za-z0-9._-' '_')
+                mkdir -p "$metadata_dir"
+                printf '%s/%s.metadata\n' "$metadata_dir" "$tty_key"
+              }
+
+              vm_gpg_touchid_write_signing_metadata_file() {
+                local payload="$1"
+                local tty_name="$2"
+                local metadata_file
+
+                if [ -z "$tty_name" ]; then
+                  return 1
+                fi
+
+                vm_gpg_touchid_parse_signing_payload "$payload"
+                vm_gpg_touchid_derive_repo_context
+
+                metadata_file=$(vm_gpg_touchid_metadata_path_for_tty "$tty_name") || return 1
+
+                : >"$metadata_file"
+                chmod 600 "$metadata_file"
+
+                {
+                  printf 'payload_kind=%s\n' "$VM_GPG_TOUCHID_PAYLOAD_KIND"
+                  printf 'payload_subject=%s\n' "$VM_GPG_TOUCHID_PAYLOAD_SUBJECT"
+                  printf 'tag_name=%s\n' "$VM_GPG_TOUCHID_TAG_NAME"
+                  printf 'signer_name=%s\n' "$VM_GPG_TOUCHID_SIGNER_NAME"
+                  printf 'signer_email=%s\n' "$VM_GPG_TOUCHID_SIGNER_EMAIL"
+                  printf 'repo_name=%s\n' "$VM_GPG_TOUCHID_REPO_NAME"
+                  printf 'repo_branch=%s\n' "$VM_GPG_TOUCHID_REPO_BRANCH"
+                } >"$metadata_file"
+
+                printf '%s\n' "$metadata_file"
+              }
+
+              vm_gpg_touchid_exec_gpg_with_metadata() {
+                local gpg_bin="''${GPG_TOUCHID_GPG_BIN:-${pkgs.gnupg}/bin/gpg}"
+                local payload_file=""
+                local metadata_file=""
+                local payload=""
+                local tty_name=""
+                local status
+
+                cleanup() {
+                  vm_gpg_touchid_cleanup_file "$metadata_file"
+                  vm_gpg_touchid_cleanup_file "$payload_file"
+                }
+
+                trap cleanup EXIT HUP INT TERM
+
+                payload_file=$(mktemp "''${TMPDIR:-/tmp}/vm-gpg-touchid-signing-payload.XXXXXX")
+                cat >"$payload_file"
+                payload=$(cat "$payload_file")
+                tty_name="''${GPG_TTY:-}"
+                if [ -z "$tty_name" ]; then
+                  tty_name=$(tty 2>/dev/null || true)
+                fi
+                if [ -n "$tty_name" ] && [ "$tty_name" != "not a tty" ]; then
+                  metadata_file=$(vm_gpg_touchid_write_signing_metadata_file "$payload" "$tty_name" || true)
+                fi
+
+                GPG_TOUCHID_METADATA_PATH="$metadata_file" "$gpg_bin" "$@" <"$payload_file"
+                status=$?
+
+                cleanup
+                trap - EXIT HUP INT TERM
+                return "$status"
+              }
+
+              vm_gpg_touchid_exec_gpg_with_metadata "$@"
+            '';
 
             kubePassthroughBroker = pkgs.writeShellApplication {
               name = "kubectl-passthrough-broker";
@@ -862,11 +1175,14 @@ EOF
             };
 
             programs.git.signing.key = vmGitSigningKey;
-            programs.git.settings.gpg.program = "${pkgs.gnupg}/bin/gpg";
+            programs.git.settings.gpg.program = "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
             programs.git.package = repairingGit;
 
-            services.gpg-agent.pinentry.package = pkgs.pinentry-tty;
-            services.gpg-agent.extraConfig = "allow-preset-passphrase";
+            services.gpg-agent.pinentry.package = vmGpgTouchIdPinentry;
+            services.gpg-agent.extraConfig = ''
+              allow-preset-passphrase
+              pinentry-program ${vmGpgTouchIdPinentry}/bin/vm-gpg-touchid-pinentry-bridge
+            '';
 
             programs.ssh = {
               enable = true;
