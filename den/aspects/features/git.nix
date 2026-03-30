@@ -96,6 +96,9 @@
                   raise SystemExit(proc.wait())
                 '';
               };
+              darwinGitSigningWrapper = pkgs.writeShellScriptBin "gpg-touchid-signing-prompt" ''
+                exec /opt/homebrew/bin/gpg "$@"
+              '';
             in {
 
             home.packages = [
@@ -158,10 +161,12 @@
                   root      = "rev-parse --show-toplevel";
                   ce        = "git commit --amend --no-edit";
                 };
-              } // (lib.optionalAttrs isLinux {
-                "credential \"https://github.com\"".helper  = "github";
-                "credential \"https://gist.github.com\"".helper = "github";
-              });
+                } // (lib.optionalAttrs isLinux {
+                  "credential \"https://github.com\"".helper  = "github";
+                  "credential \"https://gist.github.com\"".helper = "github";
+                }) // (lib.optionalAttrs isDarwin {
+                  gpg.program = "${darwinGitSigningWrapper}/bin/gpg-touchid-signing-prompt";
+                });
 
               signing.signByDefault = true;
             };

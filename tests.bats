@@ -3601,15 +3601,24 @@ PY
 }
 
 # bats test_tags=gpg
-@test "gpg: git gpg.program is set to gpg on vm-aarch64 and homebrew gpg on macbook-pro-m1" {
+@test "gpg: git gpg.program is set to gpg on vm-aarch64" {
   local actual
 
   actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.git.settings.gpg.program)
   [[ "$actual" == *gpg* ]] \
     || fail "vm-aarch64 git gpg.program '$actual' does not reference gpg"
+}
+
+# bats test_tags=gpg
+@test "gpg: macbook-pro-m1 git gpg.program uses a repo-managed wrapper instead of homebrew gpg directly" {
+  local actual
 
   actual=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.git.settings.gpg.program)
-  assert_equal "$actual" "/opt/homebrew/bin/gpg"
+
+  [[ "$actual" == /nix/store/*/bin/* ]] \
+    || fail "macbook-pro-m1 git gpg.program should evaluate to a repo-managed wrapper path, got '$actual'"
+  [[ "$actual" != "/opt/homebrew/bin/gpg" ]] \
+    || fail "macbook-pro-m1 git gpg.program should not point directly at /opt/homebrew/bin/gpg"
 }
 
 
