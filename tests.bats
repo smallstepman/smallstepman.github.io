@@ -155,6 +155,11 @@ text = text.replace(
     f"REAL = {fake_real!r}",
     1,
 )
+text = text.replace(
+    'os.environ.get("GPG_TOUCHID_COMMIT_HELPER") or "${darwinGitCommitTouchIdGetPin}/bin/gpg-touchid-commit-get-pin"',
+    'os.environ.get("GPG_TOUCHID_COMMIT_HELPER") or "/nonexistent-git-commit-helper"',
+    1,
+)
 wrapper_path.write_text(text)
 wrapper_path.chmod(0o755)
 PY
@@ -185,6 +190,25 @@ done
 EOF
 
   chmod +x "$fake_real"
+}
+
+create_fake_git_touchid_commit_helper() {
+  local helper_path="$1"
+
+  cat >"$helper_path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+{
+  printf 'payload_kind=%s\n' "${GPG_TOUCHID_PAYLOAD_KIND-}"
+  printf 'prompt_desc=%s\n' "${GPG_TOUCHID_PROMPT_DESC-}"
+  printf 'keychain_label=%s\n' "${GPG_TOUCHID_KEYCHAIN_LABEL-}"
+} >"$FAKE_GIT_TOUCHID_HELPER_LOG"
+
+printf '%s' "${FAKE_GIT_TOUCHID_HELPER_SECRET:-git-commit-secret}"
+EOF
+
+  chmod +x "$helper_path"
 }
 
 assert_logged_setdesc_decodes_to() {
@@ -223,7 +247,7 @@ create_fake_gpg_touchid_signing_wrapper_probe() {
 #!/usr/bin/env bash
 set -euo pipefail
 
-metadata_path="${PINENTRY_USER_DATA-}"
+metadata_path="${GPG_TOUCHID_METADATA_PATH-}"
 metadata_mode="missing"
 metadata_exists="no"
 
@@ -251,6 +275,15 @@ cat >/dev/null
 EOF
 
   chmod +x "$fake_gpg"
+}
+
+gpg_touchid_test_metadata_path_for_tty() {
+  local cache_home="$1"
+  local tty_name="$2"
+  local key
+
+  key=$(printf '%s' "$tty_name" | LC_ALL=C tr -c 'A-Za-z0-9._-' '_')
+  printf '%s/gpg-touchid-signing-prompts/%s.metadata\n' "$cache_home" "$key"
 }
 
 
@@ -3797,6 +3830,65 @@ PY
 }
 
 # bats test_tags=gpg
+@test "gpg: macbook-pro-m1 manages ~/.gitconfig shim so repo git config overrides legacy gpg.program" {
+  local actual shim tmpdir
+
+  actual=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.file \
+    'files: if files ? ".gitconfig" then "true" else "false"')
+  assert_equal "$actual" "true"
+
+  shim=$(nix_eval_apply_raw \
+    ".#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.home.file.\".gitconfig\".text" \
+    'text: text')
+
+  [[ "$shim" == *"path = ~/.gitconfig.backup"* ]] \
+    || fail "managed ~/.gitconfig should include the legacy backup first; got: $shim"
+  [[ "$shim" == *"path = ~/.config/git/config"* ]] \
+    || fail "managed ~/.gitconfig should include the XDG git config; got: $shim"
+
+  tmpdir=$(mktemp -d)
+  mkdir -p "$tmpdir/home/.config/git"
+  printf '%s' "$shim" > "$tmpdir/home/.gitconfig"
+  cat >"$tmpdir/home/.gitconfig.backup" <<'EOF'
+[gpg]
+	program = /opt/homebrew/bin/gpg
+EOF
+  cat >"$tmpdir/home/.config/git/config" <<'EOF'
+[gpg]
+	program = /nix/store/example-wrapper/bin/gpg-touchid-signing-prompt
+EOF
+
+  actual=$(HOME="$tmpdir/home" GIT_CONFIG_NOSYSTEM=1 git config --get gpg.program)
+  assert_equal "$actual" "/nix/store/example-wrapper/bin/gpg-touchid-signing-prompt"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: macbook-pro-m1 git openpgp.program uses the repo-managed signing wrapper" {
+  local config_text section
+
+  config_text=$(nix_eval_apply_raw \
+    .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.xdg.configFile \
+    'cfg: builtins.readFile cfg."git/config".source')
+
+  section=$(printf '%s\n' "$config_text" | awk '
+    /^\[gpg "openpgp"\]/ { in_section=1; print; next }
+    /^\[/ && in_section { exit }
+    in_section { print }
+  ')
+
+  [[ "$section" == *'[gpg "openpgp"]'* ]] \
+    || fail "missing [gpg \"openpgp\"] section in generated git config: $config_text"
+  [[ "$section" == *'gpg-touchid-signing-prompt/bin/gpg-touchid-signing-prompt'* ]] \
+    || fail "[gpg \"openpgp\"] should point at the repo-managed signing wrapper, got: $section"
+  if printf '%s\n' "$section" | grep -Eq 'program = ".*/bin/gpg"$'; then
+    fail "[gpg \"openpgp\"] should not point directly at plain gpg, got: $section"
+  fi
+}
+
+# bats test_tags=gpg
 @test "gpg: signing wrapper helper parses commit payloads directly" {
   local commit_payload
   commit_payload=$(cat <<'EOF'
@@ -3877,6 +3969,7 @@ EOF
   cd detached-repo
   git config user.name "Example Committer"
   git config user.email "committer@example.com"
+  git config commit.gpgsign false
   printf 'hello\n' >README.md
   git add README.md
   git commit -m "initial commit" >/dev/null
@@ -3892,16 +3985,16 @@ EOF
 }
 
 # bats test_tags=gpg
-@test "gpg: signing wrapper creates a 0600 temp metadata file before invoking gpg" {
+@test "gpg: signing wrapper creates a 0600 tty-keyed metadata file before invoking gpg" {
   local payload tmpdir fake_gpg probe_output metadata_mode metadata_exists
   payload=$(cat <<'EOF'
 tree 0123456789abcdef0123456789abcdef01234567
 author Example Author <author@example.com> 1711752960 +0000
 committer Example Committer <committer@example.com> 1711753020 +0000
 
-feat: hand off signing metadata through a temp file
+feat: hand off signing metadata through a tty-keyed file
 EOF
-)
+  )
   tmpdir=$(mktemp -d)
   fake_gpg="$tmpdir/fake-gpg"
   probe_output="$tmpdir/probe-output"
@@ -3910,6 +4003,8 @@ EOF
   load_gpg_touchid_signing_helpers
 
   TMPDIR="$tmpdir" \
+  XDG_CACHE_HOME="$tmpdir/cache" \
+  GPG_TTY="/dev/ttys-test" \
   GPG_TOUCHID_GPG_BIN="$fake_gpg" \
   GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output" \
     gpg_touchid_exec_gpg_with_metadata --detach-sign <<<"$payload"
@@ -3926,16 +4021,16 @@ EOF
 }
 
 # bats test_tags=gpg
-@test "gpg: signing wrapper passes only the metadata file path via PINENTRY_USER_DATA" {
-  local payload tmpdir fake_gpg probe_output pinentry_user_data
+@test "gpg: signing wrapper passes only the metadata file path via GPG_TOUCHID_METADATA_PATH" {
+  local payload tmpdir fake_gpg probe_output metadata_path
   payload=$(cat <<'EOF'
 tree 0123456789abcdef0123456789abcdef01234567
 author Example Author <author@example.com> 1711752960 +0000
 committer Example Committer <committer@example.com> 1711753020 +0000
 
-feat: keep metadata out of PINENTRY_USER_DATA
+feat: keep metadata out of GPG_TOUCHID_METADATA_PATH contents
 EOF
-)
+  )
   tmpdir=$(mktemp -d)
   fake_gpg="$tmpdir/fake-gpg"
   probe_output="$tmpdir/probe-output"
@@ -3944,18 +4039,20 @@ EOF
   load_gpg_touchid_signing_helpers
 
   TMPDIR="$tmpdir" \
+  XDG_CACHE_HOME="$tmpdir/cache" \
+  GPG_TTY="/dev/ttys-test" \
   GPG_TOUCHID_GPG_BIN="$fake_gpg" \
   GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output" \
     gpg_touchid_exec_gpg_with_metadata --detach-sign <<<"$payload"
 
-  pinentry_user_data=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
+  metadata_path=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
 
-  [[ "$pinentry_user_data" == "$tmpdir"/* ]] \
-    || fail "expected PINENTRY_USER_DATA to contain only the metadata temp-file path, got '$pinentry_user_data'"
-  [[ "$pinentry_user_data" != *$'\n'* ]] \
-    || fail "PINENTRY_USER_DATA should be a single temp-file path"
-  [[ "$pinentry_user_data" != *payload_kind* ]] \
-    || fail "PINENTRY_USER_DATA should not inline metadata contents"
+  [[ "$metadata_path" == "$tmpdir/cache"/gpg-touchid-signing-prompts/* ]] \
+    || fail "expected GPG_TOUCHID_METADATA_PATH to contain only the tty-keyed metadata file path, got '$metadata_path'"
+  [[ "$metadata_path" != *$'\n'* ]] \
+    || fail "GPG_TOUCHID_METADATA_PATH should be a single metadata file path"
+  [[ "$metadata_path" != *payload_kind* ]] \
+    || fail "GPG_TOUCHID_METADATA_PATH should not inline metadata contents"
 
   rm -rf "$tmpdir"
 }
@@ -3979,6 +4076,8 @@ EOF
   load_gpg_touchid_signing_helpers
 
   TMPDIR="$tmpdir" \
+  XDG_CACHE_HOME="$tmpdir/cache" \
+  GPG_TTY="/dev/ttys-test" \
   GPG_TOUCHID_GPG_BIN="$fake_gpg" \
   GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output" \
     gpg_touchid_exec_gpg_with_metadata --detach-sign <<<"$payload"
@@ -3992,12 +4091,15 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper rewrites git signing title and description from metadata" {
-  local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc
+  local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc cache_home tty_name
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
-  metadata="$tmpdir/signing-metadata"
   command_log="$tmpdir/fake-pinentry.log"
+  cache_home="$tmpdir/cache"
+  tty_name="/dev/ttys-test"
+  metadata=$(gpg_touchid_test_metadata_path_for_tty "$cache_home" "$tty_name")
+  mkdir -p "$(dirname "$metadata")"
 
   cat >"$metadata" <<'EOF'
 payload_kind=commit
@@ -4013,15 +4115,17 @@ EOF
   materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
 
   : >"$command_log"
-  PINENTRY_USER_DATA="$metadata" \
+  XDG_CACHE_HOME="$cache_home" \
   FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
     "$wrapper" <<'EOF' >/dev/null
+OPTION ttyname=/dev/ttys-test
 SETTITLE "Passphrase Required"
 SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
 GETPIN
 EOF
 
   expected_log=$(cat <<'EOF'
+OPTION ttyname=/dev/ttys-test
 SETTITLE "GPG commit signing"
 SETDESC "Repo: nix%0ABranch: gpg-touchid-signing-prompt%0ACommit: feat: tighten signing prompt metadata%0ASigner: Example Committer <committer@example.com>"
 GETPIN
@@ -4048,13 +4152,81 @@ EOF
 }
 
 # bats test_tags=gpg
-@test "gpg: repo-managed pinentry wrapper rewrites git tag signing title and description from metadata" {
-  local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc
+@test "gpg: repo-managed pinentry wrapper can satisfy commit GETPIN via custom touchid helper" {
+  local tmpdir wrapper fake_real helper metadata command_log helper_log output_log cache_home tty_name actual_helper_log expected_helper_log
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
-  metadata="$tmpdir/signing-metadata"
+  helper="$tmpdir/fake-git-touchid-commit-helper"
   command_log="$tmpdir/fake-pinentry.log"
+  helper_log="$tmpdir/fake-git-touchid-helper.log"
+  output_log="$tmpdir/wrapper-output.log"
+  cache_home="$tmpdir/cache"
+  tty_name="/dev/ttys-test"
+  metadata=$(gpg_touchid_test_metadata_path_for_tty "$cache_home" "$tty_name")
+  mkdir -p "$(dirname "$metadata")"
+
+  cat >"$metadata" <<'EOF'
+payload_kind=commit
+payload_subject=feat: tighten signing prompt metadata
+tag_name=
+signer_name=Example Committer
+signer_email=committer@example.com
+repo_name=nix
+repo_branch=gpg-touchid-signing-prompt
+EOF
+
+  create_fake_touchid_pinentry_backend "$fake_real"
+  create_fake_git_touchid_commit_helper "$helper"
+  materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
+
+  : >"$command_log"
+  : >"$helper_log"
+  XDG_CACHE_HOME="$cache_home" \
+  FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
+  FAKE_GIT_TOUCHID_HELPER_LOG="$helper_log" \
+  GPG_TOUCHID_COMMIT_HELPER="$helper" \
+    "$wrapper" <<'EOF' >"$output_log"
+OPTION ttyname=/dev/ttys-test
+SETKEYINFO n/95F616335AF7ACA7BFC75ADC52039A088277E355
+SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:%0A%22Marcin Nowak Liebiediew <m.liebiediew@gmail.com>%22%0A4096-bit RSA key, ID 0x8B61AF07CA9954EE,%0Acreated 2026-03-11 (main key ID 0x31D3B9C9754C0F5B).%0A"
+SETPROMPT Passphrase:
+GETPIN
+EOF
+
+  if grep -Fqx 'GETPIN' "$command_log"; then
+    fail "git commit signing should not forward GETPIN to the real pinentry when a custom touchid helper is available, got: $(cat "$command_log")"
+  fi
+
+  grep -Fqx 'D git-commit-secret' "$output_log" \
+    || fail "expected wrapper to return helper-provided git commit secret, got: $(cat "$output_log")"
+
+  expected_helper_log=$(cat <<'EOF'
+payload_kind=commit
+prompt_desc=Repo: nix
+Branch: gpg-touchid-signing-prompt
+Commit: feat: tighten signing prompt metadata
+Signer: Example Committer <committer@example.com>
+keychain_label=Marcin Nowak Liebiediew <m.liebiediew@gmail.com> (8B61AF07CA9954EE)
+EOF
+)
+  actual_helper_log=$(cat "$helper_log")
+  assert_equal "$actual_helper_log" "$expected_helper_log"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: repo-managed pinentry wrapper rewrites git tag signing title and description from metadata" {
+  local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc cache_home tty_name
+  tmpdir=$(mktemp -d)
+  wrapper="$tmpdir/pinentry-touchid-wrapper"
+  fake_real="$tmpdir/fake-pinentry-touchid"
+  command_log="$tmpdir/fake-pinentry.log"
+  cache_home="$tmpdir/cache"
+  tty_name="/dev/ttys-test"
+  metadata=$(gpg_touchid_test_metadata_path_for_tty "$cache_home" "$tty_name")
+  mkdir -p "$(dirname "$metadata")"
 
   cat >"$metadata" <<'EOF'
 payload_kind=tag
@@ -4070,15 +4242,17 @@ EOF
   materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
 
   : >"$command_log"
-  PINENTRY_USER_DATA="$metadata" \
+  XDG_CACHE_HOME="$cache_home" \
   FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
     "$wrapper" <<'EOF' >/dev/null
+OPTION ttyname=/dev/ttys-test
 SETTITLE "Passphrase Required"
 SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
 GETPIN
 EOF
 
   expected_log=$(cat <<'EOF'
+OPTION ttyname=/dev/ttys-test
 SETTITLE "GPG tag signing"
 SETDESC "Repo: nix%0ABranch: detached%0ATag: Release v1.2.3%0ASigner: Example Tagger <tagger@example.com>"
 GETPIN
@@ -4106,12 +4280,15 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper falls back when payload kind is unsupported" {
-  local tmpdir wrapper fake_real metadata command_log
+  local tmpdir wrapper fake_real metadata command_log cache_home tty_name
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
-  metadata="$tmpdir/signing-metadata"
   command_log="$tmpdir/fake-pinentry.log"
+  cache_home="$tmpdir/cache"
+  tty_name="/dev/ttys-test"
+  metadata=$(gpg_touchid_test_metadata_path_for_tty "$cache_home" "$tty_name")
+  mkdir -p "$(dirname "$metadata")"
 
   cat >"$metadata" <<'EOF'
 payload_kind=unknown
@@ -4127,9 +4304,10 @@ EOF
   materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
 
   : >"$command_log"
-  PINENTRY_USER_DATA="$metadata" \
+  XDG_CACHE_HOME="$cache_home" \
   FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
     "$wrapper" <<'EOF' >/dev/null
+OPTION ttyname=/dev/ttys-test
 SETTITLE "Passphrase Required"
 SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
 GETPIN
@@ -4153,18 +4331,21 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper falls back to forwarded prompts when signing metadata is absent" {
-  local tmpdir wrapper fake_real command_log
+  local tmpdir wrapper fake_real command_log cache_home
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
   command_log="$tmpdir/fake-pinentry.log"
+  cache_home="$tmpdir/cache"
 
   create_fake_touchid_pinentry_backend "$fake_real"
   materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
 
   : >"$command_log"
+  XDG_CACHE_HOME="$cache_home" \
   FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
     "$wrapper" <<'EOF' >/dev/null
+OPTION ttyname=/dev/ttys-test
 SETTITLE "Passphrase Required"
 SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
 GETPIN

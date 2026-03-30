@@ -11,6 +11,129 @@
         in {
           homeManager = { pkgs, lib, ... }:
             let
+              darwinGitCommitTouchIdGetPin = pkgs.stdenvNoCC.mkDerivation {
+                name = "gpg-touchid-commit-get-pin";
+                dontUnpack = true;
+                buildCommand = ''
+                  set -euo pipefail
+
+                  app="$out/Applications/GPG commit signing.app"
+                  executable="$app/Contents/MacOS/GPG commit signing"
+                  mkdir -p "$app/Contents/MacOS" "$out/bin"
+
+                  cat > "$app/Contents/Info.plist" <<'PLIST'
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                  <plist version="1.0">
+                    <dict>
+                      <key>CFBundleDevelopmentRegion</key>
+                      <string>English</string>
+                      <key>CFBundleDisplayName</key>
+                      <string>GPG commit signing</string>
+                      <key>CFBundleExecutable</key>
+                      <string>GPG commit signing</string>
+                      <key>CFBundleIdentifier</key>
+                      <string>org.nixos.gpg-touchid-commit-get-pin</string>
+                      <key>CFBundleInfoDictionaryVersion</key>
+                      <string>6.0</string>
+                      <key>CFBundleName</key>
+                      <string>GPG commit signing</string>
+                      <key>CFBundlePackageType</key>
+                      <string>APPL</string>
+                      <key>LSUIElement</key>
+                      <true/>
+                    </dict>
+                  </plist>
+                  PLIST
+
+                  cat > "$TMPDIR/gpg-touchid-commit-get-pin.swift" <<'SWIFT'
+                  import Darwin
+                  import Dispatch
+                  import Foundation
+                  import LocalAuthentication
+                  import Security
+
+                  let env = ProcessInfo.processInfo.environment
+                  let keychainLabel = (env["GPG_TOUCHID_KEYCHAIN_LABEL"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                  let fallbackReason = "Unlock the GPG commit signing key"
+                  let promptReason = (env["GPG_TOUCHID_PROMPT_DESC"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                  let reason = promptReason.isEmpty ? fallbackReason : promptReason
+                  let context = LAContext()
+                  var error: NSError?
+
+                  func fail(_ prefix: String, _ message: String, _ code: Int32) -> Never {
+                      FileHandle.standardError.write(Data("\\(prefix): \\(message)\\n".utf8))
+                      Darwin.exit(code)
+                  }
+
+                  guard !keychainLabel.isEmpty else {
+                      fail("gpg-touchid-commit-get-pin", "missing GPG_TOUCHID_KEYCHAIN_LABEL", 2)
+                  }
+
+                  if #available(macOS 10.12.2, *) {
+                      context.touchIDAuthenticationAllowableReuseDuration = 0
+                  }
+
+                  guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+                      fail("gpg-touchid-commit-get-pin", error?.localizedDescription ?? "Touch ID is unavailable", 2)
+                  }
+
+                  let semaphore = DispatchSemaphore(value: 0)
+                  var approved = false
+                  var failureMessage: String?
+
+                  context.evaluatePolicy(
+                      .deviceOwnerAuthenticationWithBiometrics,
+                      localizedReason: reason
+                  ) { success, evalError in
+                      approved = success
+                      if let evalError, !success {
+                          failureMessage = evalError.localizedDescription
+                      }
+                      semaphore.signal()
+                  }
+
+                  semaphore.wait()
+
+                  if !approved {
+                      if let failureMessage {
+                          FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \\(failureMessage)\\n".utf8))
+                      }
+                      Darwin.exit(1)
+                  }
+
+                  let query: [CFString: Any] = [
+                      kSecClass: kSecClassGenericPassword,
+                      kSecAttrService: "GnuPG",
+                      kSecAttrLabel: keychainLabel,
+                      kSecMatchLimit: kSecMatchLimitOne,
+                      kSecReturnData: true,
+                      kSecUseAuthenticationContext: context,
+                  ]
+
+                  var item: CFTypeRef?
+                  let status = SecItemCopyMatching(query as CFDictionary, &item)
+                  guard status == errSecSuccess else {
+                      let message = SecCopyErrorMessageString(status, nil) as String? ?? "Keychain lookup failed (\(status))"
+                      fail("gpg-touchid-commit-get-pin", message, 2)
+                  }
+
+                  guard let data = item as? Data else {
+                      fail("gpg-touchid-commit-get-pin", "Keychain lookup returned no data", 2)
+                  }
+
+                  FileHandle.standardOutput.write(data)
+                  Darwin.exit(0)
+                  SWIFT
+
+                  if ! [ -x /usr/bin/swiftc ]; then
+                    echo "gpg-touchid-commit-get-pin: swiftc not found; install Xcode Command Line Tools (docs/macbook.sh bootstraps them)." >&2
+                    exit 1
+                  fi
+                  /usr/bin/swiftc "$TMPDIR/gpg-touchid-commit-get-pin.swift" -o "$executable"
+                  ln -s "$executable" "$out/bin/gpg-touchid-commit-get-pin"
+                '';
+              };
               darwinRbwPinentryWrapper = pkgs.writeTextFile {
                 name = "rbw-pinentry-touchid";
                 destination = "/bin/rbw-pinentry-touchid";
@@ -20,11 +143,14 @@
                   import hashlib
                   import json
                   import os
+                  import re
                   import subprocess
                   import sys
                   from pathlib import Path
+                  from urllib.parse import unquote
 
                   REAL = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid"
+                  GIT_COMMIT_TOUCHID_HELPER = os.environ.get("GPG_TOUCHID_COMMIT_HELPER") or "${darwinGitCommitTouchIdGetPin}/bin/gpg-touchid-commit-get-pin"
                   CFG = Path.home() / "Library/Application Support/rbw/config.json"
 
                   email = "rbw@local"
@@ -48,14 +174,30 @@
                           .replace("\n", "%0A")
                       )
 
-                  def load_git_signing_prompt():
-                      metadata_path = os.environ.get("PINENTRY_USER_DATA") or ""
-                      if not metadata_path:
+                  def decode_assuan_command_text(command):
+                      if " " not in command:
+                          return ""
+                      payload = command.split(" ", 1)[1].rstrip("\n")
+                      if payload.startswith('"') and payload.endswith('"'):
+                          payload = payload[1:-1]
+                      return unquote(payload)
+
+                  def metadata_path_from_tty(tty_name):
+                      if not tty_name:
+                          return None
+
+                      cache_home = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
+                      tty_key = re.sub(r"[^A-Za-z0-9._-]", "_", tty_name)
+                      return cache_home / "gpg-touchid-signing-prompts" / f"{tty_key}.metadata"
+
+                  def load_git_signing_prompt(tty_name):
+                      metadata_path = metadata_path_from_tty(tty_name)
+                      if metadata_path is None or not metadata_path.is_file():
                           return None
 
                       try:
                           pairs = {}
-                          for raw_line in Path(metadata_path).read_text().splitlines():
+                          for raw_line in metadata_path.read_text().splitlines():
                               if "=" not in raw_line:
                                   continue
                               key, value = raw_line.split("=", 1)
@@ -95,7 +237,56 @@
                       return {
                           "title": title,
                           "desc": prompt_desc,
+                          "display_desc": desc_text,
+                          "payload_kind": payload_kind,
                       }
+
+                  def git_keychain_label(desc_command):
+                      if not desc_command or not desc_command.startswith("SETDESC "):
+                          return None
+
+                      desc_text = decode_assuan_command_text(desc_command)
+                      identity_match = re.search(r'"([^"]+ <[^>]+>)"', desc_text)
+                      key_id_match = re.search(r'ID (?:0x)?([0-9A-Fa-f]+),', desc_text)
+                      if identity_match is None or key_id_match is None:
+                          return None
+
+                      return f"{identity_match.group(1)} ({key_id_match.group(1).upper()})"
+
+                  def write_assuan_secret(secret):
+                      sys.stdout.write(f"D {encode_assuan_data(secret)}\n")
+                      sys.stdout.write("OK\n")
+                      sys.stdout.flush()
+
+                  def write_assuan_cancel():
+                      sys.stdout.write("ERR 83886179 Operation cancelled <Pinentry>\n")
+                      sys.stdout.flush()
+
+                  def run_git_commit_touchid_helper(git_signing_prompt, original_desc):
+                      if not os.path.isfile(GIT_COMMIT_TOUCHID_HELPER) or not os.access(GIT_COMMIT_TOUCHID_HELPER, os.X_OK):
+                          return None
+
+                      keychain_label = git_keychain_label(original_desc)
+                      if not keychain_label:
+                          return None
+
+                      env = os.environ.copy()
+                      env["GPG_TOUCHID_PAYLOAD_KIND"] = git_signing_prompt.get("payload_kind") or ""
+                      env["GPG_TOUCHID_PROMPT_DESC"] = git_signing_prompt.get("display_desc") or ""
+                      env["GPG_TOUCHID_KEYCHAIN_LABEL"] = keychain_label
+                      result = subprocess.run(
+                          [GIT_COMMIT_TOUCHID_HELPER],
+                          capture_output=True,
+                          check=False,
+                          env=env,
+                          text=True,
+                      )
+
+                      if result.returncode == 0:
+                          return {"handled": True, "secret": result.stdout}
+                      if result.returncode == 1:
+                          return {"handled": True, "cancelled": True}
+                      return None
 
                   def is_rbw_desc(command):
                       return "local database for 'rbw'" in command or "Bitwarden" in command
@@ -140,16 +331,36 @@
                       sys.stdout.write(line)
                   sys.stdout.flush()
 
-                  git_signing_prompt = load_git_signing_prompt()
-                  session_kind = "git" if git_signing_prompt is not None else None
+                  git_signing_prompt = None
+                  git_original_desc = None
+                  session_kind = None
 
                   for raw in sys.stdin:
+                      if raw.startswith("OPTION ttyname="):
+                          tty_name = raw.split("=", 1)[1].rstrip("\n")
+                          if session_kind is None:
+                              git_signing_prompt = load_git_signing_prompt(tty_name)
+                              if git_signing_prompt is not None:
+                                  session_kind = "git"
+                          send_and_forward(raw)
+                          continue
                       if session_kind == "git" and raw.startswith("SETTITLE "):
                           send_and_forward(git_signing_prompt["title"] + "\n")
                           continue
                       if session_kind == "git" and raw.startswith("SETDESC "):
+                          if git_original_desc is None:
+                              git_original_desc = raw
                           send_and_forward(git_signing_prompt["desc"] + "\n")
                           continue
+                      if raw == "GETPIN\n" and session_kind == "git" and git_signing_prompt is not None:
+                          if git_signing_prompt.get("payload_kind") == "commit":
+                              helper_result = run_git_commit_touchid_helper(git_signing_prompt, git_original_desc)
+                              if helper_result is not None:
+                                  if helper_result.get("cancelled"):
+                                      write_assuan_cancel()
+                                  else:
+                                      write_assuan_secret(helper_result.get("secret") or "")
+                                  continue
                       if raw.startswith("SETDESC ") and is_rbw_desc(raw):
                           session_kind = "rbw"
                           send_and_forward(desc + "\n")
@@ -285,14 +496,36 @@
                   fi
                 }
 
+                gpg_touchid_metadata_path_for_tty() {
+                  local tty_name="$1"
+                  local metadata_dir
+                  local tty_key
+
+                  if [ -z "$tty_name" ]; then
+                    return 1
+                  fi
+
+                  metadata_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/gpg-touchid-signing-prompts"
+                  tty_key=$(printf '%s' "$tty_name" | LC_ALL=C tr -c 'A-Za-z0-9._-' '_')
+                  mkdir -p "$metadata_dir"
+                  printf '%s/%s.metadata\n' "$metadata_dir" "$tty_key"
+                }
+
                 gpg_touchid_write_signing_metadata_file() {
                   local payload="$1"
+                  local tty_name="$2"
                   local metadata_file
+
+                  if [ -z "$tty_name" ]; then
+                    return 1
+                  fi
 
                   gpg_touchid_parse_signing_payload "$payload"
                   gpg_touchid_derive_repo_context
 
-                  metadata_file=$(mktemp "''${TMPDIR:-/tmp}/gpg-touchid-signing-metadata.XXXXXX")
+                  metadata_file=$(gpg_touchid_metadata_path_for_tty "$tty_name") || return 1
+
+                  : >"$metadata_file"
                   chmod 600 "$metadata_file"
 
                   {
@@ -313,6 +546,7 @@
                   local payload_file=""
                   local metadata_file=""
                   local payload=""
+                  local tty_name=""
                   local status
 
                   cleanup() {
@@ -325,9 +559,15 @@
                   payload_file=$(mktemp "''${TMPDIR:-/tmp}/gpg-touchid-signing-payload.XXXXXX")
                   cat >"$payload_file"
                   payload=$(cat "$payload_file")
-                  metadata_file=$(gpg_touchid_write_signing_metadata_file "$payload")
+                  tty_name="''${GPG_TTY:-}"
+                  if [ -z "$tty_name" ]; then
+                    tty_name=$(tty 2>/dev/null || true)
+                  fi
+                  if [ -n "$tty_name" ] && [ "$tty_name" != "not a tty" ]; then
+                    metadata_file=$(gpg_touchid_write_signing_metadata_file "$payload" "$tty_name" || true)
+                  fi
 
-                  PINENTRY_USER_DATA="$metadata_file" "$gpg_bin" "$@" <"$payload_file"
+                  GPG_TOUCHID_METADATA_PATH="$metadata_file" "$gpg_bin" "$@" <"$payload_file"
                   status=$?
 
                   cleanup
@@ -407,7 +647,11 @@
                   gpg.program = "${darwinGitSigningWrapper}/bin/gpg-touchid-signing-prompt";
                 });
 
-              signing.signByDefault = true;
+              signing = {
+                signByDefault = true;
+              } // (lib.optionalAttrs isDarwin {
+                signer = "${darwinGitSigningWrapper}/bin/gpg-touchid-signing-prompt";
+              });
             };
 
             programs.gpg.enable = true;
@@ -419,6 +663,15 @@
             } // (lib.optionalAttrs isDarwin {
               extraConfig = "pinentry-program ${darwinRbwPinentryWrapper}/bin/rbw-pinentry-touchid";
             });
+
+            home.file = lib.mkIf isDarwin {
+              ".gitconfig".text = ''
+                [include]
+                	path = ~/.gitconfig.backup
+                [include]
+                	path = ~/.config/git/config
+              '';
+            };
             };
         })
     ];
