@@ -94,6 +94,31 @@ setup_file() {
   _nix_wrapper_dir=$(mk_wrapper_flake)
 }
 
+extract_gpg_touchid_signing_helpers() {
+  local helpers
+  local needle
+  local replacement
+
+  helpers=$(
+  sed -n \
+    '/# gpg-touchid-signing-prompt helpers start/,/# gpg-touchid-signing-prompt helpers end/p' \
+    den/aspects/features/git.nix | sed '1d;$d'
+  )
+
+  needle="''\${"
+  replacement="\${"
+  printf '%s\n' "${helpers//$needle/$replacement}"
+}
+
+load_gpg_touchid_signing_helpers() {
+  local helper_file
+  helper_file=$(mktemp)
+  extract_gpg_touchid_signing_helpers >"$helper_file"
+  # shellcheck source=/dev/null
+  . "$helper_file"
+  rm -f "$helper_file"
+}
+
 
 # ===========================================================================
 # no-legacy — legacy composition files are removed; structure is modernised
@@ -3619,6 +3644,61 @@ PY
     || fail "macbook-pro-m1 git gpg.program should evaluate to the repo-managed gpg-touchid-signing-prompt wrapper, got '$actual'"
   [[ "$actual" != "/opt/homebrew/bin/gpg" ]] \
     || fail "macbook-pro-m1 git gpg.program should not point directly at /opt/homebrew/bin/gpg"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper helper parses commit payloads directly" {
+  local commit_payload
+  commit_payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+parent 89abcdef0123456789abcdef0123456789abcdef
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: tighten signing prompt metadata
+
+Body text that should not become the subject.
+EOF
+)
+
+  load_gpg_touchid_signing_helpers
+  gpg_touchid_parse_signing_payload "$commit_payload"
+
+  assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND" "commit"
+  assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT" "feat: tighten signing prompt metadata"
+  assert_equal "$GPG_TOUCHID_SIGNING_TAG_NAME" ""
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper helper parses tag payloads directly" {
+  local tag_payload
+  tag_payload=$(cat <<'EOF'
+object 0123456789abcdef0123456789abcdef01234567
+type commit
+tag v1.2.3
+tagger Example Tagger <tagger@example.com> 1711753080 +0000
+
+Release v1.2.3
+
+Annotated release notes.
+EOF
+)
+
+  load_gpg_touchid_signing_helpers
+  gpg_touchid_parse_signing_payload "$tag_payload"
+
+  assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND" "tag"
+  assert_equal "$GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT" "Release v1.2.3"
+  assert_equal "$GPG_TOUCHID_SIGNING_TAG_NAME" "v1.2.3"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper helper derives repo name and branch for this worktree" {
+  load_gpg_touchid_signing_helpers
+  gpg_touchid_derive_repo_context
+
+  assert_equal "$GPG_TOUCHID_SIGNING_REPO_NAME" "nix"
+  assert_equal "$GPG_TOUCHID_SIGNING_REPO_BRANCH" "gpg-touchid-signing-prompt"
 }
 
 

@@ -97,6 +97,72 @@
                 '';
               };
               darwinGitSigningWrapper = pkgs.writeShellScriptBin "gpg-touchid-signing-prompt" ''
+                # gpg-touchid-signing-prompt helpers start
+                gpg_touchid_parse_signing_payload() {
+                  local payload="$1"
+                  local line
+                  local in_headers=1
+
+                  GPG_TOUCHID_SIGNING_PAYLOAD_KIND="unknown"
+                  GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT=""
+                  GPG_TOUCHID_SIGNING_TAG_NAME=""
+
+                  while IFS= read -r line || [ -n "$line" ]; do
+                    if [ "$in_headers" -eq 1 ]; then
+                      case "$line" in
+                        tree\ *)
+                          GPG_TOUCHID_SIGNING_PAYLOAD_KIND="commit"
+                          ;;
+                        object\ *)
+                          if [ "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND" = "unknown" ]; then
+                            GPG_TOUCHID_SIGNING_PAYLOAD_KIND="tag"
+                          fi
+                          ;;
+                        tag\ *)
+                          GPG_TOUCHID_SIGNING_TAG_NAME="''${line#tag }"
+                          ;;
+                        "")
+                          in_headers=0
+                          ;;
+                      esac
+                      continue
+                    fi
+
+                    if [ -n "$line" ]; then
+                      GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT="$line"
+                      break
+                    fi
+                  done <<< "$payload"
+                }
+
+                gpg_touchid_derive_repo_context() {
+                  local common_dir
+                  local repo_root
+
+                  GPG_TOUCHID_SIGNING_REPO_NAME=""
+                  GPG_TOUCHID_SIGNING_REPO_BRANCH=""
+
+                  common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+                  case "$common_dir" in
+                    */.git)
+                      GPG_TOUCHID_SIGNING_REPO_NAME=$(basename "$(dirname "$common_dir")")
+                      ;;
+                    ?*)
+                      GPG_TOUCHID_SIGNING_REPO_NAME=$(basename "$common_dir")
+                      ;;
+                  esac
+
+                  if [ -z "$GPG_TOUCHID_SIGNING_REPO_NAME" ]; then
+                    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+                    if [ -n "$repo_root" ]; then
+                      GPG_TOUCHID_SIGNING_REPO_NAME=$(basename "$repo_root")
+                    fi
+                  fi
+
+                  GPG_TOUCHID_SIGNING_REPO_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+                }
+                # gpg-touchid-signing-prompt helpers end
+
                 exec /opt/homebrew/bin/gpg "$@"
               '';
             in {
