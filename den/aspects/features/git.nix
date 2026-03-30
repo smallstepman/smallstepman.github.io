@@ -41,6 +41,13 @@
                   def quote_assuan(value):
                       return value.replace("\\", "\\\\").replace('"', '\\"')
 
+                  def encode_assuan_data(value):
+                      return (
+                          value.replace("%", "%25")
+                          .replace("\r", "%0D")
+                          .replace("\n", "%0A")
+                      )
+
                   def load_git_signing_prompt():
                       metadata_path = os.environ.get("PINENTRY_USER_DATA") or ""
                       if not metadata_path:
@@ -81,7 +88,7 @@
                           f"Signer: {signer}",
                       ])
                       title = f'SETTITLE "{quote_assuan(title_text)}"'
-                      prompt_desc = f'SETDESC "{quote_assuan(desc_text)}"'
+                      prompt_desc = f'SETDESC "{quote_assuan(encode_assuan_data(desc_text))}"'
                       return {
                           "title": title,
                           "desc": prompt_desc,

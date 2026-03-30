@@ -173,11 +173,47 @@ printf 'OK fake-pinentry ready\n'
 
 while IFS= read -r line; do
   printf '%s\n' "$line" >>"$FAKE_TOUCHID_PINENTRY_LOG"
-  printf 'OK forwarded: %s\n' "$line"
+  case "$line" in
+    SETTITLE\ *|SETDESC\ *|GETPIN|OPTION\ *|SETKEYINFO\ *)
+      printf 'OK forwarded: %s\n' "$line"
+      ;;
+    *)
+      printf 'ERR 67109139 invalid Assuan command: %s\n' "$line"
+      ;;
+  esac
 done
 EOF
 
   chmod +x "$fake_real"
+}
+
+assert_logged_setdesc_decodes_to() {
+  local command_log="$1"
+  local expected_text="$2"
+  local decoded_text
+
+  decoded_text=$(
+    python3 - "$command_log" <<'PY'
+from pathlib import Path
+import sys
+import urllib.parse
+
+for raw in Path(sys.argv[1]).read_text().splitlines():
+    if not raw.startswith("SETDESC "):
+        continue
+
+    payload = raw[len("SETDESC "):]
+    if payload.startswith('"') and payload.endswith('"'):
+        payload = payload[1:-1]
+
+    print(urllib.parse.unquote(payload), end="")
+    break
+else:
+    sys.exit(1)
+PY
+  ) || fail "expected a SETDESC command in $command_log, got: $(cat "$command_log")"
+
+  assert_equal "$decoded_text" "$expected_text"
 }
 
 create_fake_gpg_touchid_signing_wrapper_probe() {
@@ -3952,7 +3988,7 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper rewrites git signing title and description from metadata" {
-  local tmpdir wrapper fake_real metadata command_log expected_log actual_log
+  local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
@@ -3983,15 +4019,20 @@ EOF
 
   expected_log=$(cat <<'EOF'
 SETTITLE "GPG commit signing"
-SETDESC "Repo: nix
+SETDESC "Repo: nix%0ABranch: gpg-touchid-signing-prompt%0ACommit: feat: tighten signing prompt metadata%0ASigner: Example Committer <committer@example.com>"
+GETPIN
+EOF
+)
+  expected_desc=$(cat <<'EOF'
+Repo: nix
 Branch: gpg-touchid-signing-prompt
 Commit: feat: tighten signing prompt metadata
-Signer: Example Committer <committer@example.com>"
-GETPIN
+Signer: Example Committer <committer@example.com>
 EOF
 )
   actual_log=$(cat "$command_log")
   assert_equal "$actual_log" "$expected_log"
+  assert_logged_setdesc_decodes_to "$command_log" "$expected_desc"
   if grep -Fq 'allow-external-password-cache' "$command_log"; then
     fail 'git signing pinentry flow should not inject the rbw external password cache option'
   fi
@@ -4004,7 +4045,7 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper rewrites git tag signing title and description from metadata" {
-  local tmpdir wrapper fake_real metadata command_log expected_log actual_log
+  local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc
   tmpdir=$(mktemp -d)
   wrapper="$tmpdir/pinentry-touchid-wrapper"
   fake_real="$tmpdir/fake-pinentry-touchid"
@@ -4035,15 +4076,20 @@ EOF
 
   expected_log=$(cat <<'EOF'
 SETTITLE "GPG tag signing"
-SETDESC "Repo: nix
+SETDESC "Repo: nix%0ABranch: detached%0ATag: Release v1.2.3%0ASigner: Example Tagger <tagger@example.com>"
+GETPIN
+EOF
+)
+  expected_desc=$(cat <<'EOF'
+Repo: nix
 Branch: detached
 Tag: Release v1.2.3
-Signer: Example Tagger <tagger@example.com>"
-GETPIN
+Signer: Example Tagger <tagger@example.com>
 EOF
 )
   actual_log=$(cat "$command_log")
   assert_equal "$actual_log" "$expected_log"
+  assert_logged_setdesc_decodes_to "$command_log" "$expected_desc"
   if grep -Fq 'allow-external-password-cache' "$command_log"; then
     fail 'git signing pinentry flow should not inject the rbw external password cache option'
   fi
