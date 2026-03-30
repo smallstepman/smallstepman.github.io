@@ -3817,20 +3817,104 @@ PY
 
 # bats test_tags=gpg
 @test "gpg: darwin broker exposes get-gpg-secret" {
-  grep -Fq 'op == "get-gpg-secret"' den/aspects/features/darwin-core.nix \
-    || fail 'darwin broker should expose get-gpg-secret for vm commit-time signing'
+  run python3 - <<'PY'
+from pathlib import Path
+import re
+import textwrap
+
+text = Path("den/aspects/features/darwin-core.nix").read_text()
+anchor = 'vmTouchIdBroker = pkgs.writeTextFile {'
+
+try:
+    start = text.index(anchor)
+    start = text.index("text = ''\n", start) + len("text = ''\n")
+    end = text.index("\n              '';", start)
+except ValueError as exc:
+    raise SystemExit(f"failed to isolate vmTouchIdBroker source: {exc}")
+
+script = textwrap.dedent(text[start:end])
+
+for token in ('request = json.loads', 'op = request.get("op")'):
+    if token not in script:
+        raise SystemExit(f"darwin broker no longer looks like an op-dispatching JSON handler: missing {token!r}")
+
+if 'get-gpg-secret' not in script:
+    ops = re.findall(r'op == "([^"]+)"', script)
+    raise SystemExit(
+        "darwin broker should expose get-gpg-secret for vm commit-time signing; "
+        f"found ops: {ops}"
+    )
+PY
+  [ "$status" -eq 0 ] || fail "$output"
 }
 
 # bats test_tags=gpg
 @test "gpg: vm-aarch64 commit-time pinentry bridge asks the broker first and keeps a local fallback" {
-  grep -Fq 'def broker_get_gpg_secret()' den/aspects/hosts/vm-aarch64.nix \
-    || fail 'vm commit-time pinentry bridge should define a broker get-gpg-secret helper'
-  grep -Fq '{"op":"get-gpg-secret"}' den/aspects/hosts/vm-aarch64.nix \
-    || fail 'vm commit-time pinentry bridge should request get-gpg-secret from the broker'
-  grep -Fq 'LOCAL_FALLBACK =' den/aspects/hosts/vm-aarch64.nix \
-    || fail 'vm commit-time pinentry bridge should keep a local fallback pinentry'
-  grep -Fq 'fallback = activate_fallback(history)' den/aspects/hosts/vm-aarch64.nix \
-    || fail 'vm commit-time pinentry bridge should preserve a local fallback path'
+  run python3 - <<'PY'
+from pathlib import Path
+import re
+import textwrap
+
+text = Path("den/aspects/hosts/vm-aarch64.nix").read_text()
+anchor = 'mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {'
+
+try:
+    start = text.index(anchor)
+    start = text.index("text = ''\n", start) + len("text = ''\n")
+    end = text.index("\n            '';", start)
+except ValueError as exc:
+    raise SystemExit(f"failed to isolate vm pinentry bridge source: {exc}")
+
+script = textwrap.dedent(text[start:end])
+
+helper_match = re.search(
+    r"def (broker_get[_a-z]*)\(\):\n(?P<body>.*?)(?:\n\ndef |\Z)",
+    script,
+    re.MULTILINE | re.DOTALL,
+)
+if not helper_match:
+    raise SystemExit("vm commit-time pinentry bridge should define a broker secret helper")
+
+helper_name = helper_match.group(1)
+helper_body = helper_match.group("body")
+for token in ('client.connect(BROKER_SOCKET)', 'json.loads', 'payload.get("secret")'):
+    if token not in helper_body:
+        raise SystemExit(
+            "vm commit-time pinentry bridge broker helper is missing expected wiring: "
+            f"{token!r}"
+        )
+
+getpin_match = re.search(
+    r'if raw == "GETPIN\\n":\n(?P<body>(?:\s{4,}.*\n)+?)\s+if raw == "BYE\\n":',
+    script,
+)
+if not getpin_match:
+    raise SystemExit("vm commit-time pinentry bridge should special-case GETPIN")
+
+getpin_body = getpin_match.group("body")
+for token in (f"{helper_name}()", 'fallback = activate_fallback(history)', 'emit(fallback.command(raw))'):
+    if token not in getpin_body:
+        raise SystemExit(
+            "vm commit-time pinentry bridge should ask the broker first and fall back locally: "
+            f"missing {token!r}"
+        )
+
+fallback_tokens = ('LOCAL_FALLBACK =', 'PinentryProcess(LOCAL_FALLBACK)', 'for raw in history:')
+missing_fallback = [token for token in fallback_tokens if token not in script]
+if missing_fallback:
+    raise SystemExit(
+        "vm commit-time pinentry bridge should preserve a local fallback path: "
+        f"missing {missing_fallback}"
+    )
+
+if 'get-gpg-secret' not in helper_body:
+    requested_ops = sorted(set(re.findall(r'get-[a-z-]+', helper_body)))
+    raise SystemExit(
+        "vm commit-time pinentry bridge should request get-gpg-secret from the broker; "
+        f"helper {helper_name} currently mentions: {requested_ops}"
+    )
+PY
+  [ "$status" -eq 0 ] || fail "$output"
 }
 
 # bats test_tags=gpg
