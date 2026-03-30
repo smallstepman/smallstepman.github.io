@@ -4105,6 +4105,53 @@ EOF
 }
 
 # bats test_tags=gpg
+@test "gpg: repo-managed pinentry wrapper falls back when payload kind is unsupported" {
+  local tmpdir wrapper fake_real metadata command_log
+  tmpdir=$(mktemp -d)
+  wrapper="$tmpdir/pinentry-touchid-wrapper"
+  fake_real="$tmpdir/fake-pinentry-touchid"
+  metadata="$tmpdir/signing-metadata"
+  command_log="$tmpdir/fake-pinentry.log"
+
+  cat >"$metadata" <<'EOF'
+payload_kind=unknown
+payload_subject=feat: this should not be relabeled
+tag_name=
+signer_name=Example Signer
+signer_email=signer@example.com
+repo_name=nix
+repo_branch=gpg-touchid-signing-prompt
+EOF
+
+  create_fake_touchid_pinentry_backend "$fake_real"
+  materialize_darwin_touchid_pinentry_wrapper "$wrapper" "$fake_real"
+
+  : >"$command_log"
+  PINENTRY_USER_DATA="$metadata" \
+  FAKE_TOUCHID_PINENTRY_LOG="$command_log" \
+    "$wrapper" <<'EOF' >/dev/null
+SETTITLE "Passphrase Required"
+SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"
+GETPIN
+EOF
+
+  grep -Fqx 'SETTITLE "Passphrase Required"' "$command_log" \
+    || fail "expected unsupported payload kind title to pass through unchanged, got: $(cat "$command_log")"
+  grep -Fqx 'SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"' "$command_log" \
+    || fail "expected unsupported payload kind description to pass through unchanged, got: $(cat "$command_log")"
+  grep -Fqx 'GETPIN' "$command_log" \
+    || fail "expected unsupported payload kind GETPIN to be forwarded unchanged, got: $(cat "$command_log")"
+  if grep -Fq 'allow-external-password-cache' "$command_log"; then
+    fail 'unsupported payload kind should not inject the rbw external password cache option'
+  fi
+  if grep -Fq 'SETKEYINFO rbw/' "$command_log"; then
+    fail 'unsupported payload kind should not inject the rbw keychain keyinfo'
+  fi
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper falls back to forwarded prompts when signing metadata is absent" {
   local tmpdir wrapper fake_real command_log
   tmpdir=$(mktemp -d)

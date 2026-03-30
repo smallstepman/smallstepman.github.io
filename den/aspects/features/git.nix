@@ -63,12 +63,15 @@
                       except Exception:
                           return None
 
-                      payload_kind = pairs.get("payload_kind") or "commit"
+                      payload_kind = pairs.get("payload_kind") or ""
                       payload_subject = pairs.get("payload_subject") or ""
                       signer_name = pairs.get("signer_name") or ""
                       signer_email = pairs.get("signer_email") or ""
                       repo_name = pairs.get("repo_name") or ""
                       repo_branch = pairs.get("repo_branch") or "detached"
+
+                      if payload_kind not in {"commit", "tag"}:
+                          return None
 
                       if not repo_name and not payload_subject and not signer_name and not signer_email:
                           return None
