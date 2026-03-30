@@ -3615,8 +3615,8 @@ PY
 
   actual=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.git.settings.gpg.program)
 
-  [[ "$actual" == /nix/store/*/bin/* ]] \
-    || fail "macbook-pro-m1 git gpg.program should evaluate to a repo-managed wrapper path, got '$actual'"
+  [[ "$actual" == /nix/store/*-gpg-touchid-signing-prompt/bin/gpg-touchid-signing-prompt ]] \
+    || fail "macbook-pro-m1 git gpg.program should evaluate to the repo-managed gpg-touchid-signing-prompt wrapper, got '$actual'"
   [[ "$actual" != "/opt/homebrew/bin/gpg" ]] \
     || fail "macbook-pro-m1 git gpg.program should not point directly at /opt/homebrew/bin/gpg"
 }
