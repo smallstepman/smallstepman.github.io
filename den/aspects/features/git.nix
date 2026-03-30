@@ -195,9 +195,67 @@
 
                   GPG_TOUCHID_SIGNING_REPO_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
                 }
+
+                gpg_touchid_cleanup_file() {
+                  local path="''${1:-}"
+
+                  if [ -n "$path" ] && [ -e "$path" ]; then
+                    rm -f -- "$path"
+                  fi
+                }
+
+                gpg_touchid_write_signing_metadata_file() {
+                  local payload="$1"
+                  local metadata_file
+
+                  gpg_touchid_parse_signing_payload "$payload"
+                  gpg_touchid_derive_repo_context
+
+                  metadata_file=$(mktemp "''${TMPDIR:-/tmp}/gpg-touchid-signing-metadata.XXXXXX")
+                  chmod 600 "$metadata_file"
+
+                  {
+                    printf 'payload_kind=%s\n' "$GPG_TOUCHID_SIGNING_PAYLOAD_KIND"
+                    printf 'payload_subject=%s\n' "$GPG_TOUCHID_SIGNING_PAYLOAD_SUBJECT"
+                    printf 'tag_name=%s\n' "$GPG_TOUCHID_SIGNING_TAG_NAME"
+                    printf 'signer_name=%s\n' "$GPG_TOUCHID_SIGNING_SIGNER_NAME"
+                    printf 'signer_email=%s\n' "$GPG_TOUCHID_SIGNING_SIGNER_EMAIL"
+                    printf 'repo_name=%s\n' "$GPG_TOUCHID_SIGNING_REPO_NAME"
+                    printf 'repo_branch=%s\n' "$GPG_TOUCHID_SIGNING_REPO_BRANCH"
+                  } >"$metadata_file"
+
+                  printf '%s\n' "$metadata_file"
+                }
+
+                gpg_touchid_exec_gpg_with_metadata() {
+                  local gpg_bin="''${GPG_TOUCHID_GPG_BIN:-/opt/homebrew/bin/gpg}"
+                  local payload_file=""
+                  local metadata_file=""
+                  local payload=""
+                  local status
+
+                  cleanup() {
+                    gpg_touchid_cleanup_file "$metadata_file"
+                    gpg_touchid_cleanup_file "$payload_file"
+                  }
+
+                  trap cleanup EXIT HUP INT TERM
+
+                  payload_file=$(mktemp "''${TMPDIR:-/tmp}/gpg-touchid-signing-payload.XXXXXX")
+                  cat >"$payload_file"
+                  payload=$(cat "$payload_file")
+                  metadata_file=$(gpg_touchid_write_signing_metadata_file "$payload")
+
+                  PINENTRY_USER_DATA="$metadata_file" "$gpg_bin" "$@" <"$payload_file"
+                  status=$?
+
+                  cleanup
+                  trap - EXIT HUP INT TERM
+                  return "$status"
+                }
                 # gpg-touchid-signing-prompt helpers end
 
-                exec /opt/homebrew/bin/gpg "$@"
+                gpg_touchid_exec_gpg_with_metadata "$@"
               '';
             in {
 

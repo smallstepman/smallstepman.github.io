@@ -119,6 +119,43 @@ load_gpg_touchid_signing_helpers() {
   rm -f "$helper_file"
 }
 
+create_fake_gpg_touchid_signing_wrapper_probe() {
+  local fake_gpg="$1"
+
+  cat >"$fake_gpg" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+metadata_path="${PINENTRY_USER_DATA-}"
+metadata_mode="missing"
+metadata_exists="no"
+
+if [[ -n "$metadata_path" && -f "$metadata_path" ]]; then
+  metadata_exists="yes"
+  metadata_mode=$(python3 - "$metadata_path" <<'PY'
+import os
+import sys
+
+print(oct(os.stat(sys.argv[1]).st_mode & 0o777)[2:].zfill(3))
+PY
+)
+fi
+
+{
+  printf 'pinentry_user_data=%s\n' "$metadata_path"
+  printf 'metadata_exists=%s\n' "$metadata_exists"
+  printf 'metadata_mode=%s\n' "$metadata_mode"
+  if [[ "$metadata_exists" == "yes" ]]; then
+    cat "$metadata_path"
+  fi
+} >"$GPG_TOUCHID_WRAPPER_TEST_OUTPUT"
+
+cat >/dev/null
+EOF
+
+  chmod +x "$fake_gpg"
+}
+
 
 # ===========================================================================
 # no-legacy — legacy composition files are removed; structure is modernised
@@ -3711,6 +3748,105 @@ EOF
 
   assert_equal "$GPG_TOUCHID_SIGNING_REPO_NAME" "$expected_repo_name"
   assert_equal "$GPG_TOUCHID_SIGNING_REPO_BRANCH" "$expected_branch"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper creates a 0600 temp metadata file before invoking gpg" {
+  local payload tmpdir fake_gpg probe_output metadata_mode metadata_exists
+  payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: hand off signing metadata through a temp file
+EOF
+)
+  tmpdir=$(mktemp -d)
+  fake_gpg="$tmpdir/fake-gpg"
+  probe_output="$tmpdir/probe-output"
+
+  create_fake_gpg_touchid_signing_wrapper_probe "$fake_gpg"
+  load_gpg_touchid_signing_helpers
+
+  TMPDIR="$tmpdir" \
+  GPG_TOUCHID_GPG_BIN="$fake_gpg" \
+  GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output" \
+    gpg_touchid_exec_gpg_with_metadata --detach-sign <<<"$payload"
+
+  metadata_exists=$(grep '^metadata_exists=' "$probe_output" | cut -d= -f2-)
+  metadata_mode=$(grep '^metadata_mode=' "$probe_output" | cut -d= -f2-)
+
+  assert_equal "$metadata_exists" "yes"
+  assert_equal "$metadata_mode" "600"
+  grep -Fq 'payload_kind=commit' "$probe_output" \
+    || fail "expected metadata temp file to include payload_kind=commit"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper passes only the metadata file path via PINENTRY_USER_DATA" {
+  local payload tmpdir fake_gpg probe_output pinentry_user_data
+  payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: keep metadata out of PINENTRY_USER_DATA
+EOF
+)
+  tmpdir=$(mktemp -d)
+  fake_gpg="$tmpdir/fake-gpg"
+  probe_output="$tmpdir/probe-output"
+
+  create_fake_gpg_touchid_signing_wrapper_probe "$fake_gpg"
+  load_gpg_touchid_signing_helpers
+
+  TMPDIR="$tmpdir" \
+  GPG_TOUCHID_GPG_BIN="$fake_gpg" \
+  GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output" \
+    gpg_touchid_exec_gpg_with_metadata --detach-sign <<<"$payload"
+
+  pinentry_user_data=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
+
+  [[ "$pinentry_user_data" == "$tmpdir"/* ]] \
+    || fail "expected PINENTRY_USER_DATA to contain only the metadata temp-file path, got '$pinentry_user_data'"
+  [[ "$pinentry_user_data" != *$'\n'* ]] \
+    || fail "PINENTRY_USER_DATA should be a single temp-file path"
+  [[ "$pinentry_user_data" != *payload_kind* ]] \
+    || fail "PINENTRY_USER_DATA should not inline metadata contents"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper cleans up the metadata temp file after gpg exits" {
+  local payload tmpdir fake_gpg probe_output metadata_path
+  payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: clean up signing metadata temp files
+EOF
+)
+  tmpdir=$(mktemp -d)
+  fake_gpg="$tmpdir/fake-gpg"
+  probe_output="$tmpdir/probe-output"
+
+  create_fake_gpg_touchid_signing_wrapper_probe "$fake_gpg"
+  load_gpg_touchid_signing_helpers
+
+  TMPDIR="$tmpdir" \
+  GPG_TOUCHID_GPG_BIN="$fake_gpg" \
+  GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output" \
+    gpg_touchid_exec_gpg_with_metadata --detach-sign <<<"$payload"
+
+  metadata_path=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
+
+  assert_file_not_exists "$metadata_path"
+
+  rm -rf "$tmpdir"
 }
 
 
