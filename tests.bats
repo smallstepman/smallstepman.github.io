@@ -133,6 +133,33 @@ print(textwrap.dedent(text[start:end]), end="")
 PY
 }
 
+extract_write_textfile_script_by_anchor() {
+  local nix_file="$1"
+  local anchor="$2"
+
+  python3 - "$nix_file" "$anchor" <<'PY'
+from pathlib import Path
+import re
+import sys
+import textwrap
+
+nix_file = Path(sys.argv[1])
+anchor = sys.argv[2]
+text = nix_file.read_text()
+
+try:
+    anchored_text = text[text.index(anchor):]
+except ValueError as exc:
+    raise SystemExit(f"failed to locate anchor {anchor!r} in {nix_file}: {exc}")
+
+match = re.search(r"text\s*=\s*''\n(?P<body>.*?)\n[ \t]*'';", anchored_text, re.DOTALL)
+if match is None:
+    raise SystemExit(f"failed to isolate text = '' ... ''; block after {anchor!r} in {nix_file}")
+
+print(textwrap.dedent(match.group("body")), end="")
+PY
+}
+
 materialize_darwin_touchid_pinentry_wrapper() {
   local wrapper_path="$1"
   local fake_real="$2"
@@ -3817,103 +3844,266 @@ PY
 
 # bats test_tags=gpg
 @test "gpg: darwin broker exposes get-gpg-secret" {
-  run python3 - <<'PY'
+  local broker_script
+  broker_script=$(mktemp)
+  extract_write_textfile_script_by_anchor \
+    "den/aspects/features/darwin-core.nix" \
+    'vmTouchIdBroker = pkgs.writeTextFile {' >"$broker_script"
+
+  run python3 - "$broker_script" <<'PY'
 from pathlib import Path
-import re
-import textwrap
+import ast
+import sys
 
-text = Path("den/aspects/features/darwin-core.nix").read_text()
-anchor = 'vmTouchIdBroker = pkgs.writeTextFile {'
+script = Path(sys.argv[1]).read_text()
+module = ast.parse(script)
 
-try:
-    start = text.index(anchor)
-    start = text.index("text = ''\n", start) + len("text = ''\n")
-    end = text.index("\n              '';", start)
-except ValueError as exc:
-    raise SystemExit(f"failed to isolate vmTouchIdBroker source: {exc}")
+def string_value(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
 
-script = textwrap.dedent(text[start:end])
+saw_request_json = False
+saw_op_lookup = False
+ops = set()
 
-for token in ('request = json.loads', 'op = request.get("op")'):
-    if token not in script:
-        raise SystemExit(f"darwin broker no longer looks like an op-dispatching JSON handler: missing {token!r}")
+for node in ast.walk(module):
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "request":
+                value = node.value
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Attribute)
+                    and isinstance(value.func.value, ast.Name)
+                    and value.func.value.id == "json"
+                    and value.func.attr == "loads"
+                ):
+                    saw_request_json = True
+            if isinstance(target, ast.Name) and target.id == "op":
+                value = node.value
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Attribute)
+                    and isinstance(value.func.value, ast.Name)
+                    and value.func.value.id == "request"
+                    and value.func.attr == "get"
+                    and value.args
+                    and string_value(value.args[0]) == "op"
+                ):
+                    saw_op_lookup = True
 
-if 'get-gpg-secret' not in script:
-    ops = re.findall(r'op == "([^"]+)"', script)
+    if (
+        isinstance(node, ast.Compare)
+        and isinstance(node.left, ast.Name)
+        and node.left.id == "op"
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.Eq)
+    ):
+        for comparator in node.comparators:
+            value = string_value(comparator)
+            if value is not None:
+                ops.add(value)
+
+if not saw_request_json:
+    raise SystemExit("darwin broker no longer looks like an op-dispatching JSON handler: missing request = json.loads(...)")
+if not saw_op_lookup:
+    raise SystemExit('darwin broker no longer looks like an op-dispatching JSON handler: missing op = request.get("op")')
+
+if "get-gpg-secret" not in ops:
     raise SystemExit(
         "darwin broker should expose get-gpg-secret for vm commit-time signing; "
-        f"found ops: {ops}"
+        f"found ops: {sorted(ops)}"
     )
 PY
+  rm -f "$broker_script"
   [ "$status" -eq 0 ] || fail "$output"
 }
 
 # bats test_tags=gpg
 @test "gpg: vm-aarch64 commit-time pinentry bridge asks the broker first and keeps a local fallback" {
-  run python3 - <<'PY'
+  local bridge_script
+  bridge_script=$(mktemp)
+  extract_write_textfile_script_by_anchor \
+    "den/aspects/hosts/vm-aarch64.nix" \
+    'mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {' >"$bridge_script"
+
+  run python3 - "$bridge_script" <<'PY'
 from pathlib import Path
 import re
-import textwrap
+import ast
+import sys
 
-text = Path("den/aspects/hosts/vm-aarch64.nix").read_text()
-anchor = 'mkRbwPinentryTouchIdBridge = pkgs: pkgs.writeTextFile {'
+script = Path(sys.argv[1]).read_text()
+module = ast.parse(script)
 
-try:
-    start = text.index(anchor)
-    start = text.index("text = ''\n", start) + len("text = ''\n")
-    end = text.index("\n            '';", start)
-except ValueError as exc:
-    raise SystemExit(f"failed to isolate vm pinentry bridge source: {exc}")
+def string_value(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
 
-script = textwrap.dedent(text[start:end])
+def iter_stringish_constants(node):
+    for child in ast.walk(node):
+        if isinstance(child, ast.Constant):
+            if isinstance(child.value, str):
+                yield child.value
+            elif isinstance(child.value, bytes):
+                try:
+                    yield child.value.decode("utf-8")
+                except UnicodeDecodeError:
+                    continue
 
-helper_match = re.search(
-    r"def (broker_get[_a-z]*)\(\):\n(?P<body>.*?)(?:\n\ndef |\Z)",
-    script,
-    re.MULTILINE | re.DOTALL,
-)
-if not helper_match:
+def has_call(node, predicate):
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call) and predicate(child):
+            return True
+    return False
+
+def is_name(node, name):
+    return isinstance(node, ast.Name) and node.id == name
+
+def is_attr_call(call, base_name, attr_name):
+    return (
+        isinstance(call.func, ast.Attribute)
+        and call.func.attr == attr_name
+        and isinstance(call.func.value, ast.Name)
+        and call.func.value.id == base_name
+    )
+
+function_defs = {
+    node.name: node
+    for node in module.body
+    if isinstance(node, ast.FunctionDef)
+}
+
+broker_helpers = []
+for fn in function_defs.values():
+    connects_broker = has_call(
+        fn,
+        lambda call: is_attr_call(call, "client", "connect")
+        and call.args
+        and is_name(call.args[0], "BROKER_SOCKET"),
+    )
+    decodes_json = has_call(
+        fn,
+        lambda call: (
+            isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "json"
+            and call.func.attr == "loads"
+        ),
+    )
+    reads_secret = has_call(
+        fn,
+        lambda call: is_attr_call(call, "payload", "get")
+        and call.args
+        and string_value(call.args[0]) == "secret",
+    )
+    if connects_broker and decodes_json and reads_secret:
+        broker_helpers.append(fn)
+
+if not broker_helpers:
     raise SystemExit("vm commit-time pinentry bridge should define a broker secret helper")
 
-helper_name = helper_match.group(1)
-helper_body = helper_match.group("body")
-for token in ('client.connect(BROKER_SOCKET)', 'json.loads', 'payload.get("secret")'):
-    if token not in helper_body:
-        raise SystemExit(
-            "vm commit-time pinentry bridge broker helper is missing expected wiring: "
-            f"{token!r}"
-        )
-
-getpin_match = re.search(
-    r'if raw == "GETPIN\\n":\n(?P<body>(?:\s{4,}.*\n)+?)\s+if raw == "BYE\\n":',
-    script,
+broker_helper_names = {fn.name for fn in broker_helpers}
+requested_ops = sorted(
+    {
+        op
+        for fn in broker_helpers
+        for constant in iter_stringish_constants(fn)
+        for op in re.findall(r"get-[a-z-]+", constant)
+    }
 )
-if not getpin_match:
-    raise SystemExit("vm commit-time pinentry bridge should special-case GETPIN")
+if "get-gpg-secret" not in requested_ops:
+    raise SystemExit(
+        "vm commit-time pinentry bridge should request get-gpg-secret from the broker; "
+        f"helper mentions: {requested_ops}"
+    )
 
-getpin_body = getpin_match.group("body")
-for token in (f"{helper_name}()", 'fallback = activate_fallback(history)', 'emit(fallback.command(raw))'):
-    if token not in getpin_body:
-        raise SystemExit(
-            "vm commit-time pinentry bridge should ask the broker first and fall back locally: "
-            f"missing {token!r}"
-        )
-
-fallback_tokens = ('LOCAL_FALLBACK =', 'PinentryProcess(LOCAL_FALLBACK)', 'for raw in history:')
-missing_fallback = [token for token in fallback_tokens if token not in script]
+missing_fallback = [
+    token
+    for token in ('LOCAL_FALLBACK =', 'PinentryProcess(LOCAL_FALLBACK)', 'for raw in history:')
+    if token not in script
+]
 if missing_fallback:
     raise SystemExit(
         "vm commit-time pinentry bridge should preserve a local fallback path: "
         f"missing {missing_fallback}"
     )
 
-if 'get-gpg-secret' not in helper_body:
-    requested_ops = sorted(set(re.findall(r'get-[a-z-]+', helper_body)))
+main_fn = function_defs.get("main")
+if main_fn is None:
+    raise SystemExit("vm commit-time pinentry bridge should define a main loop")
+
+getpin_if = None
+for node in ast.walk(main_fn):
+    if (
+        isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and is_name(node.test.left, "raw")
+        and len(node.test.ops) == 1
+        and isinstance(node.test.ops[0], ast.Eq)
+        and len(node.test.comparators) == 1
+        and string_value(node.test.comparators[0]) == "GETPIN\n"
+    ):
+        getpin_if = node
+        break
+
+if getpin_if is None:
+    raise SystemExit("vm commit-time pinentry bridge should special-case GETPIN")
+
+broker_first = False
+fallback_path = False
+fallback_emit = False
+
+for node in ast.walk(getpin_if):
+    if isinstance(node, ast.Try):
+        try_calls_broker = has_call(
+            ast.Module(body=node.body, type_ignores=[]),
+            lambda call: isinstance(call.func, ast.Name) and call.func.id in broker_helper_names,
+        )
+        except_assigns_fallback = any(
+            isinstance(stmt, ast.Assign)
+            and any(is_name(target, "fallback") for target in stmt.targets)
+            and isinstance(stmt.value, ast.Call)
+            and len(stmt.value.args) == 1
+            and is_name(stmt.value.args[0], "history")
+            for handler in node.handlers
+            for stmt in handler.body
+        )
+        if try_calls_broker and except_assigns_fallback:
+            broker_first = True
+
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "emit"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Call)
+        and isinstance(node.args[0].func, ast.Attribute)
+        and is_name(node.args[0].func.value, "fallback")
+        and node.args[0].func.attr == "command"
+        and len(node.args[0].args) == 1
+        and is_name(node.args[0].args[0], "raw")
+    ):
+        fallback_emit = True
+
+    if (
+        isinstance(node, ast.Assign)
+        and any(is_name(target, "fallback") for target in node.targets)
+        and isinstance(node.value, ast.Call)
+        and len(node.value.args) == 1
+        and is_name(node.value.args[0], "history")
+    ):
+        fallback_path = True
+
+if not broker_first or not fallback_path or not fallback_emit:
     raise SystemExit(
-        "vm commit-time pinentry bridge should request get-gpg-secret from the broker; "
-        f"helper {helper_name} currently mentions: {requested_ops}"
+        "vm commit-time pinentry bridge should ask the broker first and fall back locally "
+        "during GETPIN handling"
     )
 PY
+  rm -f "$bridge_script"
   [ "$status" -eq 0 ] || fail "$output"
 }
 
