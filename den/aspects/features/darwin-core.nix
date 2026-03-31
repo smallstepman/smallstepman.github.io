@@ -14,6 +14,7 @@
             vmTouchIdKnownHosts = "/Users/m/.ssh/known_hosts_vm_touchid_bridge";
             vmTouchIdVmKnownHostsEntry = "192.168.130.3 ${builtins.readFile (generated.requireFile "vm-host-ssh-ed25519.pub")}";
             vmTouchIdPinentry = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid";
+            vmTouchIdGpgCommitHelper = "/etc/profiles/per-user/m/bin/gpg-touchid-commit-get-pin";
 
             orbstackKubeconfigSync = pkgs.writeShellApplication {
               name = "orbstack-kubeconfig-sync";
@@ -146,7 +147,7 @@
                 import hashlib
                 import json
                 import os
-                import socketserver
+                import socket
                 import subprocess
                 import threading
                 import urllib.parse
@@ -357,32 +358,34 @@
                     return {"ok": False, "error": details or "gpg-touchid-commit-get-pin failed"}
 
 
-                class ThreadedUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-                    daemon_threads = True
+                def dispatch_request(request, pinentry_program):
+                    op = request.get("op")
+                    metadata = request.get("metadata") or {}
 
-
-                class Handler(socketserver.StreamRequestHandler):
-                    def handle(self):
+                    if op == "approve":
+                        APPROVE_CONTEXT.metadata = metadata
                         try:
-                            raw = self.rfile.readline()
-                            if not raw:
-                                return
-                            request = json.loads(raw.decode("utf-8"))
-                            op = request.get("op")
-                            metadata = request.get("metadata") or {}
+                            return {"ok": True, "approved": approve(pinentry_program)}
+                        finally:
+                            APPROVE_CONTEXT.metadata = {}
+                    if op == "get-gpg-secret":
+                        return get_gpg_secret(metadata)
+                    if op == "get-secret":
+                        return {"ok": True, "secret": get_secret(pinentry_program)}
+                    return {"ok": False, "error": f"unsupported op: {op}"}
 
-                            if op == "approve":
-                                APPROVE_CONTEXT.metadata = metadata
-                                try:
-                                    response = {"ok": True, "approved": approve(self.server.pinentry_program)}
-                                finally:
-                                    APPROVE_CONTEXT.metadata = {}
-                            elif op == "get-gpg-secret":
-                                response = get_gpg_secret(metadata)
-                            elif op == "get-secret":
-                                response = {"ok": True, "secret": get_secret(self.server.pinentry_program)}
-                            else:
-                                response = {"ok": False, "error": f"unsupported op: {op}"}
+
+                def handle_connection(conn, pinentry_program):
+                    with conn:
+                        try:
+                            raw = b""
+                            while not raw.endswith(b"\n"):
+                                chunk = conn.recv(4096)
+                                if not chunk:
+                                    return
+                                raw += chunk
+                            request = json.loads(raw.decode("utf-8"))
+                            response = dispatch_request(request, pinentry_program)
                         except PinentryFailure as exc:
                             response = {
                                 "ok": False,
@@ -392,8 +395,10 @@
                         except Exception as exc:
                             response = {"ok": False, "error": str(exc)}
 
-                        self.wfile.write((json.dumps(response) + "\n").encode("utf-8"))
-                        self.wfile.flush()
+                        try:
+                            conn.sendall((json.dumps(response) + "\n").encode("utf-8"))
+                        except BrokenPipeError:
+                            return
 
 
                 def main():
@@ -407,14 +412,22 @@
                     if socket_path.exists():
                         socket_path.unlink()
 
-                    server = ThreadedUnixServer(str(socket_path), Handler)
-                    server.pinentry_program = args.pinentry_program
+                    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    server.bind(str(socket_path))
                     os.chmod(socket_path, 0o600)
+                    server.listen()
 
                     try:
-                        server.serve_forever()
+                        while True:
+                            conn, _ = server.accept()
+                            thread = threading.Thread(
+                                target=handle_connection,
+                                args=(conn, args.pinentry_program),
+                                daemon=True,
+                            )
+                            thread.start()
                     finally:
-                        server.server_close()
+                        server.close()
                         if socket_path.exists():
                             socket_path.unlink()
 
@@ -610,6 +623,9 @@
               KeepAlive = true;
               LimitLoadToSessionType = "Aqua";
               ProcessType = "Interactive";
+              EnvironmentVariables = {
+                GPG_TOUCHID_COMMIT_HELPER = vmTouchIdGpgCommitHelper;
+              };
               StandardOutPath = "/tmp/rbw-pinentry-touchid-broker.log";
               StandardErrorPath = "/tmp/rbw-pinentry-touchid-broker.log";
             };

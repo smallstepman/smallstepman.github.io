@@ -62,7 +62,7 @@
                   var error: NSError?
 
                   func fail(_ prefix: String, _ message: String, _ code: Int32) -> Never {
-                      FileHandle.standardError.write(Data("\\(prefix): \\(message)\\n".utf8))
+                      FileHandle.standardError.write(Data("\(prefix): \(message)\n".utf8))
                       Darwin.exit(code)
                   }
 
@@ -97,7 +97,7 @@
 
                   if !approved {
                       if let failureMessage {
-                          FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \\(failureMessage)\\n".utf8))
+                          FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \(failureMessage)\n".utf8))
                       }
                       Darwin.exit(1)
                   }

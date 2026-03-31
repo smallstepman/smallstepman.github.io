@@ -2655,6 +2655,16 @@ PY
 }
 
 # bats test_tags=darwin
+@test "darwin: macOS touchid broker exports a deterministic gpg helper path" {
+  local actual
+
+  actual=$(nix_eval_raw \
+    '.#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents."rbw-pinentry-touchid-broker".serviceConfig.EnvironmentVariables.GPG_TOUCHID_COMMIT_HELPER')
+
+  assert_equal "$actual" "/etc/profiles/per-user/m/bin/gpg-touchid-commit-get-pin"
+}
+
+# bats test_tags=darwin
 @test "darwin: macOS touchid broker waits for the interactive Aqua session" {
   local actual
 
@@ -3793,43 +3803,30 @@ PY
 }
 
 # bats test_tags=gpg
-@test "gpg: gpg.nix guards VM-only features with isVM" {
-  grep -Fq 'allow-preset-passphrase'                           den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'gpgPresetPassphraseLogin'                          den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'systemd.user.services.gpg-preset-passphrase-login' den/aspects/hosts/vm-aarch64.nix
-}
-
-# bats test_tags=gpg
-@test "gpg: gpg.nix helper script implementation is correct" {
-  grep -Fq 'printf '\''%s'\'' "$passphrase" |' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'mapfile -t keygrips < <('          den/aspects/hosts/vm-aarch64.nix
-  # The Nix file uses ''${...} escaping inside ''...'' string literals.
-  grep -Fq "for keygrip in \"''\${keygrips[@]}\"; do" den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'gpg-preset-passphrase --preset "$keygrip"' den/aspects/hosts/vm-aarch64.nix
-  if grep -Fq -- '--passphrase-fd' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'helper script still uses unsupported --passphrase-fd'
+@test "gpg: vm-aarch64 commit-time touchid mode does not keep login-time preset plumbing" {
+  if grep -Fq 'allow-preset-passphrase' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should not keep allow-preset-passphrase in commit-time touchid mode'
   fi
-  if grep -Fq -- '--passphrase "$passphrase"' den/aspects/hosts/vm-aarch64.nix; then
-    fail 'helper script should not expose the passphrase via command-line arguments'
+  if grep -Fq 'gpgPresetPassphraseLogin' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should not keep the gpgPresetPassphraseLogin helper in commit-time touchid mode'
   fi
-  if grep -Fq "\$1 == \"grp\" { print \$10; exit }" den/aspects/hosts/vm-aarch64.nix; then
-    fail 'helper script still assumes the first grp line is the only relevant keygrip'
+  if grep -Fq 'systemd.user.services.gpg-preset-passphrase-login' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should not keep the gpg-preset-passphrase-login service in commit-time touchid mode'
+  fi
+  if grep -Fq 'gpg-preset-passphrase --preset "$keygrip"' den/aspects/hosts/vm-aarch64.nix; then
+    fail 'vm-aarch64 should not preset the signing key on login in commit-time touchid mode'
   fi
 }
 
 # bats test_tags=gpg
-@test "gpg: gpg.nix systemd service has retry settings" {
-  grep -Fq 'Restart = "on-failure";' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'RestartSec = 30;'        den/aspects/hosts/vm-aarch64.nix
-}
-
-# bats test_tags=gpg
-@test "gpg: vm-aarch64 gpg-agent allows preset passphrases; macbook-pro-m1 does not" {
+@test "gpg: vm-aarch64 gpg-agent uses brokered pinentry without preset passphrases" {
   local vm_extra_config mac_extra_config
 
   vm_extra_config=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.services.gpg-agent.extraConfig)
-  [[ "$vm_extra_config" == *allow-preset-passphrase* ]] \
-    || fail 'vm-aarch64 gpg-agent does not allow preset passphrases'
+  [[ "$vm_extra_config" != *allow-preset-passphrase* ]] \
+    || fail 'vm-aarch64 gpg-agent should not allow preset passphrases in commit-time touchid mode'
+  [[ "$vm_extra_config" == *pinentry-program* ]] \
+    || fail 'vm-aarch64 gpg-agent lost brokered pinentry configuration'
 
   mac_extra_config=$(nix_eval_raw .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.services.gpg-agent.extraConfig)
   [[ "$mac_extra_config" != *allow-preset-passphrase* ]] \
@@ -3864,46 +3861,29 @@ PY
 }
 
 # bats test_tags=gpg
-@test "gpg: vm-aarch64 helper script package and systemd service are present" {
+@test "gpg: vm-aarch64 gpg-agent cache TTLs are 1 second" {
+  local actual
+
+  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.services.gpg-agent.defaultCacheTtl)
+  assert_equal "$actual" "1"
+
+  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.services.gpg-agent.maxCacheTtl)
+  assert_equal "$actual" "1"
+}
+
+# bats test_tags=gpg
+@test "gpg: vm-aarch64 does not install or enable gpg-preset-passphrase-login" {
   local actual
 
   actual=$(nix_generated_eval --json \
     --apply 'pkgs: builtins.any (pkg: (pkg.name or "") == "gpg-preset-passphrase-login") pkgs' \
     .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.home.packages)
-  assert_equal "$actual" "true"
+  assert_equal "$actual" "false"
 
   actual=$(nix_generated_eval --json \
     --apply 'services: services ? "gpg-preset-passphrase-login"' \
     .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services)
-  assert_equal "$actual" "true"
-}
-
-# bats test_tags=gpg
-@test "gpg: vm-aarch64 systemd user service configuration is correct" {
-  local actual
-
-  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Service.Type)
-  assert_equal "$actual" "oneshot"
-
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Service.ExecStart)
-  [[ "$actual" == *gpg-preset-passphrase-login* ]] \
-    || fail 'vm-aarch64 systemd user service does not invoke the helper script'
-
-  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Service.Restart)
-  assert_equal "$actual" "on-failure"
-
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Service.RestartSec)
-  assert_equal "$actual" "30"
-
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Unit.After)
-  [[ "$actual" == *default.target* ]] \
-    || fail 'vm-aarch64 systemd user service is not ordered after login'
-  [[ "$actual" == *rbw-config.service* ]] \
-    || fail 'vm-aarch64 systemd user service no longer waits for rbw config'
-
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.systemd.user.services.gpg-preset-passphrase-login.Install.WantedBy)
-  [[ "$actual" == *default.target* ]] \
-    || fail 'vm-aarch64 systemd user service is not enabled for login-time startup'
+  assert_equal "$actual" "false"
 }
 
 # bats test_tags=gpg
@@ -4043,6 +4023,72 @@ if "get-gpg-secret" not in ops:
         "darwin broker should expose get-gpg-secret for vm commit-time signing; "
         f"found ops: {sorted(ops)}"
     )
+PY
+  rm -f "$broker_script"
+  [ "$status" -eq 0 ] || fail "$output"
+}
+
+# bats test_tags=gpg
+@test "gpg: darwin broker uses a raw unix socket accept loop for forwarded vm requests" {
+  local broker_script
+  broker_script=$(mktemp)
+  extract_write_textfile_script_by_anchor \
+    "den/aspects/features/darwin-core.nix" \
+    'vmTouchIdBroker = pkgs.writeTextFile {' >"$broker_script"
+
+  run python3 - "$broker_script" <<'PY'
+from pathlib import Path
+import ast
+import sys
+
+script = Path(sys.argv[1]).read_text()
+module = ast.parse(script)
+
+socketserver_uses = []
+uses_af_unix_socket = False
+uses_accept = False
+
+for node in ast.walk(module):
+    if isinstance(node, ast.Name) and node.id == "socketserver":
+        socketserver_uses.append((node.lineno, node.col_offset))
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "socket"
+        and node.func.attr == "socket"
+        and len(node.args) >= 2
+    ):
+        if (
+            isinstance(node.args[0], ast.Attribute)
+            and isinstance(node.args[0].value, ast.Name)
+            and node.args[0].value.id == "socket"
+            and node.args[0].attr == "AF_UNIX"
+            and isinstance(node.args[1], ast.Attribute)
+            and isinstance(node.args[1].value, ast.Name)
+            and node.args[1].value.id == "socket"
+            and node.args[1].attr == "SOCK_STREAM"
+        ):
+            uses_af_unix_socket = True
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "accept"
+    ):
+        uses_accept = True
+
+if socketserver_uses:
+    raise SystemExit(
+        "darwin broker should avoid socketserver-based unix handlers because "
+        "SSH-forwarded VM requests blackhole there; found socketserver at "
+        f"{socketserver_uses!r}"
+    )
+
+if not uses_af_unix_socket:
+    raise SystemExit("darwin broker should create a raw AF_UNIX/SOCK_STREAM socket")
+
+if not uses_accept:
+    raise SystemExit("darwin broker should accept connections from the raw unix socket directly")
 PY
   rm -f "$broker_script"
   [ "$status" -eq 0 ] || fail "$output"
@@ -4274,6 +4320,174 @@ if Path(fallback_log).read_text() != "":
 output = proc.stdout
 if "D brokered-commit-secret\nOK\n" not in output:
     print(f"bridge should emit broker secret via Assuan data response, got {output!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: vm bridge answers gpg-agent GETINFO probes without dropping broker mode" {
+  local tmpdir bridge fallback broker_socket metadata fallback_log tty_name
+  tmpdir=$(mktemp -d)
+  bridge="$tmpdir/vm-gpg-pinentry-bridge"
+  fallback="$tmpdir/fake-pinentry-fallback"
+  broker_socket="$tmpdir/broker.sock"
+  fallback_log="$tmpdir/fallback.log"
+  tty_name="/dev/pts/7"
+  metadata=$(gpg_touchid_test_metadata_path_for_tty "$tmpdir/cache" "$tty_name")
+  mkdir -p "$(dirname "$metadata")"
+
+  cat >"$metadata" <<'EOF'
+payload_kind=commit
+payload_subject=feat: preserve broker mode across GETINFO probes
+signer_name=Example Committer
+signer_email=committer@example.com
+repo_name=nix
+repo_branch=feature/vm-gpg-touchid-signing
+EOF
+
+  create_fake_touchid_pinentry_backend "$fallback"
+  : >"$fallback_log"
+  materialize_vm_gpg_touchid_bridge "$bridge" "$fallback" "$broker_socket"
+
+  run python3 - "$bridge" "$broker_socket" "$fallback_log" "$tty_name" <<'PY'
+from pathlib import Path
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+
+bridge_path, broker_socket, fallback_log, tty_name = sys.argv[1:5]
+request_payloads = []
+server_errors = []
+server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+server.bind(broker_socket)
+server.listen(1)
+
+def serve():
+    try:
+        conn, _ = server.accept()
+        with conn:
+            request = b""
+            while not request.endswith(b"\n"):
+                chunk = conn.recv(4096)
+                if not chunk:
+                    raise RuntimeError("bridge closed before sending a complete request")
+                request += chunk
+            request_payloads.append(json.loads(request.decode("utf-8")))
+            conn.sendall(json.dumps({"ok": True, "secret": "brokered-commit-secret"}).encode("utf-8") + b"\n")
+    except Exception as exc:
+        server_errors.append(repr(exc))
+    finally:
+        server.close()
+
+thread = threading.Thread(target=serve)
+thread.start()
+
+env = os.environ.copy()
+env["XDG_CACHE_HOME"] = str(Path(bridge_path).parent / "cache")
+env["FAKE_TOUCHID_PINENTRY_LOG"] = fallback_log
+proc = subprocess.run(
+    [bridge_path],
+    input=(
+        f"OPTION ttyname={tty_name}\n"
+        "GETINFO flavor\n"
+        "GETINFO version\n"
+        "GETINFO ttyinfo\n"
+        "GETINFO pid\n"
+        'SETDESC "Please enter the passphrase to unlock the OpenPGP secret key:"\n'
+        "GETPIN\n"
+        "BYE\n"
+    ),
+    capture_output=True,
+    text=True,
+    env=env,
+    check=False,
+)
+thread.join(timeout=10)
+if thread.is_alive():
+    print("fake broker thread did not finish", file=sys.stderr)
+    sys.exit(1)
+if server_errors:
+    print(f"fake broker failed: {server_errors}", file=sys.stderr)
+    sys.exit(1)
+if proc.returncode != 0:
+    print(proc.stdout, file=sys.stderr)
+    print(proc.stderr, file=sys.stderr)
+    raise SystemExit(proc.returncode)
+if len(request_payloads) != 1 or request_payloads[0].get("op") != "get-gpg-secret":
+    print(f"expected exactly one get-gpg-secret request after GETINFO probes, got {request_payloads!r}", file=sys.stderr)
+    sys.exit(1)
+if Path(fallback_log).read_text() != "":
+    print(f"fallback pinentry should stay unused after GETINFO probes, got log {Path(fallback_log).read_text()!r}", file=sys.stderr)
+    sys.exit(1)
+output = proc.stdout
+for expected in (
+    "D broker-touchid\nOK\n",
+    "D 0.0.0\nOK\n",
+    "D brokered-commit-secret\nOK\n",
+):
+    if expected not in output:
+        print(f"expected {expected!r} in bridge output, got {output!r}", file=sys.stderr)
+        sys.exit(1)
+PY
+  [ "$status" -eq 0 ] || fail "$output"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: vm bridge loads signing context from owner env when ttyname is absent" {
+  local tmpdir bridge fallback broker_socket
+  tmpdir=$(mktemp -d)
+  bridge="$tmpdir/vm-gpg-pinentry-bridge"
+  fallback="$tmpdir/fake-pinentry-fallback"
+  broker_socket="$tmpdir/broker.sock"
+
+  create_fake_touchid_pinentry_backend "$fallback"
+  materialize_vm_gpg_touchid_bridge "$bridge" "$fallback" "$broker_socket"
+
+  run python3 - "$bridge" "$tmpdir" <<'PY'
+from pathlib import Path
+import sys
+import types
+
+bridge_path, tmpdir = sys.argv[1:3]
+tmpdir = Path(tmpdir)
+proc_root = tmpdir / "proc"
+metadata_path = tmpdir / "owner.metadata"
+metadata_path.write_text(
+    "payload_kind=commit\n"
+    "payload_subject=feat: owner env fallback\n"
+    "signer_name=VM TouchID Test\n"
+    "signer_email=m.liebiediew@gmail.com\n"
+    "repo_name=nix\n"
+    "repo_branch=feature/vm-gpg-touchid-signing\n"
+)
+(proc_root / "1546504").mkdir(parents=True)
+(proc_root / "1546504" / "environ").write_bytes(
+    f"GPG_TOUCHID_METADATA_PATH={metadata_path}\0OTHER=value\0".encode("utf-8")
+)
+
+module = types.ModuleType("vm_gpg_touchid_bridge")
+exec(compile(Path(bridge_path).read_text(), bridge_path, "exec"), module.__dict__)
+
+context = module.load_signing_context_from_owner("1546504/1000 vm-macbook", proc_root)
+expected = {
+    "payload_kind": "commit",
+    "payload_subject": "feat: owner env fallback",
+    "tag_name": "",
+    "signer_name": "VM TouchID Test",
+    "signer_email": "m.liebiediew@gmail.com",
+    "repo_name": "nix",
+    "repo_branch": "feature/vm-gpg-touchid-signing",
+}
+if context != expected:
+    print(f"expected owner-env signing context {expected!r}, got {context!r}", file=sys.stderr)
     sys.exit(1)
 PY
   [ "$status" -eq 0 ] || fail "$output"
@@ -4659,12 +4873,16 @@ PY
 }
 
 # bats test_tags=gpg
-@test "gpg: git gpg.program is set to gpg on vm-aarch64" {
+@test "gpg: vm-aarch64 git signing.signer uses the broker-aware wrapper" {
   local actual
 
-  actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.git.settings.gpg.program)
-  [[ "$actual" == *gpg* ]] \
-    || fail "vm-aarch64 git gpg.program '$actual' does not reference gpg"
+  actual=$(nix_generated_eval --json \
+    .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.git.signing.signer)
+
+  [[ "$actual" == *vm-gpg-touchid-signing/bin/vm-gpg-touchid-signing* ]] \
+    || fail "vm-aarch64 signing.signer should point at the broker-aware wrapper, got: $actual"
+  [[ "$actual" != *'/bin/gpg"'* ]] \
+    || fail "vm-aarch64 signing.signer should not point directly at plain gpg, got: $actual"
 }
 
 # bats test_tags=gpg
@@ -4871,6 +5089,258 @@ EOF
 }
 
 # bats test_tags=gpg
+@test "gpg: signing wrapper derives tty-keyed metadata without exported GPG_TTY" {
+  local payload tmpdir payload_file fake_gpg fake_bin wrapper_script probe_output runner metadata_exists metadata_path
+  payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: recover the controlling tty without exported GPG_TTY
+EOF
+  )
+  tmpdir=$(mktemp -d)
+  payload_file="$tmpdir/payload"
+  fake_gpg="$tmpdir/fake-gpg"
+  fake_bin="$tmpdir/bin"
+  wrapper_script="$tmpdir/vm-gpg-touchid-signing"
+  probe_output="$tmpdir/probe-output"
+  runner="$tmpdir/run-wrapper.sh"
+
+  printf '%s\n' "$payload" >"$payload_file"
+  mkdir -p "$fake_bin"
+  create_fake_gpg_touchid_signing_wrapper_probe "$fake_gpg"
+  extract_write_shell_script_bin_by_anchor \
+    "den/aspects/hosts/vm-aarch64.nix" \
+    'vmGitSigningWrapper = pkgs.writeShellScriptBin "vm-gpg-touchid-signing"' >"$wrapper_script"
+  python3 - "$wrapper_script" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+path.write_text(path.read_text().replace("''${", "${"))
+PY
+  chmod +x "$wrapper_script"
+
+  cat >"$fake_bin/tty" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -t 0 ]]; then
+  printf '/dev/pts/test-tty\n'
+else
+  printf 'not a tty\n'
+fi
+EOF
+  chmod +x "$fake_bin/tty"
+
+  cat >"$fake_bin/ps" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'pts/test-tty\n'
+EOF
+  chmod +x "$fake_bin/ps"
+
+  cat >"$runner" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+unset GPG_TTY
+export PATH="$fake_bin:\$PATH"
+export TMPDIR="$tmpdir"
+export XDG_CACHE_HOME="$tmpdir/cache"
+export GPG_TOUCHID_GPG_BIN="$fake_gpg"
+export GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output"
+
+bash "$wrapper_script" --detach-sign <"$payload_file"
+EOF
+  chmod +x "$runner"
+
+  script -q /dev/null "$runner" >/dev/null
+
+  metadata_exists=$(grep '^metadata_exists=' "$probe_output" | cut -d= -f2-)
+  metadata_path=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
+
+  assert_equal "$metadata_exists" "yes"
+  [[ "$metadata_path" == "$tmpdir/cache"/gpg-touchid-signing-prompts/*dev_pts_test-tty*.metadata ]] \
+    || fail "expected metadata path to be keyed by the controlling tty, got '$metadata_path'"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper prefers a concrete pts tty over the /dev/tty alias" {
+  local payload tmpdir payload_file fake_gpg fake_bin wrapper_script probe_output runner metadata_exists metadata_path
+  payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: prefer the concrete controlling tty path
+EOF
+  )
+  tmpdir=$(mktemp -d)
+  payload_file="$tmpdir/payload"
+  fake_gpg="$tmpdir/fake-gpg"
+  fake_bin="$tmpdir/bin"
+  wrapper_script="$tmpdir/vm-gpg-touchid-signing"
+  probe_output="$tmpdir/probe-output"
+  runner="$tmpdir/run-wrapper.sh"
+
+  printf '%s\n' "$payload" >"$payload_file"
+  mkdir -p "$fake_bin"
+  create_fake_gpg_touchid_signing_wrapper_probe "$fake_gpg"
+  extract_write_shell_script_bin_by_anchor \
+    "den/aspects/hosts/vm-aarch64.nix" \
+    'vmGitSigningWrapper = pkgs.writeShellScriptBin "vm-gpg-touchid-signing"' >"$wrapper_script"
+  python3 - "$wrapper_script" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+path.write_text(path.read_text().replace("''${", "${"))
+PY
+  chmod +x "$wrapper_script"
+
+  cat >"$fake_bin/tty" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+counter_file="${TTY_CALL_COUNTER_FILE:?}"
+count=0
+if [[ -f "$counter_file" ]]; then
+  count=$(cat "$counter_file")
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >"$counter_file"
+
+if [[ "$count" -eq 1 ]]; then
+  printf '/dev/tty\n'
+else
+  printf '/dev/pts/test-tty\n'
+fi
+EOF
+  chmod +x "$fake_bin/tty"
+
+  cat >"$fake_bin/ps" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'pts/test-tty\n'
+EOF
+  chmod +x "$fake_bin/ps"
+
+  cat >"$runner" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+unset GPG_TTY
+export PATH="$fake_bin:\$PATH"
+export TMPDIR="$tmpdir"
+export XDG_CACHE_HOME="$tmpdir/cache"
+export GPG_TOUCHID_GPG_BIN="$fake_gpg"
+export GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output"
+export TTY_CALL_COUNTER_FILE="$tmpdir/tty-call-count"
+
+bash "$wrapper_script" --detach-sign <"$payload_file"
+EOF
+  chmod +x "$runner"
+
+  script -q /dev/null "$runner" >/dev/null
+
+  metadata_exists=$(grep '^metadata_exists=' "$probe_output" | cut -d= -f2-)
+  metadata_path=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
+
+  assert_equal "$metadata_exists" "yes"
+  [[ "$metadata_path" == "$tmpdir/cache"/gpg-touchid-signing-prompts/*dev_pts_test-tty*.metadata ]] \
+    || fail "expected metadata path to use the concrete pts tty instead of /dev/tty, got '$metadata_path'"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: signing wrapper derives a concrete pts tty from ps when stdin is the payload pipe" {
+  local payload tmpdir payload_file fake_gpg fake_bin wrapper_script probe_output runner metadata_exists metadata_path
+  payload=$(cat <<'EOF'
+tree 0123456789abcdef0123456789abcdef01234567
+author Example Author <author@example.com> 1711752960 +0000
+committer Example Committer <committer@example.com> 1711753020 +0000
+
+feat: derive the controlling pts tty even when stdin is the payload pipe
+EOF
+  )
+  tmpdir=$(mktemp -d)
+  payload_file="$tmpdir/payload"
+  fake_gpg="$tmpdir/fake-gpg"
+  fake_bin="$tmpdir/bin"
+  wrapper_script="$tmpdir/vm-gpg-touchid-signing"
+  probe_output="$tmpdir/probe-output"
+  runner="$tmpdir/run-wrapper.sh"
+
+  printf '%s\n' "$payload" >"$payload_file"
+  mkdir -p "$fake_bin"
+  create_fake_gpg_touchid_signing_wrapper_probe "$fake_gpg"
+  extract_write_shell_script_bin_by_anchor \
+    "den/aspects/hosts/vm-aarch64.nix" \
+    'vmGitSigningWrapper = pkgs.writeShellScriptBin "vm-gpg-touchid-signing"' >"$wrapper_script"
+  python3 - "$wrapper_script" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+path.write_text(path.read_text().replace("''${", "${"))
+PY
+  chmod +x "$wrapper_script"
+
+  cat >"$fake_bin/tty" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -t 0 ]]; then
+  printf '/dev/tty\n'
+else
+  printf 'not a tty\n'
+fi
+EOF
+  chmod +x "$fake_bin/tty"
+
+  cat >"$fake_bin/ps" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'pts/test-tty\n'
+EOF
+  chmod +x "$fake_bin/ps"
+
+  cat >"$runner" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+unset GPG_TTY
+export PATH="$fake_bin:\$PATH"
+export TMPDIR="$tmpdir"
+export XDG_CACHE_HOME="$tmpdir/cache"
+export GPG_TOUCHID_GPG_BIN="$fake_gpg"
+export GPG_TOUCHID_WRAPPER_TEST_OUTPUT="$probe_output"
+
+bash "$wrapper_script" --detach-sign <"$payload_file"
+EOF
+  chmod +x "$runner"
+
+  script -q /dev/null "$runner" >/dev/null
+
+  metadata_exists=$(grep '^metadata_exists=' "$probe_output" | cut -d= -f2-)
+  metadata_path=$(grep '^pinentry_user_data=' "$probe_output" | cut -d= -f2-)
+
+  assert_equal "$metadata_exists" "yes"
+  [[ "$metadata_path" == "$tmpdir/cache"/gpg-touchid-signing-prompts/*dev_pts_test-tty*.metadata ]] \
+    || fail "expected metadata path to use the controlling pts tty from ps, got '$metadata_path'"
+
+  rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
 @test "gpg: signing wrapper passes only the metadata file path via GPG_TOUCHID_METADATA_PATH" {
   local payload tmpdir fake_gpg probe_output metadata_path
   payload=$(cat <<'EOF'
@@ -4937,6 +5407,23 @@ EOF
   assert_file_not_exists "$metadata_path"
 
   rm -rf "$tmpdir"
+}
+
+# bats test_tags=gpg
+@test "gpg: darwin commit touchid helper preserves Swift error interpolation" {
+  grep -Fq 'FileHandle.standardError.write(Data("\(prefix): \(message)\n".utf8))' den/aspects/features/git.nix \
+    || fail 'darwin gpg touchid helper should interpolate prefix/message in fail()'
+
+  if grep -Fq 'FileHandle.standardError.write(Data("\\(prefix): \\(message)\\n".utf8))' den/aspects/features/git.nix; then
+    fail 'darwin gpg touchid helper still escapes Swift fail() interpolation'
+  fi
+
+  grep -Fq 'FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \(failureMessage)\n".utf8))' den/aspects/features/git.nix \
+    || fail 'darwin gpg touchid helper should interpolate failureMessage on cancellation'
+
+  if grep -Fq 'FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \\(failureMessage)\\n".utf8))' den/aspects/features/git.nix; then
+    fail 'darwin gpg touchid helper still escapes Swift cancellation interpolation'
+  fi
 }
 
 # bats test_tags=gpg

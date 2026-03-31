@@ -93,8 +93,7 @@
                   return cache_home / "gpg-touchid-signing-prompts" / f"{tty_key}.metadata"
 
 
-              def load_signing_context(tty_name):
-                  metadata_path = metadata_path_from_tty(tty_name)
+              def load_signing_context_from_path(metadata_path):
                   if metadata_path is None or not metadata_path.is_file():
                       return None
 
@@ -134,6 +133,44 @@
                       "repo_name": pairs.get("repo_name") or "",
                       "repo_branch": pairs.get("repo_branch") or "detached",
                   }
+
+
+              def load_signing_context(tty_name):
+                  return load_signing_context_from_path(metadata_path_from_tty(tty_name))
+
+
+              def load_signing_context_from_owner(owner_value, proc_root=Path("/proc")):
+                  owner_pid = owner_value.split("/", 1)[0].strip()
+                  if not owner_pid or not owner_pid.isdigit():
+                      return None
+
+                  environ_path = proc_root / owner_pid / "environ"
+                  try:
+                      raw_environ = environ_path.read_bytes()
+                  except OSError:
+                      return None
+
+                  environ = {}
+                  for entry in raw_environ.split(b"\0"):
+                      if not entry or b"=" not in entry:
+                          continue
+                      key, value = entry.split(b"=", 1)
+                      try:
+                          environ[key.decode("utf-8")] = value.decode("utf-8")
+                      except UnicodeDecodeError:
+                          continue
+
+                  metadata_path = environ.get("GPG_TOUCHID_METADATA_PATH")
+                  if metadata_path:
+                      context = load_signing_context_from_path(Path(metadata_path))
+                      if context is not None:
+                          return context
+
+                  gpg_tty = environ.get("GPG_TTY")
+                  if gpg_tty:
+                      return load_signing_context(gpg_tty)
+
+                  return None
 
 
               def is_rbw_desc(command):
@@ -230,6 +267,7 @@
                   history = []
                   signing_context = None
                   session_kind = None
+                  owner_value = None
 
                   sys.stdout.write("OK Pleased to meet you, broker touchid pinentry ready\n")
                   sys.stdout.flush()
@@ -250,6 +288,17 @@
                               sys.stdout.flush()
                               continue
 
+                          if raw.startswith("OPTION owner="):
+                              owner_value = raw.split("=", 1)[1].rstrip("\n")
+                              if signing_context is None:
+                                  signing_context = load_signing_context_from_owner(owner_value)
+                                  if signing_context is not None:
+                                      session_kind = "gpg-signing"
+                              history.append(raw)
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
                           if raw.startswith("SETDESC ") and is_rbw_desc(raw):
                               session_kind = "rbw"
                               history.append(raw)
@@ -258,6 +307,11 @@
                               continue
 
                           if raw == "GETPIN\n":
+                              if session_kind is None and signing_context is None and owner_value is not None:
+                                  signing_context = load_signing_context_from_owner(owner_value)
+                                  if signing_context is not None:
+                                      session_kind = "gpg-signing"
+
                               if session_kind == "gpg-signing":
                                   try:
                                       secret = broker_get_secret(session_kind, signing_context)
@@ -288,6 +342,29 @@
 
                               fallback = activate_fallback(history)
                               emit(fallback.command(raw))
+                              continue
+
+                          if raw == "GETINFO flavor\n":
+                              sys.stdout.write("D broker-touchid\n")
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
+                          if raw == "GETINFO version\n":
+                              sys.stdout.write("D 0.0.0\n")
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
+                          if raw == "GETINFO ttyinfo\n":
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
+                              continue
+
+                          if raw == "GETINFO pid\n":
+                              sys.stdout.write(f"D {os.getpid()}\n")
+                              sys.stdout.write(OK)
+                              sys.stdout.flush()
                               continue
 
                           if raw == "BYE\n":
@@ -818,6 +895,62 @@
                 printf '%s\n' "$metadata_file"
               }
 
+              vm_gpg_touchid_detect_tty_name() {
+                local tty_name="''${GPG_TTY:-}"
+                local ps_tty=""
+                local controlling_tty=""
+                local stdin_tty=""
+
+                if [ -z "$tty_name" ] && [ -r /dev/tty ]; then
+                  controlling_tty=$(tty </dev/tty 2>/dev/null || true)
+                fi
+
+                if [ -z "$tty_name" ] && [ -n "$controlling_tty" ] && [ "$controlling_tty" != "not a tty" ] && [ "$controlling_tty" != "/dev/tty" ]; then
+                  tty_name="$controlling_tty"
+                fi
+
+                if [ -z "$tty_name" ]; then
+                  ps_tty=$(ps -o tty= -p "$$" 2>/dev/null | tr -d '[:space:]' || true)
+                  case "$ps_tty" in
+                    ""|"?"|"??"|"notty")
+                      ps_tty=""
+                      ;;
+                    /dev/*)
+                      ;;
+                    *)
+                      ps_tty="/dev/$ps_tty"
+                      ;;
+                  esac
+                fi
+
+                if [ -z "$tty_name" ] && [ -n "$ps_tty" ] && [ "$ps_tty" != "/dev/tty" ]; then
+                  tty_name="$ps_tty"
+                fi
+
+                if [ -z "$tty_name" ]; then
+                  stdin_tty=$(tty 2>/dev/null || true)
+                fi
+
+                if [ -z "$tty_name" ] && [ -n "$stdin_tty" ] && [ "$stdin_tty" != "not a tty" ] && [ "$stdin_tty" != "/dev/tty" ]; then
+                  tty_name="$stdin_tty"
+                fi
+
+                if [ -z "$tty_name" ] && [ -n "$controlling_tty" ] && [ "$controlling_tty" != "not a tty" ]; then
+                  tty_name="$controlling_tty"
+                fi
+
+                if [ -z "$tty_name" ] && [ -n "$stdin_tty" ] && [ "$stdin_tty" != "not a tty" ]; then
+                  tty_name="$stdin_tty"
+                fi
+
+                if [ -n "$tty_name" ] && [ "$tty_name" != "not a tty" ]; then
+                  printf '%s\n' "$tty_name"
+                  return 0
+                fi
+
+                return 1
+              }
+
               vm_gpg_touchid_exec_gpg_with_metadata() {
                 local gpg_bin="''${GPG_TOUCHID_GPG_BIN:-${pkgs.gnupg}/bin/gpg}"
                 local payload_file=""
@@ -852,10 +985,7 @@
                 payload_file=$(mktemp "''${TMPDIR:-/tmp}/vm-gpg-touchid-signing-payload.XXXXXX")
                 cat >"$payload_file"
                 payload=$(cat "$payload_file")
-                tty_name="''${GPG_TTY:-}"
-                if [ -z "$tty_name" ]; then
-                  tty_name=$(tty 2>/dev/null || true)
-                fi
+                tty_name=$(vm_gpg_touchid_detect_tty_name || true)
                 if [ -n "$tty_name" ] && [ "$tty_name" != "not a tty" ]; then
                   metadata_file=$(vm_gpg_touchid_write_signing_metadata_file "$payload" "$tty_name" || true)
                 fi
@@ -1081,34 +1211,6 @@ EOF
               '';
             };
 
-            gpgPresetPassphraseLogin = pkgs.writeShellScriptBin "gpg-preset-passphrase-login" ''
-              set -euo pipefail
-
-              if ! passphrase="$(${pkgs.rbw}/bin/rbw get gpg-password-nixos-macbook-vm)"; then
-                echo "gpg-preset-passphrase-login: failed to read gpg-password-nixos-macbook-vm from rbw" >&2
-                exit 1
-              fi
-
-              if [ -z "$passphrase" ]; then
-                echo "gpg-preset-passphrase-login: empty passphrase from rbw" >&2
-                exit 1
-              fi
-
-              mapfile -t keygrips < <(
-                ${pkgs.gnupg}/bin/gpg --batch --with-colons --with-keygrip --list-secret-keys ${vmGitSigningKey} \
-                  | ${pkgs.gawk}/bin/awk -F: '$1 == "grp" && $10 != "" { print $10 }'
-              )
-              if [ "''${#keygrips[@]}" -eq 0 ]; then
-                echo "gpg-preset-passphrase-login: failed to resolve keygrip for ${vmGitSigningKey}" >&2
-                exit 1
-              fi
-
-              ${pkgs.gnupg}/bin/gpg-connect-agent /bye >/dev/null
-              for keygrip in "''${keygrips[@]}"; do
-                printf '%s' "$passphrase" | ${pkgs.gnupg}/bin/gpg-preset-passphrase --preset "$keygrip"
-              done
-            '';
-
             repairSharedGitFileMode = pkgs.writeShellScriptBin "repair-shared-git-filemode" ''
               set -euo pipefail
 
@@ -1224,7 +1326,6 @@ EOF
           in {
             home.packages = [
               pkgs.docker-client
-              gpgPresetPassphraseLogin
             ];
 
             home.sessionVariables = {
@@ -1233,14 +1334,18 @@ EOF
             };
 
             programs.git.signing.key = vmGitSigningKey;
+            programs.git.signing.signer = "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
             programs.git.settings.gpg.program = "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
             programs.git.package = repairingGit;
 
-            services.gpg-agent.pinentry.package = vmGpgTouchIdPinentry;
-            services.gpg-agent.extraConfig = ''
-              allow-preset-passphrase
-              pinentry-program ${vmGpgTouchIdPinentry}/bin/vm-gpg-touchid-pinentry-bridge
-            '';
+            services.gpg-agent = {
+              defaultCacheTtl = 1;
+              maxCacheTtl = 1;
+              pinentry.package = vmGpgTouchIdPinentry;
+              extraConfig = ''
+                pinentry-program ${vmGpgTouchIdPinentry}/bin/vm-gpg-touchid-pinentry-bridge
+              '';
+            };
 
             programs.ssh = {
               enable = true;
@@ -1289,21 +1394,6 @@ EOF
               Service = {
                 Type = "oneshot";
                 ExecStart = "${repairSharedGitFileMode}/bin/repair-shared-git-filemode";
-              };
-              Install.WantedBy = [ "default.target" ];
-            };
-
-            systemd.user.services.gpg-preset-passphrase-login = {
-              Unit = {
-                Description = "Preset GPG signing passphrase on login";
-                After = [ "default.target" "rbw-config.service" ];
-                Wants = [ "rbw-config.service" ];
-              };
-              Service = {
-                Type = "oneshot";
-                ExecStart = "${gpgPresetPassphraseLogin}/bin/gpg-preset-passphrase-login";
-                Restart = "on-failure";
-                RestartSec = 30;
               };
               Install.WantedBy = [ "default.target" ];
             };
