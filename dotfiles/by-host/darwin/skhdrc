@@ -60,19 +60,19 @@ ctrl - d [
 
 ctrl - n [
   "VMWare Fusion" ~
-  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus west
+  *   : /usr/bin/env YNY_WARM_HELPER_SOCKET=/tmp/yny-warm.sock /Users/m/.local/state/yny-warm-helper-target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus west
 ]
 ctrl - e [
   "VMWare Fusion" ~
-  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus south
+  *   : /usr/bin/env YNY_WARM_HELPER_SOCKET=/tmp/yny-warm.sock /Users/m/.local/state/yny-warm-helper-target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus south
 ]
 ctrl - i [
   "VMWare Fusion" ~
-  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus north
+  *   : /usr/bin/env YNY_WARM_HELPER_SOCKET=/tmp/yny-warm.sock /Users/m/.local/state/yny-warm-helper-target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus north
 ]
 ctrl - o [
   "VMWare Fusion" ~
-  *   : /Users/m/.cargo/target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus east
+  *   : /usr/bin/env YNY_WARM_HELPER_SOCKET=/tmp/yny-warm.sock /Users/m/.local/state/yny-warm-helper-target/release/yny --log-file=/tmp/yny/debug.log --profile --log-append --config /Users/m/yny.config.dev.toml focus east
 ]
 ctrl - l [
   "VMWare Fusion" ~

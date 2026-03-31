@@ -114,6 +114,33 @@
               };
             };
 
+            launchd.user.agents.yny-warm-helper = {
+              serviceConfig = {
+                ProgramArguments = [
+                  "/bin/bash" "-c"
+                  ''
+                    set -euo pipefail
+                    /bin/wait4path /nix/store
+                    worktree="/Users/m/Projects/yeetnyoink/.worktrees/macos-native-facade-boundary"
+                    target="/Users/m/.local/state/yny-warm-helper-target"
+                    mkdir -p "$target"
+                    cd "$worktree"
+                    CARGO_TARGET_DIR="$target" /Users/m/.cargo/bin/cargo build --release
+                    exec "$target/release/yny" \
+                      --config /Users/m/yny.config.dev.toml \
+                      warm-helper serve \
+                      --socket /tmp/yny-warm.sock
+                  ''
+                ];
+                RunAtLoad = true;
+                KeepAlive = true;
+                LimitLoadToSessionType = "Aqua";
+                ProcessType = "Interactive";
+                StandardOutPath = "/tmp/yny-warm-helper.log";
+                StandardErrorPath = "/tmp/yny-warm-helper.log";
+              };
+            };
+
             services.yabai.enable = true;
             services.skhd = {
               enable = true;
