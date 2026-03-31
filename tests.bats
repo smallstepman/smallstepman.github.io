@@ -5427,6 +5427,34 @@ EOF
 }
 
 # bats test_tags=gpg
+@test "gpg: darwin commit touchid helper treats only explicit cancellation as exit code 1" {
+  run python - <<'PY'
+from pathlib import Path
+import sys
+
+text = Path("den/aspects/features/git.nix").read_text()
+
+required = [
+    "var failureCode: LAError.Code?",
+    "if let laError = evalError as? LAError {",
+    "failureCode = laError.code",
+    "let isExplicitCancellation = failureCode == .userCancel || failureCode == .userFallback",
+    "Darwin.exit(isExplicitCancellation ? 1 : 2)",
+]
+
+missing = [item for item in required if item not in text]
+if missing:
+    print(
+        "darwin gpg touchid helper should distinguish explicit cancellation from other LA failures; missing "
+        + ", ".join(missing),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+  assert_success
+}
+
+# bats test_tags=gpg
 @test "gpg: repo-managed pinentry wrapper rewrites git signing title and description from metadata" {
   local tmpdir wrapper fake_real metadata command_log expected_log actual_log expected_desc cache_home tty_name
   tmpdir=$(mktemp -d)

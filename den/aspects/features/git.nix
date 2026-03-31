@@ -81,6 +81,7 @@
                   let semaphore = DispatchSemaphore(value: 0)
                   var approved = false
                   var failureMessage: String?
+                  var failureCode: LAError.Code?
 
                   context.evaluatePolicy(
                       .deviceOwnerAuthenticationWithBiometrics,
@@ -89,6 +90,9 @@
                       approved = success
                       if let evalError, !success {
                           failureMessage = evalError.localizedDescription
+                          if let laError = evalError as? LAError {
+                              failureCode = laError.code
+                          }
                       }
                       semaphore.signal()
                   }
@@ -99,7 +103,8 @@
                       if let failureMessage {
                           FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \(failureMessage)\n".utf8))
                       }
-                      Darwin.exit(1)
+                      let isExplicitCancellation = failureCode == .userCancel || failureCode == .userFallback
+                      Darwin.exit(isExplicitCancellation ? 1 : 2)
                   }
 
                   let query: [CFString: Any] = [
