@@ -114,6 +114,26 @@
               };
             };
 
+            launchd.user.agents.yny-warm-helper = {
+              serviceConfig = {
+                ProgramArguments = [
+                  "/Users/m/.cargo/target/release/yny"
+                  "--config"
+                  "/Users/m/yny.config.dev.toml"
+                  "warm-helper"
+                  "serve"
+                  "--socket"
+                  "/tmp/yny-warm.sock"
+                ];
+                RunAtLoad = true;
+                KeepAlive = true;
+                LimitLoadToSessionType = "Aqua";
+                ProcessType = "Interactive";
+                StandardOutPath = "/tmp/yny-warm-helper.log";
+                StandardErrorPath = "/tmp/yny-warm-helper.log";
+              };
+            };
+
             services.yabai.enable = true;
             services.skhd = {
               enable = true;
