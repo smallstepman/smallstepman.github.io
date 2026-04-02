@@ -1,20 +1,15 @@
 (defalias 
-  🔆 brup
-  🔅 brdn
-  ;; f3 launchpad
-  🏠 lrld
-  ;; f4 search
-  🔍 a
-  ;; f5 microphone 
-  🎤 a
-  ;; f6 focus mode (moon icon)
-  🌙 a
-  ;; f7-f9
-  ⏪ prev
-  ⏯️ pp
-  ⏭️ next
-  ;; f10-f12
-  🔇 mute
-  🔉 vold
-  🔊 volu
+  🔆 brup ;; f1
+  🔅 brdn ;; f2 
+  🏠 lrld ;; f3 launchpad
+  🔍 a    ;; f4 search
+  🎤 a    ;; f5 microphone 
+  🌙 a    ;; f6 focus mode (moon icon)
+  ⏪ prev ;; f7
+  ⏯️ pp   ;; f8
+  ⏭️ next ;; f9
+  🔇 mute ;; f10
+  🔉 vold ;; f11
+  🔊 volu ;; f12
 )
+

@@ -1,35 +1,36 @@
+  ;; left hand 
+   ;; right hand
 (deflayermap (special-chars)
   tab nubs
   q S--
   w -
   e =
   r S-=
-    o S-[
-    p [
-    [ ]
-    ] S-]
+   o S-[
+   p [
+   [ ]
+   ] S-]
 
   a S-1
   s S-2
   d S-3
   f S-4
   g S-5
-    k S-6
-    l S-7
-    ; S-8
-    ' S-9
-    \ S-0
-    return S-'
+   k S-6
+   l S-7
+   ; S-8
+   ' S-9
+   \ S-0
+   return S-'
   
   z 1
   x 2
   c 3
   v 4
   b 5
-    m 6
-    , 7
-    . 8
-    / 9
-    rsft 0
-
-  spc =)
+   m 6
+   , 7
+   . 8
+   / 9
+   rsft 0
+)

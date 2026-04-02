@@ -20,13 +20,13 @@
   nubs     1  2  3  4  5  6  7  8  9  0  -   =   bspc
   tab       q  w  e  r  t  y  u  i  o  p  [   ]   ret
   caps       a  s  d  f  g  h  j  k  l  ;  '   \
-  lsft   grv  z  x  c  v  b  n  m  ,  .  /       rsft 
+  lsft   grv  z  x  c  v  b  n  m  ,  .  /       rsft
   fn lctl lalt lmet  spc  rmet ralt left down up rght)
 
 (defalias
   tty A-M-S-v
   .|🔢 (t! th . (layer-while-held special-chars))
-  🧭|🪐 (t! th spc (t! stacked-layer navigation code-navigation))
+  🪐|🧭 (t! th spc (t! stacked-layer navigation code-navigation))
   🧭|🤴 (t! th C-spc (t! stacked-layer navigation code-navigation)))
 
 (deflayer base
@@ -35,7 +35,7 @@
   tab        q   w   f   p   g  XX XX  j  l   u   y   ;     (t! th return ')
   bspc        @LM @LC @LA @LS d  XX XX  h  @RS @RA @RC @RM
   del grv      z   x   c   v   b  XX XX  k  m   ,           /
-  _ _ _ @tty           @🧭|🤴          @🧭|🪐 @.|🔢 _ _ _ _)
+  _ _ _ @tty           @🧭|🤴          @🪐|🧭 @.|🔢 _ _ _ _)
 (include components/layer-non-alphabetic-characters.kbd)
 (include components/layer-code-editor-navigation.kbd)
 (deflayermap navigation

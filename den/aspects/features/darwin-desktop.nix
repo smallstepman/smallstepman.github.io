@@ -120,6 +120,7 @@
                   "/Users/m/.cargo/target/release/yny"
                   "--config"
                   "/Users/m/yny.config.dev.toml"
+                  "--profile"
                   "warm-helper"
                   "serve"
                   "--socket"

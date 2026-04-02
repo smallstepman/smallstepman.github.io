@@ -117,12 +117,6 @@
                 ll  = "eza -lh --color=auto --group-directories-first --icons";
                 magit        = "emacsclient -a \"\" -nw -e -q '(progn (magit-status))'";
                 "nix-gc"           = "nix-collect-garbage -d";
-                "nix-update-flakes" = "nix flake update";
-
-                # cc = "claude";
-                oc  = "opencode";
-                ocd = "opencode";
-                openspec-in-progress = "openspec list --json | jq -r '.changes[] | select(.status == \"in-progress\").name'";
 
                 rs      = "cargo";
                 kubectl = "kubecolor";
@@ -133,16 +127,15 @@
                 pbpaste = "wl-paste --type text/plain";
                 open    = "xdg-open";
                 noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
-                nix-config = "nvim /nix-config";
                 niks = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
                 nikt = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
+                nikw = "${niksWorktree}/bin/niks-worktree";
               }) // (lib.optionalAttrs isNonWSLLinux {
-                "niks-worktree" = "${niksWorktree}/bin/niks-worktree";
+                nikw = "${niksWorktree}/bin/niks-worktree";
               }) // (lib.optionalAttrs isDarwin {
-                nix-config = "nvim ~/.config/nix-config";
                 niks = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
                 nikt = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
-                "niks-worktree" = "${niksWorktree}/bin/niks-worktree";
+                nikw = "${niksWorktree}/bin/niks-worktree";
                 pinentry = "pinentry-mac";
               });
 
