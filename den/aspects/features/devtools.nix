@@ -8,6 +8,7 @@
         pkgs.just
         pkgs.gnumake
 
+        pkgs.harlequin
         pkgs.btop
         pkgs.dust
         pkgs.tree
@@ -16,6 +17,8 @@
         pkgs.yazi
         pkgs.yq
         pkgs.jq
+
+        pkgs.dbeaver-bin
 
         pkgs.bws
         pkgs.fluxcd
@@ -33,6 +36,7 @@
 
         pkgs.go
         pkgs.gopls
+        pkgs.protobuf
 
         (pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "rust-src" "rust-analyzer" ];

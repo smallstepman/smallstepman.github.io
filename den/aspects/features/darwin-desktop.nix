@@ -67,6 +67,8 @@
                 NSWindowShouldDragOnGesture = true;
                 NSAutomaticWindowAnimationsEnabled = false;
                 NSWindowResizeTime = 0.001;
+                NSStatusItemSpacing = 2;
+                NSStatusItemSelectionPadding = 2;
               };
 
               "com.apple.screencapture" = {

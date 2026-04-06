@@ -72,9 +72,6 @@
     # LazyVim Nix (declarative Neovim + LazyVim)
     lazyvim.url = "github:pfassina/lazyvim-nix";
 
-    # Agent of Empires - AI agent game
-    agent-of-empires-src.url = "github:njbrake/agent-of-empires";
-
     # Non-flake sources for packages we build ourselves
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
@@ -130,7 +127,7 @@
     # Gastown - multi-agent orchestration system for Claude Code
     gastown = {
       url = "github:steveyegge/gastown";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs-master";
     };
 
     # import-tree - import Nix modules by directory tree (required by den)

@@ -14,11 +14,7 @@ let
     (final: prev: {
         opencode = inputs.opencode.packages.${prev.stdenv.hostPlatform.system}.default;
         rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
-        agent-of-empires = inputs.agent-of-empires-src.packages.${prev.stdenv.hostPlatform.system}.default;
-        gastown = inputs.gastown.packages.${prev.stdenv.hostPlatform.system}.gt.overrideAttrs (old: {
-          proxyVendor = true;
-          vendorHash = "sha256-lct4BRPRh8nfNHE2p0SU0ZgItA8AbWU/AQPz+HbiPaI=";
-        });
+        gastown = inputs.gastown.packages.${prev.stdenv.hostPlatform.system}.default;
 
       llm-agents = prev.llm-agents // {
         beads-rust = prev.callPackage "${inputs.llm-agents.outPath}/packages/beads-rust/package.nix" {
@@ -39,45 +35,6 @@ let
           };
         };
       };
-
-      apm =
-        let
-          src = final.fetchFromGitHub {
-            owner = "microsoft";
-            repo = "apm";
-            rev = "v0.7.3";
-            hash = "sha256-B2gAGZpziIf5L7Unc+ojJlCKk8O7qWUnTYmtNFLsxKk=";
-          };
-          workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = src; };
-          overlay = workspace.mkPyprojectOverlay { sourcePreference = "wheel"; };
-          # Fix upstream bug: get_auto_integrate / set_auto_integrate are called
-          # in cli.py but missing from config.py (v0.7.3).
-          pyprojectOverrides = _final: prev: {
-            apm-cli = prev.apm-cli.overrideAttrs (old: {
-              postInstall = (old.postInstall or "") + ''
-                cfg=$(find $out -path "*/apm_cli/config.py" | head -1)
-                cat >> "$cfg" << 'PYEOF'
-
-
-def get_auto_integrate():
-  return get_config().get("auto_integrate", True)
-
-
-def set_auto_integrate(value: bool):
-  update_config({"auto_integrate": value})
-PYEOF
-              '';
-            });
-          };
-          pythonSet = (final.callPackage inputs.pyproject-nix.build.packages {
-            python = final.python3;
-          }).overrideScope (final.lib.composeManyExtensions [
-            inputs.pyproject-build-systems.overlays.default
-            overlay
-            pyprojectOverrides
-          ]);
-        in
-        pythonSet.mkVirtualEnv "apm" workspace.deps.default;
 
       uniclip = final.buildGoModule {
         pname = "uniclip";
@@ -213,50 +170,17 @@ PYEOF
         };
       };
 
-      dotagents = final.stdenv.mkDerivation (finalAttrs: {
-        pname = "dotagents";
-        version = "0.15.0";
-
-        src = final.fetchFromGitHub {
-          owner = "getsentry";
-          repo = "dotagents";
-          rev = finalAttrs.version;
-          hash = "sha256-uqS2hh61urEtZ+ZLzyzdNChNA8kNNMemZUrV510uCfk=";
-        };
-
-        pnpmDeps = final.pnpm.fetchDeps {
-          inherit (finalAttrs) pname version src;
-          fetcherVersion = 1; # pnpm-lock.yaml lockfileVersion 9.0
-          hash = "sha256-E2YJ2bw9OB3T1//2rtHx0dqgoYFKo4Cj59x13QdJj4s=";
-        };
-
-        nativeBuildInputs = [ final.pnpm.configHook final.nodejs_22 final.makeWrapper ];
-
-        buildPhase = ''
-          runHook preBuild
-          pnpm build
-          runHook postBuild
-        '';
-
-        installPhase = ''
-          runHook preInstall
-          pnpm install --frozen-lockfile --prod
-          mkdir -p $out/lib/node_modules/@sentry/dotagents
-          cp -r dist package.json node_modules $out/lib/node_modules/@sentry/dotagents/
-          mkdir -p $out/bin
-          makeWrapper ${final.nodejs_22}/bin/node $out/bin/dotagents \
-            --add-flags "$out/lib/node_modules/@sentry/dotagents/dist/cli/index.js"
-          runHook postInstall
-        '';
-
-        meta = with final.lib; {
-          description = "Package manager for AI agent skill dependencies";
-          homepage = "https://github.com/getsentry/dotagents";
-          license = licenses.mit;
-          mainProgram = "dotagents";
-          platforms = platforms.all;
-        };
-      });
+      # Patch nvim-treesitter vim query to remove invalid "tab" node
+      # The vim grammar doesn't have "tab" as a valid node type
+      vimPlugins = prev.vimPlugins // {
+        nvim-treesitter = prev.vimPlugins.nvim-treesitter.overrideAttrs (oldAttrs: {
+          postPatch = (oldAttrs.postPatch or "") + ''
+            if [ -f runtime/queries/vim/highlights.scm ]; then
+              sed -i '/^  "tab"$/d' runtime/queries/vim/highlights.scm
+            fi
+          '';
+        });
+      };
 
     })
 

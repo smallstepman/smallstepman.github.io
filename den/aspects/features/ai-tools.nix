@@ -74,8 +74,6 @@ PY
         '';
       in {
         home.packages = [
-          pkgs.agent-of-empires
-
           pkgs.llm-agents.amp
           pkgs.llm-agents.ccusage-amp
           pkgs.llm-agents.claude-code
@@ -91,10 +89,8 @@ PY
           pkgs.llm-agents.beads-viewer
           pkgs.llm-agents.openspec
           pkgs.llm-agents.workmux
-          pkgs.gastown
 
-          pkgs.dotagents
-          pkgs.apm
+          pkgs.llm-agents.apm
 
           pkgs.llm-agents.copilot-language-server
           pkgs.llm-agents.openskills
