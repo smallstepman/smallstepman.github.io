@@ -436,17 +436,27 @@
                 ]
               '';
 
-              yaziInitLua = ''
+                yaziInitLua = ''
                 require("recycle-bin"):setup()
 
                 local orig_preview_touch = Preview.touch or function() end
+                local debug_enabled = os.getenv("DVCES_DEBUG") == "1"
+
+                local function dbg(...)
+                  if debug_enabled then
+                    ya.dbg("[dvces/init]", ...)
+                  end
+                end
 
                 function Preview:touch(event, step)
                     local hovered = cx.active.current.hovered
-                  if hovered and hovered.name == "rows.duckdbvfs" then
+                    dbg("touch", { hovered = hovered and hovered.name or nil, step = step })
+                    if hovered and hovered.name == "rows.duckdbvfs" then
+                      dbg("touch -> preview_delta", { delta = ya.clamp(-1, step, 1) })
                       ya.emit("plugin", { "dvces", preview_delta = ya.clamp(-1, step, 1) })
                       return
-                  end
+                    end
+                    dbg("touch -> seek", { step = step })
                     ya.emit("seek", { step })
                     return orig_preview_touch(self, event, step)
                 end
