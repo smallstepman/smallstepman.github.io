@@ -1,15 +1,15 @@
 local M = {}
 
-local function plugin_dir()
-  local source = debug.getinfo(1, "S").source
-  if source:sub(1, 1) == "@" then
-    source = source:sub(2)
+local function plugin_root()
+  local home = os.getenv("HOME")
+  if not home or home == "" then
+    error("Missing HOME; cannot locate OHLCV preview helper.")
   end
-  return source:match("(.*/)") or "./"
+  return home .. "/.config/yazi/plugins/ohlcv.yazi/"
 end
 
 local function helper_path()
-  return plugin_dir() .. "preview.py"
+  return plugin_root() .. "preview.py"
 end
 
 local function split_lines(text)
