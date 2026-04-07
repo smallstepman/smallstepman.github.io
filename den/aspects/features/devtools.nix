@@ -14,7 +14,6 @@
         pkgs.tree
         pkgs.watch
         pkgs.websocat
-        pkgs.yazi
         pkgs.yq
         pkgs.jq
 
