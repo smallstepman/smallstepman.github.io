@@ -1,13 +1,6 @@
 --- @since 25.5.31
 
 local M = {}
-local debug_enabled = os.getenv("DVCES_DEBUG") == "1"
-
-local function dbg(...)
-  if debug_enabled then
-    ya.dbg("[dvces/preview]", ...)
-  end
-end
 
 local state = ya.sync(function(st, op, key, value)
   st.scroll = st.scroll or {}
@@ -278,66 +271,53 @@ end
 
 function M:entry(job)
   local delta = requested_preview_delta(job)
-  dbg("entry", { args = job.args, delta = delta })
   if not delta then
-    dbg("entry -> no delta")
     return
   end
 
   local preview = current_preview()
   if not preview or preview.name ~= "rows.duckdbvfs" then
-    dbg("entry -> not rows.duckdbvfs", { preview = preview and preview.name or nil })
     return
   end
 
   local key = tostring(preview.url)
   local current = state("get", key)
-  dbg("entry -> scroll", { key = key, current = current, delta = delta, skip = preview.skip })
   state("set", key, current + math.floor(delta))
   ya.emit("peek", { preview.skip, force = true, only_if = Url(preview.url) })
 end
 
 function M:peek(job)
-  dbg("peek", { file = job.file and job.file.name, skip = job.skip })
   if job.file.name ~= "rows.duckdbvfs" then
-    dbg("peek -> clear")
     state("clear", tostring(job.file.url))
     return
   end
 
   local desc, err = read_descriptor(tostring(job.file.path))
   if not desc then
-    dbg("peek -> descriptor error", { err = err })
     return render(job, "DuckDB preview error:\n" .. tostring(err))
   end
 
   local output, query_err = query_rows(job, desc)
   if not output then
-    dbg("peek -> query error", { err = query_err })
     return render(job, "DuckDB preview error:\n" .. tostring(query_err))
   end
 
-  dbg("peek -> render", { desc = desc.kind, name = desc.name })
   return render(job, output)
 end
 
 function M:seek(job)
-  dbg("seek", { file = job.file and job.file.name, units = job.units })
   if type(job.units) ~= "number" then
-    dbg("seek -> non-number", { skip = cx.active.preview and cx.active.preview.skip or nil })
     ya.emit("peek", { cx.active.preview.skip, force = true, only_if = job.file.url })
     return
   end
 
   local hovered = cx.active.current.hovered
   if not hovered or hovered.url ~= job.file.url then
-    dbg("seek -> hovered mismatch", { hovered = hovered and hovered.name or nil })
     return
   end
 
   local page = math.max(job.area.h - 6, 3)
   local step = job.units < 0 and -page or page
-  dbg("seek -> peek", { step = step, skip = cx.active.preview.skip })
 
   ya.emit("peek", {
     math.max(0, cx.active.preview.skip + step),

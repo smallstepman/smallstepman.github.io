@@ -440,23 +440,13 @@
                 require("recycle-bin"):setup()
 
                 local orig_preview_touch = Preview.touch or function() end
-                local debug_enabled = os.getenv("DVCES_DEBUG") == "1"
-
-                local function dbg(...)
-                  if debug_enabled then
-                    ya.dbg("[dvces/init]", ...)
-                  end
-                end
 
                 function Preview:touch(event, step)
                     local hovered = cx.active.current.hovered
-                    dbg("touch", { hovered = hovered and hovered.name or nil, step = step })
                     if hovered and hovered.name == "rows.duckdbvfs" then
-                      dbg("touch -> preview_delta", { delta = ya.clamp(-1, step, 1) })
                       ya.emit("plugin", { "dvces", preview_delta = ya.clamp(-1, step, 1) })
                       return
                     end
-                    dbg("touch -> seek", { step = step })
                     ya.emit("seek", { step })
                     return orig_preview_touch(self, event, step)
                 end
@@ -547,19 +537,20 @@
                   source ${../../../dotfiles/common/zsh-manydot.sh}
 
                   # Add a `y` function to zsh that opens yazi either at the given directory or
-                  # at the one zoxide suggests
+                  # at the one zoxide's `z` command would pick.
                   unalias y 2>/dev/null || true
                   y() {
-                    if [ "$1" != "" ]; then
-                      if [ -d "$1" ]; then
-                        yazi "$1"
-                      else
-                        yazi "$(zoxide query $1)"
-                      fi
-                    else
+                    if [ "$#" -eq 0 ]; then
                       yazi
+                    elif [ "$#" -eq 1 ] && [ -d "$1" ]; then
+                      yazi "$1"
+                    elif [ "$#" -eq 2 ] && [ "$1" = "--" ]; then
+                      yazi "$2"
+                    else
+                      local result
+                      result="$(zoxide query --exclude "$(\builtin pwd -L)" -- "$@")" && yazi "$result"
                     fi
-                      return $?
+                    return $?
                   }
 
                   # Doom-like leader key in zsh vi normal mode when running inside tmux.

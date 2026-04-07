@@ -1,13 +1,6 @@
 --- @since 25.5.31
 
 local M = {}
-local debug_enabled = os.getenv("DVCES_DEBUG") == "1"
-
-local function dbg(...)
-  if debug_enabled then
-    ya.dbg("[dvces/fs]", ...)
-  end
-end
 
 local function flag(args, name)
   return args[name] or args[name:gsub("_", "-")] or args[name:gsub("-", "_")]
@@ -134,15 +127,12 @@ local function build_virtual_tree(item, force)
 end
 
 function M:entry(job)
-  dbg("entry", { args = job.args })
   local ctx = get_context()
   if not ctx then
-    dbg("entry -> no context")
     return
   end
 
   if flag(job.args, "leave") then
-    dbg("entry -> leave", { cwd = tostring(ctx.cwd) })
     local marker = ctx.cwd:join("_source.txt")
     local cha = fs.cha(marker)
     if cha then
@@ -167,18 +157,15 @@ function M:entry(job)
 
   local item = ctx.hovered
   if not item then
-    dbg("entry -> no hovered item")
     return
   end
 
   if item.is_dir then
-    dbg("entry -> dir", { name = item.stem or item.ext })
     ya.emit("enter", {})
     return
   end
 
   if not is_duckdb_file(item) then
-    dbg("entry -> file", { name = item.stem or item.ext, enter_only = flag(job.args, "enter_only") })
     if flag(job.args, "enter_only") then
       ya.emit("enter", {})
     else
@@ -187,10 +174,8 @@ function M:entry(job)
     return
   end
 
-  dbg("entry -> duckdb", { url = tostring(item.url), refresh = flag(job.args, "refresh") })
   local root, err = build_virtual_tree(item, flag(job.args, "refresh"))
   if not root then
-    dbg("entry -> duckdb error", { err = err })
     ya.notify({
       title = "DuckDB virtual FS",
       content = tostring(err),
@@ -200,7 +185,6 @@ function M:entry(job)
     return
   end
 
-  dbg("entry -> cd", { root = tostring(root) })
   ya.emit("cd", { root })
 end
 
