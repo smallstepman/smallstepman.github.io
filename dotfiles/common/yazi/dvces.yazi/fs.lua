@@ -13,7 +13,7 @@ local function flag(args, name)
   return args[name] or args[name:gsub("_", "-")] or args[name:gsub("-", "_")]
 end
 
-local function get_context()
+local get_context = ya.sync(function()
   local current = cx.active.current
   local hovered = cx.active.current.hovered
 
@@ -26,7 +26,7 @@ local function get_context()
       stem = hovered.url.stem or hovered.name or "database",
     } or nil,
   }
-end
+end)
 
 local function is_duckdb_file(item)
   return not item.is_dir and item.ext:lower() == "duckdb"
