@@ -373,6 +373,10 @@ local function requested_delta(job)
   return tonumber(arg)
 end
 
+local function is_enter_only(job)
+  return job.args.enter_only or job.args["enter-only"]
+end
+
 local function preview_delta(job)
   local delta = requested_delta(job)
   if not delta then
@@ -477,7 +481,7 @@ function M:entry(job)
   end
 
   if not is_duckdb_file(item) then
-    if job.args.enter_only then
+    if is_enter_only(job) then
       ya.emit("enter", {})
     else
       ya.emit("open", { hovered = true })

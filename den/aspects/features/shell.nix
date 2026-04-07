@@ -443,10 +443,10 @@
 
                 function Preview:touch(event, step)
                     local hovered = cx.active.current.hovered
-                    if hovered and hovered.name == "rows.duckdbvfs" then
-                        ya.emit("plugin", { "dvces", string.format("--delta=%d", ya.clamp(-1, step, 1)) })
-                        return
-                    end
+                  if hovered and hovered.name == "rows.duckdbvfs" then
+                      ya.emit("plugin", { "dvces", delta = ya.clamp(-1, step, 1) })
+                      return
+                  end
                     ya.emit("seek", { step })
                     return orig_preview_touch(self, event, step)
                 end
