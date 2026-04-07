@@ -51,16 +51,20 @@ local function read_text(url)
   return output.stdout:gsub("%s+$", "")
 end
 
-local function plugin_dir()
-  local source = debug.getinfo(1, "S").source
-  if source:sub(1, 1) == "@" then
-    source = source:sub(2)
+local function plugin_root()
+  local home = os.getenv("HOME")
+  if not home or home == "" then
+    return nil, "Missing HOME; cannot locate DuckDB helper scripts."
   end
-  return source:match("(.*/)") or "./"
+  return home .. "/.config/yazi/plugins/dvces.yazi/"
 end
 
 local function helper_path()
-  return plugin_dir() .. "duckdb_fs_build.py"
+  local root, err = plugin_root()
+  if not root then
+    return nil, err
+  end
+  return root .. "duckdb_fs_build.py"
 end
 
 local function slugify(name)
@@ -100,7 +104,12 @@ local function build_virtual_tree(item, force)
     return nil, tostring(create_err)
   end
 
-  local args = { helper_path(), tostring(item.url), tostring(root) }
+  local helper, helper_err = helper_path()
+  if not helper then
+    return nil, helper_err
+  end
+
+  local args = { helper, tostring(item.url), tostring(root) }
   if force then
     args[#args + 1] = "--refresh"
   end

@@ -9,15 +9,15 @@ local function dbg(...)
   end
 end
 
-local function plugin_dir()
-  local source = debug.getinfo(1, "S").source
-  if source:sub(1, 1) == "@" then
-    source = source:sub(2)
+local function plugin_root()
+  local home = os.getenv("HOME")
+  if not home or home == "" then
+    error("Missing HOME; cannot locate dvces plugin files.")
   end
-  return source:match("(.*/)") or "./"
+  return home .. "/.config/yazi/plugins/dvces.yazi/"
 end
 
-local base = plugin_dir()
+local base = plugin_root()
 local fs = dofile(base .. "fs.lua")
 local preview = dofile(base .. "preview.lua")
 
