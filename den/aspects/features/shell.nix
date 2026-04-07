@@ -12,7 +12,7 @@
             generated_dir="''${GENERATED_INPUT_DIR:-''${HOME}/.local/share/nix-config-generated}"
           '';
         in {
-          homeManager = { pkgs, lib, ... }:
+          homeManager = { pkgs, lib, config, ... }:
             let
               niksWorktree = if isDarwin || isNonWSLLinux then pkgs.writeShellApplication {
                 name = "niks-worktree";
@@ -470,10 +470,14 @@
                 DISPLAY = "nixpkgs-390751";
               });
 
-              home.sessionPath = lib.optionals isDarwin [
-                "/Applications/VMware Fusion.app/Contents/Library"
-                "/Users/m/.cargo/bin"
-              ];
+              home.sessionPath =
+                lib.optionals (isDarwin || isNonWSLLinux) [
+                  "${config.home.homeDirectory}/.cargo/target/release"
+                ]
+                ++ lib.optionals isDarwin [
+                  "/Applications/VMware Fusion.app/Contents/Library"
+                  "${config.home.homeDirectory}/.cargo/bin"
+                ];
 
               home.packages = [
                 pkgs.bat
