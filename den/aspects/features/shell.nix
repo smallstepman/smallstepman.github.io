@@ -383,12 +383,12 @@
 
                 [[mgr.prepend_keymap]]
                 on = "H"
-                run = "plugin dvces -- --delta=-1"
+                run = "plugin dvces -- --preview-delta=-1"
                 desc = "Scroll DuckDB preview columns left"
 
                 [[mgr.prepend_keymap]]
                 on = "L"
-                run = "plugin dvces -- --delta=1"
+                run = "plugin dvces -- --preview-delta=1"
                 desc = "Scroll DuckDB preview columns right"
 
                 [[mgr.prepend_keymap]]
@@ -444,7 +444,7 @@
                 function Preview:touch(event, step)
                     local hovered = cx.active.current.hovered
                   if hovered and hovered.name == "rows.duckdbvfs" then
-                      ya.emit("plugin", { "dvces", delta = ya.clamp(-1, step, 1) })
+                      ya.emit("plugin", { "dvces", preview_delta = ya.clamp(-1, step, 1) })
                       return
                   end
                     ya.emit("seek", { step })
