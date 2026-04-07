@@ -414,7 +414,8 @@ function M:seek(job)
 end
 
 function M:entry(job)
-  if preview_delta(job) then
+  if job.args.delta ~= nil or job.args[1] ~= nil then
+    preview_delta(job)
     return
   end
 
