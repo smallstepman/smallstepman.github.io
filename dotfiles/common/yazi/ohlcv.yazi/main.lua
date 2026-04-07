@@ -57,7 +57,7 @@ function M:peek(job)
   local output, err = Command("python3")
     :arg({
       helper_path(),
-      tostring(job.file.path),
+      tostring(job.file.url.path),
       tostring(job.area.h),
       tostring(job.area.w),
     })
