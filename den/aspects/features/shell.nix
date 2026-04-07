@@ -101,41 +101,43 @@
               } else null;
 
               shellAliases = {
-                g     = "git";
-                gs    = "git status";
-                ga    = "git add";
-                gc    = "git commit";
-                gl    = "git prettylog";
-                gp    = "git push";
-                gco   = "git checkout";
-                gcp   = "git cherry-pick";
-                gdiff = "git diff";
+                g        = "git";
+                gs       = "git status";
+                ga       = "git add";
+                gc       = "git commit";
+                gl       = "git prettylog";
+                gp       = "git push";
+                gco      = "git checkout";
+                gcp      = "git cherry-pick";
+                gdiff    = "git diff";
 
-                l   = "ls";
-                lah = "eza -alh --color=auto --group-directories-first --icons";
-                la  = "eza -la";
-                ll  = "eza -lh --color=auto --group-directories-first --icons";
-                magit        = "emacsclient -a \"\" -nw -e -q '(progn (magit-status))'";
-                "nix-gc"           = "nix-collect-garbage -d";
+                j        = "just";
+                y        = "yazi";
+                l        = "ls";
+                lah      = "eza -alh --color=auto --group-directories-first --icons";
+                la       = "eza -la";
+                ll       = "eza -lh --color=auto --group-directories-first --icons";
+                magit    = "emacsclient -a \"\" -nw -e -q '(progn (magit-status))'";
+                "nix-gc" = "nix-collect-garbage -d";
 
-                rs      = "cargo";
-                kubectl = "kubecolor";
+                rs       = "cargo";
+                kubectl  = "kubecolor";
 
                 nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
               } // (lib.optionalAttrs isLinux {
-                pbcopy  = "wl-copy --type text/plain";
-                pbpaste = "wl-paste --type text/plain";
-                open    = "xdg-open";
+                niks     = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
+                nikt     = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
+                nikw     = "${niksWorktree}/bin/niks-worktree";
+                open     = "xdg-open";
+                pbcopy   = "wl-copy --type text/plain";
+                pbpaste  = "wl-paste --type text/plain";
                 noctalia-diff = "nix shell nixpkgs#jq nixpkgs#colordiff -c bash -c \"colordiff -u --nobanner <(jq -S . ~/.config/noctalia/settings.json) <(noctalia-shell ipc call state all | jq -S .settings)\"";
-                niks = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
-                nikt = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
-                nikw = "${niksWorktree}/bin/niks-worktree";
               }) // (lib.optionalAttrs isNonWSLLinux {
-                nikw = "${niksWorktree}/bin/niks-worktree";
+                nikw     = "${niksWorktree}/bin/niks-worktree";
               }) // (lib.optionalAttrs isDarwin {
-                niks = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
-                nikt = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
-                nikw = "${niksWorktree}/bin/niks-worktree";
+                niks     = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
+                nikt     = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
+                nikw     = "${niksWorktree}/bin/niks-worktree";
                 pinentry = "pinentry-mac";
               });
 
@@ -144,6 +146,311 @@
               '' else ''
                 cat "$1" | col -bx | bat --language man --style plain
               '');
+
+              yaziTheme = builtins.fromTOML ''
+                "$schema" = "https://yazi-rs.github.io/schemas/theme.json"
+
+                # vim:fileencoding=utf-8:foldmethod=marker
+
+                # : Manager {{{
+
+                [mgr]
+                cwd = { fg = "#D87C4A", bold = true }
+
+                # Hovered
+                hovered = { reversed = true, bold = true }
+                preview_hovered = { underline = true }
+
+                # Find
+                find_keyword = { fg = "#4A8B8B", bold = true, italic = true, underline = true }
+                find_position = { fg = "#4A8B8B", bg = "reset", bold = true, italic = true }
+
+                # Marker
+                marker_copied = { fg = "#629C7D", bg = "#629C7D" }
+                marker_cut = { fg = "#C53030", bg = "#C53030" }
+                marker_marked = { fg = "#E5A72A", bg = "#E5A72A" }
+                marker_selected = { fg = "#C4693D", bg = "#C4693D" }
+
+                # Count
+                count_copied = { fg = "#121212", bg = "#629C7D" }
+                count_cut = { fg = "#121212", bg = "#C53030" }
+                count_selected = { fg = "#121212", bg = "#C4693D" }
+
+                # Border
+                border_symbol = "│"
+                border_style = { fg = "#a7a7a7" }
+
+                # : }}}
+
+
+                # : Tabs {{{
+
+                [tabs]
+                active = { fg = "#121212", bg = "#b4b4b4", bold = true }
+                inactive = { fg = "#b4b4b4", bg = "#212121" }
+
+                # Separator
+                sep_inner = { open = "", close = "" }
+                sep_outer = { open = "", close = "" }
+
+                # : }}}
+
+
+                # : Mode {{{
+
+                [mode]
+                normal_main = { fg = "#121212", bg = "#b4b4b4", bold = true }
+                normal_alt = { fg = "#b4b4b4", bg = "#212121" }
+
+                # Select mode
+                select_main = { fg = "#121212", bg = "#BD4C4C", bold = true }
+                select_alt = { fg = "#BD4C4C", bg = "#212121" }
+
+                # Unset mode
+                unset_main = { fg = "#121212", bg = "#D87C4A", bold = true }
+                unset_alt = { fg = "#D87C4A", bg = "#212121" }
+
+                # : }}}
+
+
+                # : Status bar {{{
+
+                [status]
+                sep_left = { open = "", close = "" }
+                sep_right = { open = "", close = "" }
+
+                # Progress
+                progress_label = { fg = "#121212", bold = true }
+                progress_normal = { fg = "#C4693D", bg = "#323232" }
+                progress_error = { fg = "#C53030", bg = "#323232" }
+
+                # Permissions
+                perm_sep = { fg = "#949494", bold = true }
+                perm_type = { fg = "#B14242" }
+                perm_read = { fg = "#d5d5d5", bold = true }
+                perm_write = { fg = "#C4693D", bold = true }
+                perm_exec = { fg = "#B14242", bold = true }
+
+                # : }}}
+
+
+                # : Pick {{{
+
+                [pick]
+                border = { fg = "#C4693D" }
+                active = { fg = "#DF6464", bold = true }
+                inactive = {}
+
+                # : }}}
+
+
+                # : Input {{{
+
+                [input]
+                border = { fg = "#B14242" }
+                title = {}
+                value = {}
+                selected = { reversed = true }
+
+                # : }}}
+
+
+                # : Completion {{{
+
+                [cmp]
+                border = { fg = "#B14242" }
+
+                # : }}}
+
+
+                # : Tasks {{{
+
+                [tasks]
+                border = { fg = "#C4693D" }
+                title = {}
+                hovered = { fg = "#d5d5d5", underline = true }
+
+                # : }}}
+
+
+                # : Which {{{
+
+                [which]
+                mask = { bg = "#212121" }
+                cand = { fg = "#E49A44" }
+                rest = { fg = "#b4b4b4" }
+                desc = { fg = "#DF6464" }
+                separator = "  "
+                separator_style = { fg = "#B14242" }
+
+                # : }}}
+
+
+                # : Help {{{
+
+                [help]
+                on = { fg = "#D87C4A" }
+                run = { fg = "#DF6464" }
+                desc = { fg = "#d5d5d5" }
+                hovered = { reversed = true, bold = true }
+                footer = { fg = "#e5e5e5", bg = "#121212" }
+
+                # : }}}
+
+
+                # : Notify {{{
+
+                [notify]
+                title_info = { fg = "#d5d5d5" }
+                title_warn = { fg = "#E5A72A" }
+                title_error = { fg = "#C53030" }
+
+                # : }}}
+
+
+                # : Spotter {{{
+
+                [spot]
+                border = { fg = "#C4693D" }
+                title  = {}
+
+                # Table
+                tbl_cell = { fg = "#d5d5d5", reversed = true }
+                tbl_col  = {}
+
+                # : }}}
+
+
+                # : Confirmation {{{
+
+                [confirm]
+                border     = { fg = "#C4693D" }
+                title      = {}
+
+                list       = {}
+                btn_yes    = { reversed = true }
+                btn_no     = {}
+                btn_labels = [ " [Y]es  ", "  (N)o  " ]
+
+                # : }}}
+
+
+                # : File-specific styles {{{
+
+                [filetype]
+
+                rules = [
+                  # Images
+                  { mime = "image/*", fg = "#E49A44" },
+
+                  # Media
+                  { mime = "{audio,video}/*", fg = "#D87C4A" },
+
+                  # Archives
+                  { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#DF6464" },
+
+                  # Documents
+                  { mime = "application/{pdf,doc,rtf}", fg = "#C4693D" },
+
+                  # Fallback
+                  { name = "*", fg = "#d5d5d5" },
+                  { name = "*/", fg = "#B14242" },
+                ]
+
+                # : }}}
+              '';
+
+              yaziKeymap = builtins.fromTOML ''
+                [[mgr.prepend_keymap]]
+                on = "l"
+                run = "plugin dvces -- --enter-only"
+                desc = "Enter directory or DuckDB database"
+
+                [[mgr.prepend_keymap]]
+                on = "<Right>"
+                run = "plugin dvces -- --enter-only"
+                desc = "Enter directory or DuckDB database"
+
+                [[mgr.prepend_keymap]]
+                on = "<Enter>"
+                run = "plugin dvces"
+                desc = "Open file or enter DuckDB database"
+
+                [[mgr.prepend_keymap]]
+                on = [ "g", "R" ]
+                run = "plugin dvces -- --refresh"
+                desc = "Refresh DuckDB virtual filesystem"
+
+                [[mgr.prepend_keymap]]
+                on = "H"
+                run = "plugin dvces -- --delta=-1"
+                desc = "Scroll DuckDB preview columns left"
+
+                [[mgr.prepend_keymap]]
+                on = "L"
+                run = "plugin dvces -- --delta=1"
+                desc = "Scroll DuckDB preview columns right"
+
+                [[mgr.prepend_keymap]]
+                on = "h"
+                run = "plugin dvces -- --leave"
+                desc = "Leave directory or DuckDB virtual filesystem"
+
+                [[mgr.prepend_keymap]]
+                on = "<Left>"
+                run = "plugin dvces -- --leave"
+                desc = "Leave directory or DuckDB virtual filesystem"
+
+                [[mgr.prepend_keymap]]
+                on = [ "R", "b" ]
+                run = "plugin recycle-bin"
+                desc = "Open Recycle Bin menu"
+              '';
+
+              yaziSettings = builtins.fromTOML ''
+                [mgr]
+                mouse_events = [ "click", "scroll", "touch" ]
+
+                [opener]
+                play = [
+                  { run = 'mpv "$@"', orphan = true, for = "unix" },
+                  { run = '"C:\Program Files\mpv.exe" %*', orphan = true, for = "windows" }
+                ]
+                edit = [
+                  { run = 'nvim "$@"', block = true, for = "unix" },
+                  #{ run = 'emacsclient -nw "$@"', block = true, for = "unix" },
+                ]
+                open = [
+                  { run = 'open "$@"', desc = "Open" },
+                ]
+
+                [plugin]
+                prepend_previewers = [
+                  { url = "*.duckdbvfs", run = "dvces" },
+                  { url = "*.csv", run = "ohlcv" },
+                  { url = "*.parquet", run = "ohlcv" },
+                  { url = "*.parq", run = "ohlcv" },
+                  { url = "*.feather", run = "ohlcv" },
+                  { url = "*.arrow", run = "ohlcv" },
+                  { url = "*.ipc", run = "ohlcv" },
+                ]
+              '';
+
+              yaziInitLua = ''
+                require("recycle-bin"):setup()
+
+                local orig_preview_touch = Preview.touch or function() end
+
+                function Preview:touch(event, step)
+                    local hovered = cx.active.current.hovered
+                    if hovered and hovered.name == "rows.duckdbvfs" then
+                        ya.emit("plugin", { "dvces", string.format("--delta=%d", ya.clamp(-1, step, 1)) })
+                        return
+                    end
+                    ya.emit("seek", { step })
+                    return orig_preview_touch(self, event, step)
+                end
+              '';
 
             in {
               home.stateVersion = "18.09";
@@ -182,8 +489,33 @@
                 pkgs.rbw
                 pkgs.ripgrep
                 pkgs.basalt
+                pkgs.trash-cli
                 manpager
               ] ++ lib.optionals (niksWorktree != null) [ niksWorktree ];
+
+              programs.yazi = {
+                enable = true;
+                package = pkgs.yazi;
+                plugins = {
+                  ohlcv = ../../../dotfiles/common/yazi/ohlcv.yazi;
+                  dvces = ../../../dotfiles/common/yazi/dvces.yazi;
+                  "recycle-bin" = pkgs.fetchFromGitHub {
+                    owner = "uhs-robert";
+                    repo = "recycle-bin.yazi";
+                    rev = "fa687116c46a784e664ef96619b32abf51f29b06";
+                    hash = "sha256-lpxTGWA15szM5VJ+qvV2+GTg7HXiZaZfyWyjeNMsTSM=";
+                  };
+                };
+                settings = yaziSettings;
+                theme = yaziTheme;
+                keymap = yaziKeymap;
+                initLua = yaziInitLua;
+                extraPackages = [
+                  pkgs.duckdb
+                  pkgs.python314
+                  pkgs.trash-cli
+                ];
+              };
 
               programs.zsh = {
                 enable = true;
@@ -191,7 +523,7 @@
                 autosuggestion.enable = true;
                 syntaxHighlighting.enable = true;
                 shellAliases = shellAliases;
-                initContent = ''
+                initContent = /* bash */ ''
                   # VSCode shell integration
                   [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
 
