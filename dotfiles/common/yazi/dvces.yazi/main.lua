@@ -17,13 +17,14 @@ end)
 
 local current_preview = ya.sync(function()
   local hovered = cx.active.current.hovered
-  if not hovered then
+  local preview = cx.active.preview
+  if not hovered or not preview then
     return nil
   end
   return {
     url = Url(hovered.url),
     name = hovered.name,
-    skip = cx.active.preview.skip,
+    skip = preview.skip or 0,
   }
 end)
 
@@ -355,13 +356,13 @@ local function query_rows(job, desc)
 end
 
 local function preview_delta(job)
-  local preview = current_preview()
-  if not preview or preview.name ~= "rows.duckdbvfs" then
+  local delta = tonumber(job.args.delta or job.args[1] or "")
+  if not delta then
     return false
   end
 
-  local delta = tonumber(job.args.delta or job.args[1] or "")
-  if not delta then
+  local preview = current_preview()
+  if not preview or preview.name ~= "rows.duckdbvfs" then
     return false
   end
 
