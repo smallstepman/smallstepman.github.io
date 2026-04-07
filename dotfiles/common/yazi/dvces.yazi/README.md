@@ -11,6 +11,14 @@ Use it from `keymap.toml` and `yazi.toml` with the `dvces` plugin name:
 on = [ "l" ]
 run = "plugin dvces -- --enter-only"
 
+[[mgr.prepend_keymap]]
+on = "H"
+run = "plugin dvces -- --preview-delta=-1"
+
+[[mgr.prepend_keymap]]
+on = "L"
+run = "plugin dvces -- --preview-delta=1"
+
 [plugin]
 prepend_previewers = [
   { url = "*.duckdbvfs", run = "dvces" },
