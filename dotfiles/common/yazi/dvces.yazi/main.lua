@@ -355,8 +355,26 @@ local function query_rows(job, desc)
   return header .. "\n" .. body
 end
 
+local function requested_delta(job)
+  if job.args.delta ~= nil then
+    return tonumber(job.args.delta)
+  end
+
+  local arg = job.args[1]
+  if type(arg) ~= "string" then
+    return nil
+  end
+
+  local named = arg:match("^%-%-delta=(.+)$")
+  if named then
+    return tonumber(named)
+  end
+
+  return tonumber(arg)
+end
+
 local function preview_delta(job)
-  local delta = tonumber(job.args.delta or job.args[1] or "")
+  local delta = requested_delta(job)
   if not delta then
     return false
   end
@@ -414,7 +432,8 @@ function M:seek(job)
 end
 
 function M:entry(job)
-  if job.args.delta ~= nil or job.args[1] ~= nil then
+  local delta = requested_delta(job)
+  if delta ~= nil then
     preview_delta(job)
     return
   end
