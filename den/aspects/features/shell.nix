@@ -546,6 +546,22 @@
                   bindkey -v
                   source ${../../../dotfiles/common/zsh-manydot.sh}
 
+                  # Add a `y` function to zsh that opens yazi either at the given directory or
+                  # at the one zoxide suggests
+                  unalias y 2>/dev/null || true
+                  y() {
+                    if [ "$1" != "" ]; then
+                      if [ -d "$1" ]; then
+                        yazi "$1"
+                      else
+                        yazi "$(zoxide query $1)"
+                      fi
+                    else
+                      yazi
+                    fi
+                      return $?
+                  }
+
                   # Doom-like leader key in zsh vi normal mode when running inside tmux.
                   tmux-leader-menu() {
                     if [[ -n "$TMUX" ]]; then
