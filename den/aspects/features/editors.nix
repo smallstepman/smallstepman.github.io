@@ -31,7 +31,7 @@
 
             programs.lazyvim = {
               enable = true;
-              pluginSource = "nixpkgs";
+              pluginSource = "latest";
               configFiles = ../../../dotfiles/common/lazyvim;
 
               extras = {
@@ -59,10 +59,6 @@
                 nixd
                 alejandra
                 pyright
-              ];
-
-              treesitterParsers = with pkgs.vimPlugins.nvim-treesitter-parsers; [
-                templ
               ];
             };
 

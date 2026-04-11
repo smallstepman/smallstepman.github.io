@@ -169,19 +169,6 @@ let
           rtpFilePath = "menus.tmux";
         };
       };
-
-      # Patch nvim-treesitter vim query to remove invalid "tab" node
-      # The vim grammar doesn't have "tab" as a valid node type
-      vimPlugins = prev.vimPlugins // {
-        nvim-treesitter = prev.vimPlugins.nvim-treesitter.overrideAttrs (oldAttrs: {
-          postPatch = (oldAttrs.postPatch or "") + ''
-            if [ -f runtime/queries/vim/highlights.scm ]; then
-              sed -i '/^  "tab"$/d' runtime/queries/vim/highlights.scm
-            fi
-          '';
-        });
-      };
-
     })
 
     (final: prev:

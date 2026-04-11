@@ -112,7 +112,6 @@
                 gdiff    = "git diff";
 
                 j        = "just";
-                y        = "yazi";
                 l        = "ls";
                 lah      = "eza -alh --color=auto --group-directories-first --icons";
                 la       = "eza -la";
