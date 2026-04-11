@@ -160,6 +160,155 @@ print(textwrap.dedent(match.group("body")), end="")
 PY
 }
 
+extract_brace_block_after_anchor() {
+  local source_path="$1"
+  local anchor="$2"
+
+  python3 - "$source_path" "$anchor" <<'PY'
+from pathlib import Path
+import sys
+
+source_path, anchor = sys.argv[1], sys.argv[2]
+text = sys.stdin.read() if source_path == "-" else Path(source_path).read_text()
+
+start = text.find(anchor)
+if start == -1:
+    raise SystemExit(1)
+
+brace_start = text.find("{", start)
+if brace_start == -1:
+    raise SystemExit(1)
+
+depth = 0
+for index in range(brace_start, len(text)):
+    char = text[index]
+    if char == "{":
+        depth += 1
+    elif char == "}":
+        depth -= 1
+        if depth == 0:
+            sys.stdout.write(text[brace_start + 1:index])
+            raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
+extract_brace_block_from_text_after_anchor() {
+  local source_text="$1"
+  local anchor="$2"
+
+  SOURCE_TEXT="$source_text" python3 - "$anchor" <<'PY'
+import os
+import sys
+
+anchor = sys.argv[1]
+text = os.environ["SOURCE_TEXT"]
+
+start = text.find(anchor)
+if start == -1:
+    raise SystemExit(1)
+
+brace_start = text.find("{", start)
+if brace_start == -1:
+    raise SystemExit(1)
+
+depth = 0
+for index in range(brace_start, len(text)):
+    char = text[index]
+    if char == "{":
+        depth += 1
+    elif char == "}":
+        depth -= 1
+        if depth == 0:
+            sys.stdout.write(text[brace_start + 1:index])
+            raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
+extract_multiline_string_after_anchor() {
+  local source_path="$1"
+  local anchor="$2"
+
+  python3 - "$source_path" "$anchor" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+source_path, anchor = sys.argv[1], sys.argv[2]
+text = sys.stdin.read() if source_path == "-" else Path(source_path).read_text()
+
+start = text.find(anchor)
+if start == -1:
+    raise SystemExit(1)
+
+body_start = start + len(anchor)
+closing = re.search(r"\n[ \t]*'';", text[body_start:])
+if closing is None:
+    raise SystemExit(1)
+
+sys.stdout.write(text[body_start:body_start + closing.start()])
+PY
+}
+
+assert_yazi_plugin_binding() {
+  local nix_file="$1"
+  local list_name="$2"
+  local target_pattern="$3"
+  local expected_run="$4"
+  local expected_multi="${5:-__any__}"
+
+  python3 - "$nix_file" "$list_name" "$target_pattern" "$expected_run" "$expected_multi" <<'PY'
+from pathlib import Path
+import re
+import sys
+import tomllib
+
+nix_file, list_name, target_pattern, expected_run, expected_multi = sys.argv[1:6]
+text = Path(nix_file).read_text()
+
+anchor = "yaziSettings = builtins.fromTOML ''"
+start = text.find(anchor)
+if start == -1:
+    raise SystemExit(1)
+
+body_start = start + len(anchor)
+closing = re.search(r"\n[ \t]*'';", text[body_start:])
+if closing is None:
+    raise SystemExit(1)
+
+settings = tomllib.loads(text[body_start:body_start + closing.start()])
+entries = settings["plugin"][list_name]
+
+for entry in entries:
+    target = entry.get("url", entry.get("name"))
+    if target != target_pattern or entry.get("run") != expected_run:
+        continue
+
+    if expected_multi == "__any__":
+        raise SystemExit(0)
+
+    wants_multi = expected_multi == "true"
+    if entry.get("multi") is wants_multi:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
+refute_yazi_plugin_binding() {
+  local nix_file="$1"
+  local list_name="$2"
+  local target_pattern="$3"
+  local forbidden_run="$4"
+
+  if assert_yazi_plugin_binding "$nix_file" "$list_name" "$target_pattern" "$forbidden_run"; then
+    return 1
+  fi
+}
+
 extract_write_shell_script_bin_by_anchor() {
   local nix_file="$1"
   local anchor="$2"
@@ -797,6 +946,331 @@ PYEOF
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git includes g = git alias" {
   grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell.nix
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb plugins are declared" {
+  local shell_file="den/aspects/features/shell.nix"
+  local yazi_block
+  local plugins_block
+  local duckdb_plugin_block
+
+  yazi_block=$(extract_brace_block_after_anchor "$shell_file" 'programs.yazi = {') \
+    || fail "expected programs.yazi attrset in $shell_file"
+  plugins_block=$(extract_brace_block_from_text_after_anchor "$yazi_block" 'plugins = {') \
+    || fail "expected plugins attrset inside programs.yazi"
+  duckdb_plugin_block=$(extract_brace_block_from_text_after_anchor "$plugins_block" 'duckdb = pkgs.fetchFromGitHub {') \
+    || fail "expected duckdb plugin entry in programs.yazi.plugins"
+
+  grep -Fq 'owner = "wylie102";' <<<"$duckdb_plugin_block"
+  grep -Fq 'repo = "duckdb.yazi";' <<<"$duckdb_plugin_block"
+  grep -Fq 'overlap = ../../../dotfiles/common/yazi/overlap.yazi;' <<<"$plugins_block"
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb overlap previewers only cover shared formats" {
+  local shell_file="den/aspects/features/shell.nix"
+  local ext
+
+  for ext in csv parquet; do
+    if ! assert_yazi_plugin_binding "$shell_file" "prepend_previewers" "*.${ext}" "overlap"; then
+      fail "expected *.$ext previewer to route through overlap"
+    fi
+
+    if ! refute_yazi_plugin_binding "$shell_file" "prepend_previewers" "*.${ext}" "ohlcv"; then
+      fail "expected *.$ext previewer to stop binding directly to ohlcv"
+    fi
+  done
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb ohlcv-only formats stay bound directly to ohlcv" {
+  local shell_file="den/aspects/features/shell.nix"
+  local ext
+
+  for ext in parq feather arrow ipc; do
+    if ! assert_yazi_plugin_binding "$shell_file" "prepend_previewers" "*.${ext}" "ohlcv"; then
+      fail "expected *.$ext previewer to stay bound directly to ohlcv"
+    fi
+
+    if ! refute_yazi_plugin_binding "$shell_file" "prepend_previewers" "*.${ext}" "overlap"; then
+      fail "expected *.$ext previewer not to route through overlap"
+    fi
+
+    if ! refute_yazi_plugin_binding "$shell_file" "prepend_preloaders" "*.${ext}" "duckdb" "false"; then
+      fail "expected *.$ext not to preload with duckdb"
+    fi
+  done
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb shared and extra formats are wired for preload" {
+  local shell_file="den/aspects/features/shell.nix"
+  local ext
+
+  for ext in duckdb db json tsv xlsx; do
+    if ! assert_yazi_plugin_binding "$shell_file" "prepend_previewers" "*.${ext}" "duckdb"; then
+      fail "expected *.$ext to be previewed with duckdb"
+    fi
+  done
+
+  for ext in csv parquet duckdb db json tsv xlsx; do
+    if ! assert_yazi_plugin_binding "$shell_file" "prepend_preloaders" "*.${ext}" "duckdb" "false"; then
+      fail "expected *.$ext to preload with duckdb"
+    fi
+  done
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb init lua wires plugin setup" {
+  local shell_file="den/aspects/features/shell.nix"
+  local init_lua
+
+  init_lua=$(extract_multiline_string_after_anchor "$shell_file" "yaziInitLua = ''") \
+    || fail "expected yaziInitLua block in $shell_file"
+  grep -Eq 'require\("duckdb"\):setup[[:space:]]*\(' <<<"$init_lua" \
+    || fail 'expected require("duckdb"):setup(...) inside yaziInitLua'
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb overlap router falls back on helper execution failure" {
+  run lua - "dotfiles/common/yazi/overlap.yazi/main.lua" <<'LUA'
+local plugin_path = assert(arg[1], "missing overlap router path")
+local duckdb_calls = {}
+local preview_calls = {}
+local file_url = "file:///tmp/sample.csv"
+
+local function expect(condition, message)
+  if not condition then
+    error(message, 0)
+  end
+end
+
+local function text_widget(text)
+  local widget = { text = text }
+  function widget:area(_)
+    return self
+  end
+  function widget:wrap(_)
+    return self
+  end
+  return widget
+end
+
+local duckdb = {}
+function duckdb:peek(job)
+  duckdb_calls[#duckdb_calls + 1] = { method = "peek", url = tostring(job.file.url) }
+end
+function duckdb:seek(job)
+  duckdb_calls[#duckdb_calls + 1] = { method = "seek", url = tostring(job.file.url) }
+end
+
+package.preload["duckdb"] = function()
+  return duckdb
+end
+
+Command = setmetatable({ PIPED = {} }, {
+  __call = function(_, _)
+    local cmd = {}
+    function cmd:arg(_)
+      return self
+    end
+    function cmd:stdout(_)
+      return self
+    end
+    function cmd:stderr(_)
+      return self
+    end
+    function cmd:output()
+      return {
+        stdout = "",
+        stderr = "ohlcv helper failed",
+        status = { success = false },
+      }
+    end
+    return cmd
+  end,
+})
+
+ya = {
+  emit = function() end,
+  preview_widget = function(job, widget)
+    preview_calls[#preview_calls + 1] = {
+      job = job,
+      widget = widget,
+    }
+  end,
+  clamp = function(minimum, value, maximum)
+    if value < minimum then
+      return minimum
+    end
+    if value > maximum then
+      return maximum
+    end
+    return value
+  end,
+}
+
+ui = {
+  Wrap = { NO = "no" },
+  Text = {
+    parse = text_widget,
+  },
+}
+
+cx = {
+  active = {
+    current = {
+      hovered = { url = file_url },
+    },
+    preview = {
+      skip = 0,
+    },
+  },
+}
+
+local router = assert(dofile(plugin_path))
+local peek_job = {
+  file = { url = file_url },
+  area = { h = 10, w = 40 },
+  skip = 0,
+}
+router:peek(peek_job)
+router:seek({
+  file = { url = file_url },
+  area = { h = 10, w = 40 },
+  units = 5,
+})
+
+expect(#duckdb_calls == 2, "expected peek and seek to delegate to duckdb after helper failure")
+expect(duckdb_calls[1].method == "peek", "expected failed helper execution to fall back during peek")
+expect(duckdb_calls[2].method == "seek", "expected seek to keep delegating after fallback activates")
+expect(#preview_calls == 0, "expected router not to render helper stderr after execution failure")
+LUA
+
+  assert_success
+}
+
+# bats test_tags=home-manager-core
+@test "home-manager-core: yazi duckdb overlap router keeps successful ohlcv output" {
+  run lua - "dotfiles/common/yazi/overlap.yazi/main.lua" <<'LUA'
+local plugin_path = assert(arg[1], "missing overlap router path")
+local duckdb_calls = {}
+local preview_calls = {}
+local emitted = {}
+local file_url = "file:///tmp/sample.csv"
+
+local function expect(condition, message)
+  if not condition then
+    error(message, 0)
+  end
+end
+
+local function text_widget(text)
+  local widget = { text = text }
+  function widget:area(_)
+    return self
+  end
+  function widget:wrap(_)
+    return self
+  end
+  return widget
+end
+
+local duckdb = {}
+function duckdb:peek(job)
+  duckdb_calls[#duckdb_calls + 1] = { method = "peek", url = tostring(job.file.url) }
+end
+function duckdb:seek(job)
+  duckdb_calls[#duckdb_calls + 1] = { method = "seek", url = tostring(job.file.url) }
+end
+
+package.preload["duckdb"] = function()
+  return duckdb
+end
+
+Command = setmetatable({ PIPED = {} }, {
+  __call = function(_, _)
+    local cmd = {}
+    function cmd:arg(_)
+      return self
+    end
+    function cmd:stdout(_)
+      return self
+    end
+    function cmd:stderr(_)
+      return self
+    end
+    function cmd:output()
+      return {
+        stdout = "",
+        stderr = "ohlcv raw preview",
+        status = { success = true },
+      }
+    end
+    return cmd
+  end,
+})
+
+ya = {
+  emit = function(...)
+    emitted[#emitted + 1] = { ... }
+  end,
+  preview_widget = function(job, widget)
+    preview_calls[#preview_calls + 1] = {
+      job = job,
+      widget = widget,
+    }
+  end,
+  clamp = function(minimum, value, maximum)
+    if value < minimum then
+      return minimum
+    end
+    if value > maximum then
+      return maximum
+    end
+    return value
+  end,
+}
+
+ui = {
+  Wrap = { NO = "no" },
+  Text = {
+    parse = text_widget,
+  },
+}
+
+cx = {
+  active = {
+    current = {
+      hovered = { url = file_url },
+    },
+    preview = {
+      skip = 0,
+    },
+  },
+}
+
+local router = assert(dofile(plugin_path))
+local peek_job = {
+  file = { url = file_url },
+  area = { h = 10, w = 40 },
+  skip = 0,
+}
+router:peek(peek_job)
+router:seek({
+  file = { url = file_url },
+  area = { h = 10, w = 40 },
+  units = 5,
+})
+
+expect(#duckdb_calls == 0, "expected successful ohlcv execution not to fall back to duckdb")
+expect(#preview_calls == 1, "expected successful ohlcv execution to render preview output")
+expect(preview_calls[1].widget.text == "ohlcv raw preview", "expected router to keep ohlcv stderr output on success")
+expect(#emitted == 1 and emitted[1][1] == "peek", "expected seek to continue using ohlcv preview path")
+LUA
+
+  assert_success
 }
 
 # bats test_tags=home-manager-core

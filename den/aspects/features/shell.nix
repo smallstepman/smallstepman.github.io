@@ -426,17 +426,32 @@
                 [plugin]
                 prepend_previewers = [
                   { url = "*.duckdbvfs", run = "dvces" },
-                  { url = "*.csv", run = "ohlcv" },
-                  { url = "*.parquet", run = "ohlcv" },
+                  { url = "*.csv", run = "overlap" },
+                  { url = "*.parquet", run = "overlap" },
                   { url = "*.parq", run = "ohlcv" },
                   { url = "*.feather", run = "ohlcv" },
                   { url = "*.arrow", run = "ohlcv" },
                   { url = "*.ipc", run = "ohlcv" },
+                  { url = "*.duckdb", run = "duckdb" },
+                  { url = "*.db", run = "duckdb" },
+                  { url = "*.json", run = "duckdb" },
+                  { url = "*.tsv", run = "duckdb" },
+                  { url = "*.xlsx", run = "duckdb" },
+                ]
+                prepend_preloaders = [
+                  { url = "*.csv", run = "duckdb", multi = false },
+                  { url = "*.parquet", run = "duckdb", multi = false },
+                  { url = "*.duckdb", run = "duckdb", multi = false },
+                  { url = "*.db", run = "duckdb", multi = false },
+                  { url = "*.json", run = "duckdb", multi = false },
+                  { url = "*.tsv", run = "duckdb", multi = false },
+                  { url = "*.xlsx", run = "duckdb", multi = false },
                 ]
               '';
 
                 yaziInitLua = ''
                 require("recycle-bin"):setup()
+                require("duckdb"):setup({ mode = "standard" })
 
                 local orig_preview_touch = Preview.touch or function() end
 
@@ -501,7 +516,14 @@
                 package = pkgs.yazi;
                 plugins = {
                   ohlcv = ../../../dotfiles/common/yazi/ohlcv.yazi;
+                  overlap = ../../../dotfiles/common/yazi/overlap.yazi;
                   dvces = ../../../dotfiles/common/yazi/dvces.yazi;
+                  duckdb = pkgs.fetchFromGitHub {
+                    owner = "wylie102";
+                    repo = "duckdb.yazi";
+                    rev = "3f8c8633d4b02d3099cddf9e892ca5469694ba22";
+                    hash = "sha256-XQM459V3HbPgXKgd9LnAIKRQOAaJPdZA/Tp91TSGHqY=";
+                  };
                   "recycle-bin" = pkgs.fetchFromGitHub {
                     owner = "uhs-robert";
                     repo = "recycle-bin.yazi";
