@@ -45,6 +45,60 @@ let
         meta.description = "Universal clipboard - copy on one device, paste on another";
       };
 
+      glowm = final.buildGo126Module {
+        pname = "glowm";
+        version = "0-unstable";
+        src = inputs.glowm-src;
+        vendorHash = "sha256-VrfaFGV8NdFPpmH/35nKEPzbJxTmgyNPAYTSrAYtJy0=";
+        subPackages = [ "cmd/glowm" ];
+
+        meta = {
+          description = "Glow-like Markdown CLI with Mermaid rendering";
+          homepage = "https://github.com/atani/glowm";
+          license = final.lib.licenses.mit;
+          mainProgram = "glowm";
+        };
+      };
+
+      btop = prev.btop.overrideAttrs (_: {
+        version = "1.4.6";
+        src = inputs.btop-src;
+
+        nativeBuildInputs = [
+          final.gnumake
+          final.gcc14
+          final.coreutils
+          final.gnused
+          final.lowdown
+        ] ++ final.lib.optionals final.stdenv.hostPlatform.isLinux [
+          final.autoAddDriverRunpath
+        ];
+
+        buildInputs = final.lib.optionals final.stdenv.hostPlatform.isDarwin [
+          final.apple-sdk_15
+        ];
+
+        dontUseCmakeConfigure = true;
+        makeFlags = [ "PREFIX=$(out)" "GPU_SUPPORT=true" ];
+
+        buildPhase = ''
+          runHook preBuild
+          make btop
+          runHook postBuild
+        '';
+
+        installPhase = ''
+          runHook preInstall
+          make install PREFIX=$out
+          runHook postInstall
+        '';
+
+        versionCheckProgram = "${placeholder "out"}/bin/btop";
+        versionCheckProgramArg = "--version";
+        nativeInstallCheckInputs = [ final.versionCheckHook ];
+        doInstallCheck = true;
+      });
+
       bws = prev.bws.overrideAttrs (finalAttrs:
         let
           version = "2.0.0";

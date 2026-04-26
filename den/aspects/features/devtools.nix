@@ -7,9 +7,11 @@
         pkgs.devenv
         pkgs.just
         pkgs.gnumake
+        pkgs.pixi
 
         pkgs.harlequin
         pkgs.btop
+        pkgs.glowm
         pkgs.dust
         pkgs.tree
         pkgs.watch

@@ -34,6 +34,7 @@
     };
     mac-app-util.url = "github:hraban/mac-app-util";
 
+    # codex.url = "github:openai/codex";  # disabled: missing libwebrtc outputHash in upstream flake
     # Other packages
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -74,6 +75,9 @@
 
     # Non-flake sources for packages we build ourselves
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
+    glowm-src = { url = "github:atani/glowm"; flake = false; };
+    btop-src = { url = "github:aristocratos/btop"; flake = false; };
+
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
 
     # rbw (Bitwarden CLI) with inject/run support
@@ -135,7 +139,6 @@
 
     # sonar - CLI to manage processes running on localhost ports
     sonar.url = "github:smallstepman/sonar";
-
   };
 
   # Den - aspect-oriented context-driven Nix configurations (top-level dotted path

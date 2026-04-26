@@ -60,6 +60,22 @@
         "type": "github"
       }
     },
+    "btop-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776069514,
+        "narHash": "sha256-3zfferEYgPoHXWr3Nmmw3OMRBf2wjWylFpxswj30lrM=",
+        "owner": "aristocratos",
+        "repo": "btop",
+        "rev": "b101fb378e75d26626fcb98a993f76a0b06ab120",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aristocratos",
+        "repo": "btop",
+        "type": "github"
+      }
+    },
     "bun2nix": {
       "inputs": {
         "flake-parts": [
@@ -479,6 +495,22 @@
         "type": "github"
       }
     },
+    "glowm-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776150636,
+        "narHash": "sha256-Ps14oj9SJZdzFZGfE93Ueb6Hat2NWk5av5ZZOxbAs0Q=",
+        "owner": "atani",
+        "repo": "glowm",
+        "rev": "97bc113233fe25e9d5903d93e5f282e4af8c4755",
+        "type": "github"
+      },
+      "original": {
+        "owner": "atani",
+        "repo": "glowm",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -559,11 +591,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1775832605,
-        "narHash": "sha256-T8Lm9K94//Pc0Corm7xwQRWhDt5PjsZbFPqPKZ8IU9Q=",
+        "lastModified": 1775975098,
+        "narHash": "sha256-impeGdZGirfnBz3hyynoF12oFcK3FlCNYooO1pySIXc=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "d98d7fc7eed214e30b637bea7b51188d1078fb0c",
+        "rev": "01e70ec69c7b46feee62846997727af5b56c8b6c",
         "type": "github"
       },
       "original": {
@@ -939,11 +971,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1775763530,
-        "narHash": "sha256-BuTK9z1QEwWPOIakQ1gCN4pa4VwVJpfptYCviy2uOGc=",
+        "lastModified": 1775888245,
+        "narHash": "sha256-nwASzrRDD1JBEu/o8ekKYEXm/oJW6EMCzCRdrwcLe90=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "b0188973b4b2a5b6bdba8b65381d6cd09a533da0",
+        "rev": "13043924aaa7375ce482ebe2494338e058282925",
         "type": "github"
       },
       "original": {
@@ -1181,12 +1213,14 @@
     "root": {
       "inputs": {
         "aw-import-screentime-src": "aw-import-screentime-src",
+        "btop-src": "btop-src",
         "darwin": "darwin",
         "den": "den",
         "disko": "disko",
         "flake-aspects": "flake-aspects",
         "gastown": "gastown",
         "git-repo-manager": "git-repo-manager",
+        "glowm-src": "glowm-src",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
         "lazyvim": "lazyvim",

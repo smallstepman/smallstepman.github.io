@@ -80,6 +80,7 @@ PY
           pkgs.claude-code-acp
           pkgs.llm-agents.ccusage
           pkgs.llm-agents.copilot-cli
+          # pkgs.codex -- disabled: upstream flake has missing libwebrtc outputHash
           pkgs.llm-agents.pi
           pkgs.llm-agents.ccusage-pi
           pkgs.llm-agents.ccusage-opencode

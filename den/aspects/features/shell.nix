@@ -104,14 +104,20 @@
                 g        = "git";
                 gs       = "git status";
                 ga       = "git add";
+                gaa      = "git add .";
                 gc       = "git commit";
-                gl       = "git prettylog";
+                gcc      = "git commit -m";
+                gaacc    = "git add . && git commit -m";
+                gl       = "git log --oneline";
+                gll      = "git log";
                 gp       = "git push";
                 gco      = "git checkout";
                 gcp      = "git cherry-pick";
-                gdiff    = "git diff";
+                gd       = "git diff";
 
                 j        = "just";
+                jj       = "just -g";
+                jjfo     = "just -g focusedride";
                 l        = "ls";
                 lah      = "eza -alh --color=auto --group-directories-first --icons";
                 la       = "eza -la";
@@ -408,6 +414,7 @@
 
               yaziSettings = builtins.fromTOML ''
                 [mgr]
+                ratio = [2, 3, 7]
                 mouse_events = [ "click", "scroll", "touch" ]
 
                 [opener]
@@ -422,13 +429,22 @@
                 open = [
                   { run = 'open "$@"', desc = "Open" },
                 ]
+                parqeye = [
+                  { run = 'parqeye %s', desc = "Parqeye", block = true },
+                ]
+
+                [open]
+                prepend_rules = [
+                  { url = "*.parquet", use = "parqeye" },
+                ]
 
                 [plugin]
                 prepend_previewers = [
                   { url = "*.duckdbvfs", run = "dvces" },
-                  { url = "*.csv", run = "overlap" },
-                  { url = "*.parquet", run = "overlap" },
-                  { url = "*.parq", run = "ohlcv" },
+                  { url = "*.csv", run = "duckdb" },
+                  { url = "**/data/bars/**/*.parquet", run = "ohlcv" },
+                  { url = "*.parquet", run = "duckdb" },
+                  { url = "*.parq", run = "duckdb" },
                   { url = "*.feather", run = "ohlcv" },
                   { url = "*.arrow", run = "ohlcv" },
                   { url = "*.ipc", run = "ohlcv" },
@@ -504,6 +520,7 @@
                 pkgs.jq
                 pkgs.kubecolor
                 pkgs.kubectl
+                pkgs.mdfried
                 pkgs.rbw
                 pkgs.ripgrep
                 pkgs.basalt
@@ -601,8 +618,71 @@
                   with-amp() { AMP_API_KEY=$(rbw get amp-api-key) "$@"; }
                   copilot() { COPILOT_GITHUB_TOKEN=$(rbw get github-token) command copilot "$@"; }
                   claude() { CLAUDE_CODE_OAUTH_TOKEN=$(rbw get claude-oauth-token) command claude "$@"; }
-                  codex() { OPENAI_API_KEY=$(rbw get openai-api-key) command codex "$@"; }
-                '');
+                  # codex() { OPENAI_API_KEY=$(rbw get openai-api-key) command codex "$@"; }  # disabled: codex package not available
+                '') + ''
+
+                  # Zummoner - AI CLI command helper (bound to Ctrl+L)
+                  zummoner() {
+                    local question="$BUFFER"
+                    local prompt="
+                    You are an experienced Linux engineer with expertise in all Linux
+                    commands and their functionality across different Linux systems.
+
+                    Given a task, generate a single command or a pipeline
+                    of commands that accomplish the task efficiently.
+                    This command is to be executed in the current shell, zsh.
+                    For complex tasks or those requiring multiple
+                    steps, provide a pipeline of commands.
+                    Ensure all commands are safe and prefer modern ways. For instance,
+                    homectl instead of adduser, ip instead of ifconfig, systemctl, journalctl, etc.
+                    Make sure that the command flags used are supported by the binaries
+                    usually available in the current system or shell.
+                    If a command is not compatible with the
+                    system or shell, provide a suitable alternative.
+
+                    The system information is: $(uname -a) (generated using: uname -a).
+                    The user is $USER. Use sudo when necessary
+
+                    Create a command to accomplish the following task: $QUESTION
+
+                    If there is text enclosed in paranthesis, that's what ought to be changed.
+                    If there's a comment (#), then the stuff after is is the instructions, you should put the stuff there.
+
+                    Output only the command as a single line of plain text, with no
+                    quotes, formatting, or additional commentary. Do not use markdown or any
+                    other formatting. Do not include the command into a code block.
+                    Don't include the shell itself (bash, zsh, etc.) in the command.
+                    Don't reason about what the user wants, don't think. Don't do any self-dialog, commentery, pondering. 
+                    Just oneshot the command the best you can.
+                    NO THINKING, JUST BEST GUESS!
+                    "
+
+                    BUFFER="$question ... thinking"
+                    zle -R
+
+                    local response
+                    response=$(curl -sf http://localhost:1234/api/v1/chat \
+                      -H "Content-Type: application/json" \
+                      -d "$(jq -n \
+                        --arg model "google/gemma-4-e4b" \
+                        --arg system_prompt "$prompt" \
+                        --arg input "$question" \
+                        '{model: $model, system_prompt: $system_prompt, input: $input}')")
+
+                    local command
+                    command=$(printf '%s' "$response" | jq -r '.output[0].content // empty' | sed 's/```//g' | tr -d '\n')
+
+                    if [[ -n "$command" ]]; then
+                      QUESTION="$(echo $question | cut -d '#' -f 2)"
+                      BUFFER="$command # $QUESTION"
+                      CURSOR=''${#BUFFER}
+                    else
+                      BUFFER="$question ... no results"
+                    fi
+                  }
+                  zle -N zummoner
+                  bindkey '\C-e' zummoner
+                '';
               };
 
               programs.bash = {
