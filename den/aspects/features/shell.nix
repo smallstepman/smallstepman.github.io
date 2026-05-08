@@ -502,6 +502,7 @@
 
               home.sessionPath =
                 lib.optionals (isDarwin || isNonWSLLinux) [
+                  "${config.home.homeDirectory}/.local/bin"
                   "${config.home.homeDirectory}/.cargo/target/release"
                 ]
                 ++ lib.optionals isDarwin [
