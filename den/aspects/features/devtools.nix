@@ -18,8 +18,11 @@
         pkgs.websocat
         pkgs.yq
         pkgs.jq
+        pkgs.d2
+        pkgs.adrs
 
         pkgs.dbeaver-bin
+        pkgs.atlas
 
         pkgs.bws
         pkgs.fluxcd
@@ -39,9 +42,9 @@
         pkgs.gopls
         pkgs.protobuf
 
-        (pkgs.rust-bin.stable.latest.default.override {
+        (pkgs.rust-bin.nightly.latest.default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
-          targets = [ "wasm32-wasip1" ];
+          targets = [ "wasm32-wasip1" "wasm32-unknown-unknown" "wasm32-wasip2" ];
         })
 
         (lib.hiPrio pkgs.python314)
@@ -50,6 +53,12 @@
         pkgs.nodejs_22
 
         pkgs.s3fs
+        pkgs.cmake
+        pkgs.ninja
+        pkgs.llvmPackages_21.clang-tools
+        pkgs.llvmPackages_21.lld
+        pkgs.llvmPackages_21.lldb
+        pkgs.llvmPackages_21.libcxx
 
         pkgs.zellij
         pkgs.kitty
@@ -60,7 +69,7 @@
 
       home.file.".gdbinit".source = ../../../dotfiles/common/gdbinit;
 
-      home.file.".cargo/config.toml".text = "[build]\n" + "target-dir = \"" + config.home.homeDirectory + "/.cargo/target\"\n";
+      home.file.".cargo/config.toml".text = "[build]\n" + "#target-dir = \"" + config.home.homeDirectory + "/.cargo/target\"\ntarget-dir = \"/Volumes/crucialP3/.cargo/target\"";
 
       xdg.configFile."tmux/menus/doomux.sh" = {
         source = ../../../dotfiles/common/tmux/doomux.sh;

@@ -507,7 +507,7 @@
                 ]
                 ++ lib.optionals isDarwin [
                   "/Applications/VMware Fusion.app/Contents/Library"
-                  "${config.home.homeDirectory}/.cargo/bin"
+                  # "${config.home.homeDirectory}/.cargo/bin"
                 ];
 
               home.packages = [

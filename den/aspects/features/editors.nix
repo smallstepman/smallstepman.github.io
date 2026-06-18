@@ -14,6 +14,7 @@
             ];
 
             home.packages = [
+              pkgs.obsidian
               pkgs.nerd-fonts.symbols-only
               pkgs.emacs-all-the-icons-fonts
             ];
