@@ -6,4 +6,6 @@
 
   den.hosts.x86_64-linux.wsl.wsl.enable = true;
   den.hosts.x86_64-linux.wsl.users.m = { };
+
+  den.hosts.x86_64-linux.jimi.users.s = { };
 }

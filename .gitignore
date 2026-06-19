@@ -1,4 +1,5 @@
 .DS_Store
+.env
 backup.tar.gz
 result
 iso/nixos.iso

@@ -5,7 +5,7 @@
     # Pin our primary nixpkgs repository. This is the main nixpkgs repository
     # we'll use for our configurations. Be very careful changing this because
     # it'll impact your entire system.
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
 
     # We use the unstable nixpkgs repo for some packages.
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
@@ -24,12 +24,12 @@
     nix-snapd.inputs.nixpkgs.follows = "nixpkgs";
 
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.11";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     darwin = {
-      url = "github:nix-darwin/nix-darwin/nix-darwin-25.11";
+      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     mac-app-util.url = "github:hraban/mac-app-util";
@@ -139,6 +139,17 @@
 
     # sonar - CLI to manage processes running on localhost ports
     sonar.url = "github:smallstepman/sonar";
+
+    # CoolerControl plugins for jimi bare-metal server
+    corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
+    ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
+
+    # Unattended NixOS installer
+    unattended-installer = {
+      url = "github:chrillefkr/nixos-unattended-installer";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.disko.follows = "disko";
+    };
   };
 
   # Den - aspect-oriented context-driven Nix configurations (top-level dotted path

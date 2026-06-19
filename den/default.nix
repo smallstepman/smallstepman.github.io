@@ -15,7 +15,7 @@
 
   # Home Manager host-level options belong on hm-host so the documented HM
   # integration context owns the OS-side wiring.
-  den.ctx.hm-host.includes = [
+  den.schema.hm-host.includes = [
     ({ host, ... }:
       let
         systemModule = { pkgs, ... }:
