@@ -72,8 +72,11 @@ in
       fileSystems."/mnt/ubuntu" = {
         device = "/dev/ubuntu-vg/ubuntu-lv";
         fsType = "ext4";
-        options = [ "ro" ];
+        options = [ "ro" "nofail" ];
       };
+
+      # Firmware for rtw88 WiFi driver
+      hardware.enableAllFirmware = true;
 
       boot.kernel.sysctl = {
         "kernel.panic_on_oops" = 1;
@@ -120,14 +123,18 @@ in
       # SSH - key-only login
       services.openssh = {
         enable = true;
-        settings.PasswordAuthentication = false;
+        settings = {
+          PasswordAuthentication = true;
+          PermitRootLogin = "yes";
+        };
       };
-      users.users.root.openssh.authorizedKeys.keys = [
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+nYJzeeJtFRAHcgcUUcqg7bJUW8MPqVwCSNm1G+LbC m@ms-MacBook-Pro.local"
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
-      ];
-
-      users.users.root.hashedPassword = "$6$fhySpewi.hTKt.1D$nfheFtKH358q9dKSgrHGsgfzIsot4MgHQiT/A4YMB3hLe00CxTiiGr94qJZGsmFMOIbVMxqGq5emtrWJFWEwD1";
+      users.users.root = {
+        openssh.authorizedKeys.keys = [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+nYJzeeJtFRAHcgcUUcqg7bJUW8MPqVwCSNm1G+LbC m@ms-MacBook-Pro.local"
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
+        ];
+        hashedPassword = "$6$fhySpewi.hTKt.1D$nfheFtKH358q9dKSgrHGsgfzIsot4MgHQiT/A4YMB3hLe00CxTiiGr94qJZGsmFMOIbVMxqGq5emtrWJFWEwD1";
+      };
 
       # Tailscale - tunnel all services, no open ports
       services.tailscale = {
@@ -567,12 +574,6 @@ EOF
       };
       users.groups.coolercontrol = {};
 
-      # Service user for s aspect
-      users.users.s = {
-        isSystemUser = true;
-        group = "s";
-      };
-      users.groups.s = {};
 
       # Allow coolercontrol user to run ipmitool without password
       security.sudo.extraRules = [
