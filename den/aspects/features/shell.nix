@@ -531,6 +531,7 @@
 
               programs.yazi = {
                 enable = true;
+                shellWrapperName = "y";
                 package = pkgs.yazi;
                 plugins = {
                   ohlcv = ../../../dotfiles/common/yazi/ohlcv.yazi;

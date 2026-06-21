@@ -101,16 +101,6 @@
         '';
       };
 
-      programs.zellij = {
-        enable = true;
-        settings = {
-          on_force_close = "quit";
-          load_plugins = {
-            "https://github.com/smallstepman/yeetnyoink/releases/download/zellij-plugin-latest/yeetnyoink-zellij-break.wasm" = {};
-          };
-        };
-      };
-
       programs.go = {
         enable = true;
         env = {

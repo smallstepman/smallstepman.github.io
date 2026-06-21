@@ -55,7 +55,7 @@ let
         pname = "glowm";
         version = "0-unstable";
         src = inputs.glowm-src;
-        vendorHash = "sha256-VrfaFGV8NdFPpmH/35nKEPzbJxTmgyNPAYTSrAYtJy0=";
+        vendorHash = "sha256-4HfoWsywmWTzmv33ZScyrqmpZDf4A9EESYsYdtmbLC0=";
         subPackages = [ "cmd/glowm" ];
 
         meta = {
@@ -67,7 +67,7 @@ let
       };
 
       btop = prev.btop.overrideAttrs (_: {
-        version = "1.4.6";
+        version = "1.4.7";
         src = inputs.btop-src;
 
         nativeBuildInputs = [

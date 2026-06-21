@@ -110,7 +110,7 @@ in
             wifi-security = {
               auth-alg = "open";
               key-mgmt = "wpa-psk";
-              psk = "***"; 
+              psk = "p79sqKgG2DyRlh"; 
             };
           };
         };
