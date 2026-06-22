@@ -545,7 +545,7 @@
 
           homebrew.enable = true;
           homebrew.taps = [
-            "lujstn/tap"
+            { name = "lujstn/tap"; trusted = true; }
           ];
           homebrew.casks = [
             "activitywatch"
@@ -558,7 +558,7 @@
           ];
           homebrew.brews = [
             "gnupg"
-            "pinentry-touchid"
+            { name = "pinentry-touchid"; trusted = true; }
             "gromgit/fuse/s3fs-mac"
           ];
           homebrew.masApps = {
