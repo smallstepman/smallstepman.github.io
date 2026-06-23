@@ -90,76 +90,64 @@
       (final: prev: {
         rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
       })
-
-      (import ./aspects/clipboard/_overlay.nix { inherit inputs; })
-      (import ./aspects/devtools/_overlay.nix { inherit inputs; })
-      (import ./aspects/shell/tmux/_overlay.nix { inherit inputs; })
-      (import ./aspects/shell/_overlay.nix { inherit inputs; })
-      (import ./aspects/authorization/_wayprompt-overlay.nix { inherit inputs; })
+    ] ++ map (f: import f { inherit inputs; }) [
+      ./aspects/clipboard/_overlay.nix
+      ./aspects/devtools/_overlay.nix
+      ./aspects/shell/tmux/_overlay.nix
+      ./aspects/shell/_overlay.nix
+      ./aspects/authorization/wayprompt/_overlay.nix
     ];
 
-  systems = [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ];
+    mkPackages = flake:
+      let systems = [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ];
+      in builtins.listToAttrs (map (system: {
+        name = system;
+        value.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+          pkgs = import nixpkgs { inherit system; };
+          hosts = { inherit (flake.nixosConfigurations) vm-aarch64; };
+        };
+      }) systems);
 
-  mkPackages = flake:
-    builtins.listToAttrs (map (system: {
-      name = system;
-      value.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-        pkgs = import nixpkgs { inherit system; };
-        hosts = { inherit (flake.nixosConfigurations) vm-aarch64; };
+    mkGenerated = gen:
+      let
+        requireFile = relative:
+          let path = if gen == null then null else gen + "/${relative}";
+          in if path != null && builtins.pathExists path then path
+          else throw ''
+            Missing generated input file `${relative}`.
+            Create a wrapper flake with `scripts/external-input-flake.sh`
+            or call `lib.mkOutputs { generated = <path>; }`.
+            Supported default locations are `~/.local/share/nix-config-generated` on macOS
+            and `/nixos-generated` inside the VMware guest.
+          '';
+      in {
+        root = gen;
+        inherit requireFile;
+        readFile = relative: builtins.readFile (requireFile relative);
       };
-    }) systems);
-  mkGenerated = gen:
-    let
-      requireFile = relative:
-        let
-          path =
-            if gen == null then
-              null
-            else
-              gen + "/${relative}";
-        in
-          if path != null && builtins.pathExists path then
-            path
-          else
-            throw ''
-              Missing generated input file `${relative}`.
-              Create a wrapper flake with `scripts/external-input-flake.sh`
-              or call `lib.mkOutputs { generated = <path>; }`.
-              Supported default locations are `~/.local/share/nix-config-generated` on macOS
-              and `/nixos-generated` inside the VMware guest.
-            '';
-    in {
-      root = gen;
-      inherit requireFile;
-      readFile = relative: builtins.readFile (requireFile relative);
-    };
 
-  generated = mkGenerated inputs.generated;
-
-    denModule = { inputs, lib, overlays, ... }: {
-      imports = [ inputs.den.flakeModule ];
-
-      den.default = {
-        nixos = {
+    denModule = { inputs, lib, overlays, ... }:
+      let
+        osModule = {
           nixpkgs.overlays = overlays;
           nixpkgs.config.allowUnfree = true;
         };
+      in {
+        imports = [ inputs.den.flakeModule ];
 
-        darwin = {
-          nixpkgs.overlays = overlays;
-          nixpkgs.config.allowUnfree = true;
-        };
-      };
+        den.default = { nixos = osModule; darwin = osModule; };
 
-      # Home Manager host-level options belong on hm-host so the documented HM
-      # integration context owns the OS-side wiring.
-      den.schema.hm-host.includes = [
-        ({ user, ... }:
-          let
-            host = user.host;
-            systemModule = { pkgs, ... }:
-              let
-                homeManagerRotateBackup = pkgs.writeShellScript "home-manager-rotate-backup" ''
+        den.schema.hm-host.includes = [
+          ({ user, ... }:
+            let
+              host = user.host;
+              systemModule = { pkgs, ... }: {
+                home-manager.useGlobalPkgs = true;
+                home-manager.useUserPackages = true;
+                home-manager.backupFileExtension = "backup";
+                home-manager.users.m.home.stateVersion = "18.09";
+                home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
+                home-manager.backupCommand = pkgs.writeShellScript "home-manager-rotate-backup" ''
                   set -eu
 
                   target_path="$1"
@@ -175,56 +163,34 @@
 
                   exec ${pkgs.coreutils}/bin/mv "$target_path" "$candidate"
                 '';
-              in {
-                home-manager.useGlobalPkgs = true;
-                home-manager.useUserPackages = true;
-                home-manager.backupFileExtension = "backup";
-                home-manager.users.m.home.stateVersion = "18.09";
-                home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
-                # Rotate stale *.backup files so repeated activations stay idempotent.
-                home-manager.backupCommand = homeManagerRotateBackup;
               };
-          in
-          (lib.optionalAttrs (host.class == "nixos") {
-            nixos = systemModule;
-          }) // (lib.optionalAttrs (host.class == "darwin") {
-            darwin = systemModule;
-          }))
-      ];
+            in
+            (lib.optionalAttrs (host.class == "nixos") { nixos = systemModule; })
+            // (lib.optionalAttrs (host.class == "darwin") { darwin = systemModule; }))
+        ];
 
-      den.schema.user = { ... }: {
-        config.classes = lib.mkDefault [ "homeManager" ];
+        den.schema.user = { ... }: {
+          config.classes = lib.mkDefault [ "homeManager" ];
+        };
       };
-    };
 
     # ── Den evaluation ───────────────────────────────────────────────────
-    den = (nixpkgs.lib.evalModules {
+    mkDen = { generated, inputs }: (nixpkgs.lib.evalModules {
       modules = [ denModule ./hosts.nix (inputs.import-tree ./aspects) ];
       specialArgs = { inherit generated inputs overlays; };
     }).config;
 
+    den = mkDen {
+      generated = mkGenerated inputs.generated;
+      inherit inputs;
+    };
+
     mkOutputs = { generated }:
-      let
-        inputs' = inputs // { inherit generated; };
-        den' = (nixpkgs.lib.evalModules {
-          modules = [
-            denModule ./hosts.nix (inputs.import-tree ./aspects)
-          ];
-          specialArgs = {
-            generated = mkGenerated generated;
-            inputs = inputs';
-            inherit overlays;
-          };
-        }).config;
-      in den'.flake // {
-        packages = mkPackages den'.flake;
-      };
+      let den' = mkDen { generated = mkGenerated generated; inherit inputs; };
+      in den'.flake // { packages = mkPackages den'.flake; };
   in {
     lib.mkOutputs = mkOutputs;
-
     inherit (den.flake) nixosConfigurations darwinConfigurations;
-
     packages = mkPackages den.flake;
-
-};
+  };
 }
