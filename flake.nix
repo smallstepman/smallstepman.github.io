@@ -188,7 +188,6 @@
     den = (nixpkgs.lib.evalModules {
       modules = [
         denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
-        (inputs.import-tree ./den/hosts) (inputs.import-tree ./den/users)
       ];
       specialArgs = { inherit generated inputs overlays; };
     }).config;
@@ -218,7 +217,6 @@
         den' = (nixpkgs.lib.evalModules {
           modules = [
             denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
-            (inputs.import-tree ./den/hosts) (inputs.import-tree ./den/users)
           ];
           specialArgs = {
             generated = {
