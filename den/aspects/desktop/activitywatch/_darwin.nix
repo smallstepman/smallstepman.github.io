@@ -43,7 +43,7 @@
       awImportScreentimeSrc = pkgs.applyPatches {
         name = "aw-import-screentime-src";
         src = inputs.aw-import-screentime-src;
-        patches = [ ../../../../../patches/aw-import-screentime.patch ];
+        patches = [ ./aw-import-screentime.patch ];
       };
     in {
       serviceConfig = {

@@ -160,10 +160,217 @@
   # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
   inputs.flake-aspects.url = "github:vic/flake-aspects";
 
-  outputs = { self, nixpkgs, ... }@inputs: {
-    lib.mkOutputs = { generated }:
-      import ./den/mk-config-outputs.nix {
-        inputs = inputs // { inherit generated; };
+  outputs = { self, nixpkgs, ... }@inputs:
+  let
+    # ── Overlays ─────────────────────────────────────────────────────────
+    overlays = [
+      inputs.rust-overlay.overlays.default
+      inputs.niri.overlays.niri
+      inputs.llm-agents.overlays.default
+      inputs.git-repo-manager.overlays.git-repo-manager
+      inputs.yeetnyoink.overlays.default
+
+      (final: prev: {
+        rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
+      })
+
+      (import ./den/aspects/clipboard/_overlay.nix { inherit inputs; })
+      (import ./den/aspects/devtools/_overlay.nix { inherit inputs; })
+      (import ./den/aspects/shell/tmux/_overlay.nix { inherit inputs; })
+      (import ./den/aspects/shell/_overlay.nix { inherit inputs; })
+      (import ./den/aspects/authorization/_wayprompt-overlay.nix { inherit inputs; })
+    ];
+
+    # ── Generated input helper ───────────────────────────────────────────
+    generated =
+      let
+        requireFile = relative:
+          let
+            path =
+              if inputs.generated == null then
+                null
+              else
+                inputs.generated + "/${relative}";
+          in
+            if path != null && builtins.pathExists path then
+              path
+            else
+              throw ''
+                Missing generated input file `${relative}`.
+                Create a wrapper flake with `scripts/external-input-flake.sh`
+                or call `lib.mkOutputs { generated = <path>; }`.
+                Supported default locations are `~/.local/share/nix-config-generated` on macOS
+                and `/nixos-generated` inside the VMware guest.
+              '';
+      in {
+        root = inputs.generated;
+        inherit requireFile;
+        readFile = relative: builtins.readFile (requireFile relative);
       };
+
+    # ── Den base module (formerly den/default.nix) ───────────────────────
+    denModule = { inputs, lib, overlays, ... }: {
+      imports = [ inputs.den.flakeModule ];
+
+      den.default = {
+        nixos = {
+          nixpkgs.overlays = overlays;
+          nixpkgs.config.allowUnfree = true;
+        };
+
+        darwin = {
+          nixpkgs.overlays = overlays;
+          nixpkgs.config.allowUnfree = true;
+        };
+      };
+
+      # Home Manager host-level options belong on hm-host so the documented HM
+      # integration context owns the OS-side wiring.
+      den.schema.hm-host.includes = [
+        ({ host, ... }:
+          let
+            systemModule = { pkgs, ... }:
+              let
+                homeManagerRotateBackup = pkgs.writeShellScript "home-manager-rotate-backup" ''
+                  set -eu
+
+                  target_path="$1"
+                  backup_ext="''${HOME_MANAGER_BACKUP_EXT:-backup}"
+                  backup_path="$target_path.$backup_ext"
+                  candidate="$backup_path"
+                  suffix=1
+
+                  while [[ -e "$candidate" || -L "$candidate" ]]; do
+                    candidate="$backup_path.$suffix"
+                    suffix=$((suffix + 1))
+                  done
+
+                  exec ${pkgs.coreutils}/bin/mv "$target_path" "$candidate"
+                '';
+              in {
+                home-manager.useGlobalPkgs = true;
+                home-manager.useUserPackages = true;
+                home-manager.backupFileExtension = "backup";
+                # Rotate stale *.backup files so repeated activations stay idempotent.
+                home-manager.backupCommand = homeManagerRotateBackup;
+              };
+          in
+          (lib.optionalAttrs (host.class == "nixos") {
+            nixos = systemModule;
+          }) // (lib.optionalAttrs (host.class == "darwin") {
+            darwin = systemModule;
+          }))
+      ];
+
+      den.schema.user = { ... }: {
+        config.classes = lib.mkDefault [ "homeManager" ];
+      };
+    };
+
+    # ── Den evaluation ───────────────────────────────────────────────────
+    den = (nixpkgs.lib.evalModules {
+      modules = [
+        denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
+        (inputs.import-tree ./den/hosts) (inputs.import-tree ./den/users)
+      ];
+      specialArgs = { inherit generated inputs overlays; };
+    }).config;
+
+    # ── Outputs ──────────────────────────────────────────────────────────
+    mkOutputs = { generated }:
+      let
+        inputs' = inputs // { inherit generated; };
+
+        requireFile = relative:
+          let
+            path =
+              if generated == null then
+                null
+              else
+                generated + "/${relative}";
+          in
+            if path != null && builtins.pathExists path then
+              path
+            else
+              throw ''
+                Missing generated input file `${relative}`.
+                Create a wrapper flake with `scripts/external-input-flake.sh`
+                or call `lib.mkOutputs { generated = <path>; }.
+              '';
+
+        den' = (nixpkgs.lib.evalModules {
+          modules = [
+            denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
+            (inputs.import-tree ./den/hosts) (inputs.import-tree ./den/users)
+          ];
+          specialArgs = {
+            generated = {
+              root = generated;
+              requireFile = requireFile;
+              readFile = relative: builtins.readFile (requireFile relative);
+            };
+            inputs = inputs';
+            inherit overlays;
+          };
+        }).config;
+      in den'.flake // {
+        packages = let
+          pkgsForHost = hostName: import nixpkgs { system = hostName; };
+        in {
+          aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+            pkgs = pkgsForHost "aarch64-darwin";
+            hosts = {
+              inherit (den'.flake.nixosConfigurations) vm-aarch64;
+            };
+          };
+          x86_64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+            pkgs = pkgsForHost "x86_64-darwin";
+            hosts = {
+              inherit (den'.flake.nixosConfigurations) vm-aarch64;
+            };
+          };
+          aarch64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+            pkgs = pkgsForHost "aarch64-linux";
+            hosts = {
+              inherit (den'.flake.nixosConfigurations) vm-aarch64;
+            };
+          };
+          x86_64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+            pkgs = pkgsForHost "x86_64-linux";
+            hosts = {
+              inherit (den'.flake.nixosConfigurations) vm-aarch64;
+            };
+          };
+        };
+      };
+  in {
+    lib.mkOutputs = mkOutputs;
+
+    inherit (den.flake) nixosConfigurations darwinConfigurations;
+
+    packages.aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "aarch64-darwin"; };
+      hosts = {
+        inherit (den.flake.nixosConfigurations) vm-aarch64;
+      };
+    };
+    packages.x86_64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "x86_64-darwin"; };
+      hosts = {
+        inherit (den.flake.nixosConfigurations) vm-aarch64;
+      };
+    };
+    packages.aarch64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "aarch64-linux"; };
+      hosts = {
+        inherit (den.flake.nixosConfigurations) vm-aarch64;
+      };
+    };
+    packages.x86_64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
+      hosts = {
+        inherit (den.flake.nixosConfigurations) vm-aarch64;
+      };
+    };
   };
 }
