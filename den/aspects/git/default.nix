@@ -68,6 +68,7 @@
 
         signing = {
           signByDefault = true;
+          key = "9317B542250D33B34C41F62831D3B9C9754C0F5B";
         } // (lib.optionalAttrs isDarwin {
           signer = "${darwinStuff.darwinGitSigningWrapper}/bin/gpg-touchid-signing-prompt";
         });
@@ -80,6 +81,8 @@
         defaultCacheTtl = lib.mkDefault 31536000;
         maxCacheTtl = lib.mkDefault 31536000;
       } // (lib.optionalAttrs isDarwin {
+        defaultCacheTtl = 1;
+        maxCacheTtl = 1;
         extraConfig = "pinentry-program ${darwinStuff.darwinRbwPinentryWrapper}/bin/rbw-pinentry-touchid";
       });
 

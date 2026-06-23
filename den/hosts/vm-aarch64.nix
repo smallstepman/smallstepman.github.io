@@ -27,14 +27,8 @@
       den.aspects.virtualization.core
       den.aspects.virtualization.flatpak
       den.aspects.vmware
+      den.aspects.shell.wezterm-vm
       den.provides.hostname
-
-      ({ ... }: {
-        homeManager = { ... }: {
-          xdg.configFile."wezterm/wezterm.lua".text =
-            builtins.readFile ./../aspects/shell/wezterm-vm.lua;
-        };
-      })
     ];
   };
 }

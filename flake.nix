@@ -2,11 +2,11 @@
   description = "NixOS systems and tools by smallstepman";
 
   inputs = {
-    inputs.den.url = "github:vic/den";  # Den - aspect-oriented context-driven Nix configurations
+    den.url = "github:vic/den";  # Den - aspect-oriented context-driven Nix configurations
     import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree (required by den)
     # flake-aspects must be a direct input here because den's lib.nix accesses
     # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
-    inputs.flake-aspects.url = "github:vic/flake-aspects";
+    flake-aspects.url = "github:vic/flake-aspects";
 
     # Unattended NixOS installer
     unattended-installer = {

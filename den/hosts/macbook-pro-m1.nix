@@ -16,16 +16,6 @@
       den.aspects.touchid
       den.aspects.uniclip
       den.aspects.window-manager
-
-      {
-        homeManager = { ... }: {
-          programs.git.signing.key = "9317B542250D33B34C41F62831D3B9C9754C0F5B";
-          services.gpg-agent = {
-            defaultCacheTtl = 1;
-            maxCacheTtl = 1;
-          };
-        };
-      }
     ];
   };
 }
