@@ -1,15 +1,15 @@
 {
-  den.aspects.kanata = {
+  den.aspects.keyboard.kanata = {
     darwin = import ./_darwin.nix;
 
     homeManager = { pkgs, ... }: {
       xdg.configFile = {
         "kanata-tray" = {
-          source = ../../../../dotfiles/by-host/darwin/kanata/tray;
+          source = ./tray;
           recursive = true;
         };
         "kanata" = {
-          source = ../../../../dotfiles/by-host/darwin/kanata/config-macbook-iso;
+          source = ./config-macbook-iso;
           recursive = true;
         };
       };

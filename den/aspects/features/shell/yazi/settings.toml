@@ -1,0 +1,49 @@
+[mgr]
+ratio = [2, 3, 7]
+mouse_events = [ "click", "scroll", "touch" ]
+
+[opener]
+play = [
+  { run = 'mpv "$@"', orphan = true, for = "unix" },
+  { run = '"C:\Program Files\mpv.exe" %*', orphan = true, for = "windows" }
+]
+edit = [
+  { run = 'nvim "$@"', block = true, for = "unix" },
+]
+open = [
+  { run = 'open "$@"', desc = "Open" },
+]
+parqeye = [
+  { run = 'parqeye %s', desc = "Parqeye", block = true },
+]
+
+[open]
+prepend_rules = [
+  { url = "*.parquet", use = "parqeye" },
+]
+
+[plugin]
+prepend_previewers = [
+  { url = "*.duckdbvfs", run = "dvces" },
+  { url = "*.csv", run = "duckdb" },
+  { url = "**/data/bars/**/*.parquet", run = "ohlcv" },
+  { url = "*.parquet", run = "duckdb" },
+  { url = "*.parq", run = "duckdb" },
+  { url = "*.feather", run = "ohlcv" },
+  { url = "*.arrow", run = "ohlcv" },
+  { url = "*.ipc", run = "ohlcv" },
+  { url = "*.duckdb", run = "duckdb" },
+  { url = "*.db", run = "duckdb" },
+  { url = "*.json", run = "duckdb" },
+  { url = "*.tsv", run = "duckdb" },
+  { url = "*.xlsx", run = "duckdb" },
+]
+prepend_preloaders = [
+  { url = "*.csv", run = "duckdb", multi = false },
+  { url = "*.parquet", run = "duckdb", multi = false },
+  { url = "*.duckdb", run = "duckdb", multi = false },
+  { url = "*.db", run = "duckdb", multi = false },
+  { url = "*.json", run = "duckdb", multi = false },
+  { url = "*.tsv", run = "duckdb", multi = false },
+  { url = "*.xlsx", run = "duckdb", multi = false },
+]

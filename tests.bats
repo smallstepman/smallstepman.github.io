@@ -95,19 +95,7 @@ setup_file() {
 }
 
 extract_gpg_touchid_signing_helpers() {
-  local helpers
-  local needle
-  local replacement
-
-  helpers=$(
-  sed -n \
-    '/# gpg-touchid-signing-prompt helpers start/,/# gpg-touchid-signing-prompt helpers end/p' \
-    den/aspects/features/git.nix | sed '1d;$d'
-  )
-
-  needle="''\${"
-  replacement="\${"
-  printf '%s\n' "${helpers//$needle/$replacement}"
+  cat den/aspects/features/git/gpg-touchid-signing-prompt.sh
 }
 
 load_gpg_touchid_signing_helpers() {
@@ -120,17 +108,7 @@ load_gpg_touchid_signing_helpers() {
 }
 
 extract_darwin_touchid_pinentry_wrapper() {
-  python3 - <<'PY'
-from pathlib import Path
-import textwrap
-
-text = Path("den/aspects/features/git.nix").read_text()
-anchor = 'darwinRbwPinentryWrapper = pkgs.writeTextFile {'
-start = text.index(anchor)
-start = text.index("text = ''\n", start) + len("text = ''\n")
-end = text.index("\n                '';", start)
-print(textwrap.dedent(text[start:end]), end="")
-PY
+  cat den/aspects/features/git/rbw-pinentry-touchid.py
 }
 
 extract_write_textfile_script_by_anchor() {
@@ -896,8 +874,8 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git and home-base aspect files exist" {
-  assert_file_exists den/aspects/features/shell.nix
-  assert_file_exists den/aspects/features/git.nix
+  assert_file_exists den/aspects/features/shell/default.nix
+  assert_file_exists den/aspects/features/git/default.nix
   assert_file_exists den/aspects/features/home-base.nix
 }
 
@@ -911,18 +889,18 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git.nix sets essential HM programs" {
-  grep -Fq 'programs.git = {' den/aspects/features/git.nix
-  grep -Fq 'programs.zsh = {' den/aspects/features/shell.nix
-  grep -Fq 'programs.oh-my-posh = {' den/aspects/features/shell.nix
-  grep -Fq 'programs.direnv = {' den/aspects/features/shell.nix
-  grep -Fq 'programs.atuin = {' den/aspects/features/shell.nix
-  grep -Fq 'programs.zoxide = {' den/aspects/features/shell.nix
-  grep -Fq 'programs.gh = {' den/aspects/features/git.nix
+  grep -Fq 'programs.git = {' den/aspects/features/git/default.nix
+  grep -Fq 'programs.zsh = {' den/aspects/features/shell/default.nix
+  grep -Fq 'programs.oh-my-posh = {' den/aspects/features/shell/default.nix
+  grep -Fq 'programs.direnv = {' den/aspects/features/shell/default.nix
+  grep -Fq 'programs.atuin = {' den/aspects/features/shell/default.nix
+  grep -Fq 'programs.zoxide = {' den/aspects/features/shell/default.nix
+  grep -Fq 'programs.gh = {' den/aspects/features/git/default.nix
 }
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git.nix sets EDITOR session variable" {
-  grep -Fq 'EDITOR' den/aspects/features/shell.nix
+  grep -Fq 'EDITOR' den/aspects/features/shell/default.nix
 }
 
 # bats test_tags=home-manager-core
@@ -937,7 +915,7 @@ PYEOF
   if grep -Fq '"wezterm/wezterm.lua"' den/aspects/features/home-base.nix; then
     fail 'home-base.nix still owns Darwin xdg config'
   fi
-  grep -Fq 'programs.rbw = lib.mkIf isLinux' den/aspects/features/git.nix
+  grep -Fq 'programs.rbw = lib.mkIf isLinux' den/aspects/features/git/default.nix
   grep -Fq 'ghostty-bin' den/aspects/features/darwin-core.nix
   grep -Fq '"wezterm/wezterm.lua"' den/aspects/features/darwin-core.nix
   grep -Fq 'den.aspects.home-base' den/aspects/users/m.nix
@@ -945,12 +923,12 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: shell-git includes g = git alias" {
-  grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell.nix
+  grep -Eq '(^|[[:space:]])g[[:space:]]*=[[:space:]]*"git";' den/aspects/features/shell/default.nix
 }
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb plugins are declared" {
-  local shell_file="den/aspects/features/shell.nix"
+  local shell_file="den/aspects/features/shell/default.nix"
   local yazi_block
   local plugins_block
   local duckdb_plugin_block
@@ -964,12 +942,12 @@ PYEOF
 
   grep -Fq 'owner = "wylie102";' <<<"$duckdb_plugin_block"
   grep -Fq 'repo = "duckdb.yazi";' <<<"$duckdb_plugin_block"
-  grep -Fq 'overlap = ../../../dotfiles/common/yazi/overlap.yazi;' <<<"$plugins_block"
+  grep -Fq 'overlap = ./yazi/overlap.yazi;' <<<"$plugins_block"
 }
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb overlap previewers only cover shared formats" {
-  local shell_file="den/aspects/features/shell.nix"
+  local shell_file="den/aspects/features/shell/default.nix"
   local ext
 
   for ext in csv parquet; do
@@ -985,7 +963,7 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb ohlcv-only formats stay bound directly to ohlcv" {
-  local shell_file="den/aspects/features/shell.nix"
+  local shell_file="den/aspects/features/shell/default.nix"
   local ext
 
   for ext in parq feather arrow ipc; do
@@ -1005,7 +983,7 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb shared and extra formats are wired for preload" {
-  local shell_file="den/aspects/features/shell.nix"
+  local shell_file="den/aspects/features/shell/default.nix"
   local ext
 
   for ext in duckdb db json tsv xlsx; do
@@ -1023,7 +1001,7 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb init lua wires plugin setup" {
-  local shell_file="den/aspects/features/shell.nix"
+  local shell_file="den/aspects/features/shell/default.nix"
   local init_lua
 
   init_lua=$(extract_multiline_string_after_anchor "$shell_file" "yaziInitLua = ''") \
@@ -1034,7 +1012,7 @@ PYEOF
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb overlap router falls back on helper execution failure" {
-  run lua - "dotfiles/common/yazi/overlap.yazi/main.lua" <<'LUA'
+  run lua - "den/aspects/features/shell/yazi/overlap.yazi/main.lua" <<'LUA'
 local plugin_path = assert(arg[1], "missing overlap router path")
 local duckdb_calls = {}
 local preview_calls = {}
@@ -1153,7 +1131,7 @@ LUA
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: yazi duckdb overlap router keeps successful ohlcv output" {
-  run lua - "dotfiles/common/yazi/overlap.yazi/main.lua" <<'LUA'
+  run lua - "den/aspects/features/shell/yazi/overlap.yazi/main.lua" <<'LUA'
 local plugin_path = assert(arg[1], "missing overlap router path")
 local duckdb_calls = {}
 local preview_calls = {}
@@ -1283,7 +1261,7 @@ LUA
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: zsh manydots does not wrap accept-line" {
-  if grep -Eq 'manydots-magic\.(rewrite-buffer|accept-line)|manydots-magic\.orig\.accept-line' dotfiles/common/zsh-manydot.sh; then
+  if grep -Eq 'manydots-magic\.(rewrite-buffer|accept-line)|manydots-magic\.orig\.accept-line' den/aspects/features/shell/zsh-manydot.sh; then
     fail "zsh-manydot.sh should not implement custom accept-line/autocd rewriting"
   fi
 }
@@ -1296,9 +1274,9 @@ LUA
 
 # bats test_tags=home-manager-core
 @test "home-manager-core: git.nix owns GPG and signing config" {
-  grep -Fq 'programs.gpg.enable' den/aspects/features/git.nix
-  grep -Fq 'services.gpg-agent'  den/aspects/features/git.nix
-  grep -Fq 'signing.signByDefault = true' den/aspects/features/git.nix
+  grep -Fq 'programs.gpg.enable' den/aspects/features/git/default.nix
+  grep -Fq 'services.gpg-agent'  den/aspects/features/git/default.nix
+  grep -Fq 'signing.signByDefault = true' den/aspects/features/git/default.nix
 }
 
 # bats test_tags=home-manager-core
@@ -1770,11 +1748,11 @@ PY
     || fail "vm-aarch64 zsh shellAliases missing 'noctalia-diff-apply'; got: $zsh_aliases"
   printf '%s' "$zsh_aliases" | grep -Fq '/bin/noctalia-diff-apply' \
     || fail "vm-aarch64 noctalia-diff-apply alias should point at the generated helper command; got: $zsh_aliases"
-  grep -Fq 'writeShellScriptBin "noctalia-diff-apply"' den/aspects/features/shell.nix \
+  grep -Fq 'writeShellScriptBin "noctalia-diff-apply"' den/aspects/features/shell/default.nix \
     || fail 'shell.nix should build a dedicated noctalia-diff-apply helper'
-  grep -Fq "p||/^[[:space:]]*[{]/{p=1;print}" den/aspects/features/shell.nix \
+  grep -Fq "p||/^[[:space:]]*[{]/{p=1;print}" den/aspects/features/shell/default.nix \
     || fail 'shell.nix should strip any non-JSON prelude before jq in the noctalia helpers'
-  grep -Fq '/nixos-config/dotfiles/by-host/vm/noctalia.json' den/aspects/features/shell.nix \
+  grep -Fq '/nixos-config/dotfiles/by-host/vm/noctalia.json' den/aspects/features/shell/default.nix \
     || fail 'shell.nix should keep noctalia-diff-apply writing to the tracked noctalia.json file'
 }
 
@@ -2032,13 +2010,13 @@ PY
   grep -Fq 'pkgs.llm-agents.beads'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.openspec'                 den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.copilot-language-server'  den/aspects/features/ai-tools.nix
-  grep -Fq 'ocd = "opencode";'                        den/aspects/features/shell.nix
+  grep -Fq 'ocd = "opencode";'                        den/aspects/features/shell/default.nix
   if grep -Fq 'opencode/modules/home-manager.nix' den/aspects/features/ai-tools.nix; then
     fail 'ai-tools.nix must not import opencode/modules/home-manager.nix (deleted)'
   fi
   if rg -n 'pkgs\.llm-agents\.opencode|pkgs\.opencode-dev|opencode-dev' \
     den/aspects/features/ai-tools.nix \
-    den/aspects/features/shell.nix \
+    den/aspects/features/shell/default.nix \
     den/aspects/hosts/vm-aarch64.nix \
     dotfiles/common/opencode/modules/darwin.nix \
     den/mk-config-outputs.nix \
@@ -2776,11 +2754,11 @@ PY
 # bats test_tags=vm-desktop
 @test "vm-desktop: scripts and docs reference external-input-flake.sh correctly" {
   grep -Fq 'external-input-flake.sh' docs/vm.sh
-  grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell/default.nix
   if grep -Fq 'git+file://$yeet_dir?dir=plugins/zellij-break' scripts/external-input-flake.sh; then
     fail 'scripts/external-input-flake.sh must not contain yeetnyoink git+file wrapper'
   fi
-  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell.nix; then
+  if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' den/aspects/features/shell/default.nix; then
     fail 'shell.nix must not reference YEET_AND_YOINK_INPUT_DIR'
   fi
   if grep -Fq 'YEET_AND_YOINK_INPUT_DIR' docs/vm.sh; then
@@ -3063,19 +3041,19 @@ PY
   [[ "$actual" == *"rbw-pinentry-touchid"* ]] \
     || fail "Darwin rbw activation should set pinentry to the adapter wrapper; got: $actual"
 
-  grep -Fq 'OPTION allow-external-password-cache' den/aspects/features/git.nix \
+  grep -Fq 'OPTION allow-external-password-cache' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing allow-external-password-cache adapter shim'
-  grep -Fq 'SETKEYINFO {keyinfo}' den/aspects/features/git.nix \
+  grep -Fq 'SETKEYINFO {keyinfo}' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing SETKEYINFO adapter shim'
-  grep -Fq 'Bitwarden RBW <{email}>' den/aspects/features/git.nix \
+  grep -Fq 'Bitwarden RBW <{email}>' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing stable Bitwarden RBW keychain label'
-  grep -Fq 'if raw.startswith("SETDESC ") and is_rbw_desc(raw):' den/aspects/features/git.nix \
+  grep -Fq 'if raw.startswith("SETDESC ") and is_rbw_desc(raw):' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing rbw-specific SETDESC adapter detection'
-  grep -Fq 'session_kind = "rbw"' den/aspects/features/git.nix \
+  grep -Fq 'session_kind = "rbw"' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing rbw session tracking before GETPIN handling'
-  grep -Fq 'if raw == "GETPIN\n" and session_kind == "rbw":' den/aspects/features/git.nix \
+  grep -Fq 'if raw == "GETPIN\n" and session_kind == "rbw":' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing rbw-scoped newline-terminated GETPIN adapter handling'
-  grep -Fq 'send_and_forward(desc + "\n")' den/aspects/features/git.nix \
+  grep -Fq 'send_and_forward(desc + "\n")' den/aspects/features/git/rbw-pinentry-touchid.py \
     || fail 'git aspect missing newline-terminated SETDESC forwarding'
 }
 
@@ -4259,16 +4237,16 @@ PY
 # ===========================================================================
 
 # bats test_tags=gpg
-@test "gpg: den/aspects/features/git.nix owns GPG config" {
-  assert_file_exists den/aspects/features/git.nix
+@test "gpg: den/aspects/features/git/default.nix owns GPG config" {
+  assert_file_exists den/aspects/features/git/default.nix
 }
 
 # bats test_tags=gpg
 @test "gpg: git.nix uses den-native host context (isVM/isDarwin, not currentSystemName)" {
-  if grep -Fq 'isVM' den/aspects/features/git.nix; then
+  if grep -Fq 'isVM' den/aspects/features/git/default.nix; then
     fail 'git.nix must not contain isVM — host-specific config belongs in host aspects'
   fi
-  if grep -Fq 'currentSystemName' den/aspects/features/git.nix; then
+  if grep -Fq 'currentSystemName' den/aspects/features/git/default.nix; then
     fail 'git.nix still uses legacy currentSystemName'
   fi
 }
@@ -5887,17 +5865,17 @@ EOF
 
 # bats test_tags=gpg
 @test "gpg: darwin commit touchid helper preserves Swift error interpolation" {
-  grep -Fq 'FileHandle.standardError.write(Data("\(prefix): \(message)\n".utf8))' den/aspects/features/git.nix \
+  grep -Fq 'FileHandle.standardError.write(Data("\(prefix): \(message)\n".utf8))' den/aspects/features/git/gpg-touchid-commit-get-pin.swift \
     || fail 'darwin gpg touchid helper should interpolate prefix/message in fail()'
 
-  if grep -Fq 'FileHandle.standardError.write(Data("\\(prefix): \\(message)\\n".utf8))' den/aspects/features/git.nix; then
+  if grep -Fq 'FileHandle.standardError.write(Data("\\(prefix): \\(message)\\n".utf8))' den/aspects/features/git/gpg-touchid-commit-get-pin.swift; then
     fail 'darwin gpg touchid helper still escapes Swift fail() interpolation'
   fi
 
-  grep -Fq 'FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \(failureMessage)\n".utf8))' den/aspects/features/git.nix \
+  grep -Fq 'FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \(failureMessage)\n".utf8))' den/aspects/features/git/gpg-touchid-commit-get-pin.swift \
     || fail 'darwin gpg touchid helper should interpolate failureMessage on cancellation'
 
-  if grep -Fq 'FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \\(failureMessage)\\n".utf8))' den/aspects/features/git.nix; then
+  if grep -Fq 'FileHandle.standardError.write(Data("gpg-touchid-commit-get-pin: \\(failureMessage)\\n".utf8))' den/aspects/features/git/gpg-touchid-commit-get-pin.swift; then
     fail 'darwin gpg touchid helper still escapes Swift cancellation interpolation'
   fi
 }
@@ -5908,7 +5886,7 @@ EOF
 from pathlib import Path
 import sys
 
-text = Path("den/aspects/features/git.nix").read_text()
+text = Path("den/aspects/features/git/gpg-touchid-commit-get-pin.swift").read_text()
 
 required = [
     "var failureCode: LAError.Code?",
@@ -6295,7 +6273,7 @@ EOF
 @test "generated-input: docs reference external-input-flake.sh" {
   grep -Fq 'external-input-flake.sh' docs/macbook.sh
   grep -Fq 'external-input-flake.sh' docs/vm.sh
-  grep -Fq 'external-input-flake.sh' den/aspects/features/shell.nix
+  grep -Fq 'external-input-flake.sh' den/aspects/features/shell/default.nix
 }
 
 # bats test_tags=generated-input

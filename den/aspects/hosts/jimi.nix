@@ -179,15 +179,6 @@ in
         requires = [ "nvidia-container-toolkit-cdi-generator.service" ];  # stronger
       };
 
-      # systemd.services.nvidia-container-toolkit-cdi-generator = {
-      #   after = [ "nvidia-persistenced.service" ];
-      #   wants = [ "nvidia-persistenced.service" ];
-      # };
-      # systemd.services.docker = {
-      #   after = [ "nvidia-container-toolkit-cdi-generator.service" ];
-      #   wants = [ "nvidia-container-toolkit-cdi-generator.service" ];
-      # };
-
       # ── GPU Power Limits ──────────────────────────────────────────────
       systemd.services.nvidia-power-limits = {
         description = "Set power limit for all NVIDIA GPUs (Headless)";
@@ -246,82 +237,6 @@ in
           StateDirectory = "vllm-dual-3090";
         };
       };
-	#      # NVIDIA driver
-	#      hardware.nvidia = {
-	#        package = config.boot.kernelPackages.nvidiaPackages.stable;
-	#        open = false;
-	#        nvidiaSettings = false;
-	# nvidiaPersistenced = true; 
-	#        modesetting.enable = true;
-	#      };
-	#      hardware.graphics.enable32Bit = true;
-	#      hardware.nvidia-container-toolkit.suppressNvidiaDriverAssertion = true;
-	#
-	#      virtualisation.docker = {
-	#        enable = true;
-	#        enableNvidia = true;
-	#      };
-	#
-	#      systemd.services.nvidia-power-limits = {
-	#        description = "Power limit for GPU 0 i 1 (Headless)";
-	#        after = [ "nvidia-persistenced.service" ];
-	#        wants = [ "nvidia-persistenced.service" ];
-	#        wantedBy = [ "multi-user.target" ];
-	#        path = [ config.boot.kernelPackages.nvidia-x11 ];
-	#        serviceConfig = {
-	#          Type = "oneshot";
-	#          RemainAfterExit = true;
-	#        };
-	#        script = ''
-	#          echo "Setting power limit for nvidia cards: 230W."
-	#          nvidia-smi -i 0,1 -pl 230
-	#        '';
-	#      };
-	#
-	#      systemd.services.club-3090 = {
-	#        description = "RTX 3090 Stack (Qwen Model)";
-	#        after = [
-	#          "network.target"
-	#          "docker.service"
-	#          "docker.socket"
-	#          "nvidia-power-limits.service"
-	#        ];
-	#        wants = [ 
-	#          "docker.service" 
-	#          "nvidia-power-limits.service"
-	#        ];
-	#        wantedBy = [ "multi-user.target" ];
-	#        path = with pkgs; [ 
-	#          docker 
-	#          curl 
-	#        ];
-	#        environment = {
-	#          MODEL_DIR = "/home/m/models";
-	#          CLUB3090_DEFAULT_QWEN3_6_27B = "vllm/dual";
-	#          PORT = "8000";
-	#        };
-	#        preStart = ''
-	#          echo "Prerun: pulling latest docker compose yaml..."
-	#          YAML_URL='https://raw.githubusercontent.com/noonghunna/club-3090/refs/heads/master/models/qwen3.6-27b/vllm/compose/dual/autoround-int4/fp8-mtp.yml'
-	#          curl -sSL "$YAML_URL" -o /var/lib/vllm-dual-3090/compose.yml
-	#        '';
-	#        script = ''
-	#          echo "Starting vLLM docker compose..."
-	#          exec docker compose -f /var/lib/vllm-dual-3090/compose.yml up --remove-orphans
-	#        '';
-	#        preStop = ''
-	#          if [ -f /var/lib/vllm-dual-3090/compose.yml ]; then
-	#            docker compose -f /var/lib/vllm-dual-3090/compose.yml down
-	#          fi
-	#        '';
-	#        serviceConfig = {
-	#          Type = "simple";
-	#          Restart = "on-failure";
-	#          RestartSec = "10s";
-	#          # TimeoutStartSec = "10min";
-	#          StateDirectory = "vllm-dual-3090"; 
-	#        };
-	#      };
 
       virtualisation.oci-containers.containers.dcgm-exporter = {
         image = "nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.6.0-ubuntu22.04";

@@ -1,0 +1,44 @@
+[[mgr.prepend_keymap]]
+on = "l"
+run = "plugin dvces -- --enter-only"
+desc = "Enter directory or DuckDB database"
+
+[[mgr.prepend_keymap]]
+on = "<Right>"
+run = "plugin dvces -- --enter-only"
+desc = "Enter directory or DuckDB database"
+
+[[mgr.prepend_keymap]]
+on = "<Enter>"
+run = "plugin dvces"
+desc = "Open file or enter DuckDB database"
+
+[[mgr.prepend_keymap]]
+on = [ "g", "R" ]
+run = "plugin dvces -- --refresh"
+desc = "Refresh DuckDB virtual filesystem"
+
+[[mgr.prepend_keymap]]
+on = "H"
+run = "plugin dvces -- --preview-delta=-1"
+desc = "Scroll DuckDB preview columns left"
+
+[[mgr.prepend_keymap]]
+on = "L"
+run = "plugin dvces -- --preview-delta=1"
+desc = "Scroll DuckDB preview columns right"
+
+[[mgr.prepend_keymap]]
+on = "h"
+run = "plugin dvces -- --leave"
+desc = "Leave directory or DuckDB virtual filesystem"
+
+[[mgr.prepend_keymap]]
+on = "<Left>"
+run = "plugin dvces -- --leave"
+desc = "Leave directory or DuckDB virtual filesystem"
+
+[[mgr.prepend_keymap]]
+on = [ "R", "b" ]
+run = "plugin recycle-bin"
+desc = "Open Recycle Bin menu"

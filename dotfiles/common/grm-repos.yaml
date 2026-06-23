@@ -1,17 +1,5 @@
 ---
 trees:
-  - root: ~/.config
-    repos:
-      # - name: nvim
-      #   remotes:
-      #     - name: origin
-      #       url: "https://github.com/LazyVim/starter.git"
-      #       type: https
-      - name: emacs
-        remotes:
-          - name: origin
-            url: "https://github.com/doomemacs/doomemacs.git"
-            type: https
   - root: ~/Pictures/Wallpapers
     repos:
       - name: walls

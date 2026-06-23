@@ -160,7 +160,7 @@ macOS (host)                              VM (guest)
 
 | File | Purpose |
 |------|---------|
-| `dotfiles/common/bashrc`, `inputrc`, `gdbinit`, `zsh-manydot.sh`, `starship.toml` | Shared shell and tool configurations |
+| `den/aspects/features/shell/bashrc`, `inputrc`, `zsh-manydot.sh`, `oh-my-posh.json`, `yazi/` | Shell configurations (moved from `dotfiles/common/` into the shell aspect) |
 | `dotfiles/common/doom/`, `lazyvim/`, `tmux/`, `vscode/` | Shared editor and terminal assets |
 | `dotfiles/common/opencode/` | OpenCode config, modules, commands, and agent/theme assets |
 | `dotfiles/common/grm-repos.yaml` | Declarative git-repo-manager repo list |
@@ -421,7 +421,7 @@ sudo ./result/sw/bin/darwin-rebuild switch --flake "path:$WRAPPER#macbook-pro-m1
 - **Aliases:** Edit `den/aspects/features/shell-git.nix`
 - **Zsh settings:** Edit `den/aspects/features/shell-git.nix`
 - **Zsh init:** Edit `den/aspects/features/shell-git.nix` (platform-conditional blocks for brew shellenv, rbw wrappers, etc.)
-- **Bash settings:** Edit `programs.bash` or `dotfiles/common/bashrc`
+- **Bash settings:** Edit `programs.bash` or `den/aspects/features/shell/bashrc`
 
 ### Adding a New Machine
 

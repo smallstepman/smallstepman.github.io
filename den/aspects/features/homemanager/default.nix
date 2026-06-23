@@ -8,9 +8,9 @@
 
       xdg.configFile = {
         "wezterm/wezterm.lua".text =
-          builtins.readFile ../../../../dotfiles/by-host/darwin/wezterm.lua;
+          builtins.readFile ./../shell/wezterm.lua;
         "activitywatch/scripts" = {
-          source = ../../../../dotfiles/by-host/darwin/activitywatch;
+          source = ../activitywatch/scripts;
           recursive = true;
         };
       };

@@ -8,6 +8,7 @@
       den.aspects.editors.emacs
       den.aspects.editors.neovim
       den.aspects.editors.vscode
+      den.aspects.desktop-apps
       den.aspects.devtools
       den.aspects.ai-tools
     ];
