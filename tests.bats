@@ -2060,23 +2060,25 @@ PY
 
 # bats test_tags=devtools
 @test "devtools: doom config wires agent-shell ACP commands" {
-  grep -Fq 'exec-path-from-shell-initialize'                            dotfiles/common/doom/config.el
-  grep -Fq 'agent-shell-copilot-acp'                                    dotfiles/common/doom/config.el
-  grep -Fq 'agent-shell-claude-code-acp'                                dotfiles/common/doom/config.el
-  grep -Fq 'agent-shell-opencode-acp'                                   dotfiles/common/doom/config.el
-  grep -Fq 'agent-shell-opencode-make-authentication :none t'           dotfiles/common/doom/config.el
+  grep -Fq 'exec-path-from-shell-initialize'                            den/aspects/features/editors/emacs/doom/config.el
+  grep -Fq 'agent-shell-copilot-acp'                                    den/aspects/features/editors/emacs/doom/config.el
+  grep -Fq 'agent-shell-claude-code-acp'                                den/aspects/features/editors/emacs/doom/config.el
+  grep -Fq 'agent-shell-opencode-acp'                                   den/aspects/features/editors/emacs/doom/config.el
+  grep -Fq 'agent-shell-opencode-make-authentication :none t'           den/aspects/features/editors/emacs/doom/config.el
 }
 
 # bats test_tags=devtools
 @test "devtools: user m aspect wires editors-devtools and ai-tools" {
-  grep -Fq 'den.aspects.editors'  den/aspects/users/m.nix
+  grep -Fq 'den.aspects.editors.emacs'  den/aspects/users/m.nix
+  grep -Fq 'den.aspects.editors.neovim' den/aspects/users/m.nix
+  grep -Fq 'den.aspects.editors.vscode' den/aspects/users/m.nix
   grep -Fq 'den.aspects.devtools' den/aspects/users/m.nix
   grep -Fq 'den.aspects.ai-tools'         den/aspects/users/m.nix
 }
 
 # bats test_tags=devtools
 @test "devtools: Task 6 aspects do not contain out-of-scope items" {
-  for aspect in den/aspects/features/editors.nix den/aspects/features/devtools.nix den/aspects/features/ai-tools.nix; do
+  for aspect in den/aspects/features/editors/emacs/default.nix den/aspects/features/editors/neovim/default.nix den/aspects/features/editors/vscode/default.nix den/aspects/features/devtools.nix den/aspects/features/ai-tools.nix; do
     local non_comment
     non_comment=$(grep -Ev '^[[:space:]]*#' "$aspect")
     if printf '%s\n' "$non_comment" | grep -Eq 'load_plugins'; then

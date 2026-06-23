@@ -276,9 +276,9 @@
         "wlr-which-key/config.yaml".text = builtins.readFile ../../../dotfiles/by-host/vm/wlr-which-key-config.yaml;
 
         "noctalia/user-templates.toml".source = ../../../dotfiles/by-host/vm/noctalia-user-templates.toml;
-        "noctalia/emacs-template.el".source = ../../../dotfiles/common/doom/themes/noctalia-template.el;
+        "noctalia/emacs-template.el".source = ../editors/emacs/doom/themes/noctalia-template.el;
         "noctalia/wezterm-colors-template.lua".source = ../../../dotfiles/by-host/vm/wezterm-colors-template.lua;
-        "nvim/lua/matugen-template.lua".source = ../../../dotfiles/common/lazyvim/lua/matugen-template.lua;
+        "nvim/lua/matugen-template.lua".source = ../editors/neovim/lazyvim/lua/matugen-template.lua;
       };
 
       programs.kitty = {
