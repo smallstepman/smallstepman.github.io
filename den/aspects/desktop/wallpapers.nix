@@ -1,9 +1,9 @@
 { den, ... }: {
-  den.aspects.home-base = {
+  den.aspects.desktop.wallpapers = {
     includes = [
       ({ ... }: {
         homeManager = { ... }: {
-          xdg.configFile."grm/repos.yaml".source = ../../../dotfiles/common/grm-repos.yaml;
+          xdg.configFile."grm/repos.yaml".source = ./grm/grm-repos.yaml;
         };
       })
     ];

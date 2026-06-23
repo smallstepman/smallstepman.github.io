@@ -64,6 +64,9 @@
         home-manager.users.m.programs.rbw.settings.pinentry =
           lib.mkIf (bridgePinentry != null) bridgePinentry;
 
+        home-manager.users.m.xdg.configFile."rbw/config.json".enable =
+          lib.mkForce false;
+
         systemd.user.services.rbw-config = {
           description = "Write rbw config from sops secrets";
           after = [ "default.target" ];
