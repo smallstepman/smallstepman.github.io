@@ -124,6 +124,9 @@
 
         home.file.".inputrc".source = ./inputrc;
 
+        xdg.configFile."wezterm/wezterm.lua".text =
+          builtins.readFile ./wezterm.lua;
+
         home.sessionVariables = {
           LANG     = "en_US.UTF-8";
           LC_CTYPE = "en_US.UTF-8";
@@ -152,7 +155,7 @@
 
         home.packages = [
           pkgs.bat pkgs.dua pkgs.dust pkgs.eza pkgs.fd pkgs.fnm pkgs.fzf
-          pkgs.jq pkgs.kubecolor pkgs.kubectl pkgs.mdfried pkgs.rbw pkgs.ripgrep
+          pkgs.ghostty-bin pkgs.jq pkgs.kubecolor pkgs.kubectl pkgs.mdfried pkgs.rbw pkgs.ripgrep
           pkgs.basalt pkgs.trash-cli pkgs.zellij pkgs.kitty pkgs.alacritty pkgs.wezterm
         ] ++ lib.optionals (niksWorktree != null) [ niksWorktree ];
 

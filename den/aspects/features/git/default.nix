@@ -98,5 +98,10 @@
         '';
       };
     };
+    darwin = { ... }: {
+      homebrew.brews = [
+        "gnupg"
+      ];
+    };
   };
 }

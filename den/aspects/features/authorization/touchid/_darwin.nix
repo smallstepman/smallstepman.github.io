@@ -41,6 +41,10 @@
       (builtins.readFile ./vm-touchid-broker.py);
   };
 in {
+  homebrew = {
+    taps = [ { name = "lujstn/tap"; trusted = true; } ];
+    brews = [ { name = "pinentry-touchid"; trusted = true; } ];
+  };
   launchd.user.agents.rbw-pinentry-touchid-broker = {
     serviceConfig = {
       ProgramArguments = [

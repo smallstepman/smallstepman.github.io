@@ -1,7 +1,13 @@
-{ lib, ... }: {
+{ den, lib, inputs, ... }: {
   den.aspects.devtools = {
     homeManager = { pkgs, lib, config, ... }: {
       home.packages = [
+        pkgs.llm-agents.omp
+        pkgs.llm-agents.pi
+        pkgs.llm-agents.codex
+        pkgs.llm-agents.apm
+        pkgs.llm-agents.skills
+
         pkgs.devenv
         pkgs.just
         pkgs.gnumake
@@ -26,6 +32,10 @@
         pkgs.terragrunt
         pkgs.kubecm
 
+
+        pkgs.cachix
+        pkgs.gettext
+        pkgs.sentry-cli
         pkgs.parallel
         (pkgs.bats.withLibraries (libs: [
           libs.bats-support

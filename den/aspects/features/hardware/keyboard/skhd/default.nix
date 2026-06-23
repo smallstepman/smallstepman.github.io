@@ -7,5 +7,9 @@
         skhdConfig = builtins.readFile ./skhdrc;
       };
     };
+
+    homeManager = { pkgs, ... }: {
+      home.packages = [ pkgs.skhd ];
+    };
   };
 }

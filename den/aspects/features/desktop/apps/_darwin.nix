@@ -1,4 +1,5 @@
 { inputs, ... }: { pkgs, ... }: {
+  homebrew.enable = true;
   imports = [ inputs.mac-app-util.darwinModules.default ];
 
   homebrew.casks = [
@@ -8,6 +9,7 @@
     "google-chrome"
     "lm-studio"
     "loop"
+    "launchcontrol"
     "spotify"
     "swiftbar"
     "wezterm@nightly"

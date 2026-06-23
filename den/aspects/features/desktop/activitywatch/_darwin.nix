@@ -1,4 +1,5 @@
 { inputs, ... }: { pkgs, ... }: {
+  homebrew.casks = ["activitywatch"];
   launchd.user.agents.activitywatch-tunnel = {
     serviceConfig = {
       ProgramArguments = [
@@ -42,7 +43,7 @@
       awImportScreentimeSrc = pkgs.applyPatches {
         name = "aw-import-screentime-src";
         src = inputs.aw-import-screentime-src;
-        patches = [ ../../../../patches/aw-import-screentime.patch ];
+        patches = [ ../../../../../patches/aw-import-screentime.patch ];
       };
     in {
       serviceConfig = {

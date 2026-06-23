@@ -3,7 +3,7 @@
     darwin = import ./_darwin.nix { inherit inputs; };
 
     homeManager = { pkgs, ... }: {
-      home.packages = [ pkgs.obsidian ];
+      home.packages = [ pkgs.keycastr pkgs.obsidian ];
       imports = [ inputs.mac-app-util.homeManagerModules.default ];
 
       home.activation.emacs-trampolines = let
