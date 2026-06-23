@@ -154,8 +154,9 @@
                 '';
               };
             in
-            (lib.optionalAttrs (host.class == "nixos") { nixos = systemModule; })
-            // (lib.optionalAttrs (host.class == "darwin") { darwin = systemModule; }))
+            lib.optionalAttrs (builtins.elem host.class [ "nixos" "darwin" ]) {
+              ${host.class} = systemModule;
+            })
         ];
 
         den.schema.user = { ... }: {
@@ -164,19 +165,17 @@
       };
 
     # ── Den evaluation ───────────────────────────────────────────────────
-    mkDen = { generated, inputs }: (nixpkgs.lib.evalModules {
+    mkDen = { generated }: (nixpkgs.lib.evalModules {
       modules = [ denModule ./hosts.nix (inputs.import-tree ./aspects) ];
       specialArgs = { inherit generated inputs overlays; };
     }).config;
 
-    den = mkDen {
-      generated = mkGenerated inputs.generated;
-      inherit inputs;
-    };
+    den = mkDen { generated = mkGenerated inputs.generated; };
 
     mkOutputs = { generated }:
-      let den' = mkDen { generated = mkGenerated generated; inherit inputs; };
+      let den' = mkDen { generated = mkGenerated generated; };
       in den'.flake // { packages = mkPackages den'.flake; };
+
   in {
     lib.mkOutputs = mkOutputs;
     inherit (den.flake) nixosConfigurations darwinConfigurations;
