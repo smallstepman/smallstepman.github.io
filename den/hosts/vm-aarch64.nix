@@ -5,6 +5,7 @@
       den.aspects.authorization.sudo
       den.aspects.authorization.touchid.vm
       den.aspects.authorization.wayprompt
+      den.aspects.desktop-apps
       den.aspects.desktop.browsers
       den.aspects.desktop.cursor
       den.aspects.desktop.greetd
@@ -14,20 +15,27 @@
       den.aspects.desktop.power
       den.aspects.desktop.wlr-which-key
       den.aspects.devtools
+      den.aspects.devtools
+      den.aspects.editors.emacs
+      den.aspects.editors.neovim
+      den.aspects.editors.vscode
+      den.aspects.git
       den.aspects.git.vm-signing
       den.aspects.hardware.bluetooth
       den.aspects.hardware.boot
       den.aspects.hardware.disk.vm-default
       den.aspects.hardware.fonts
+      den.aspects.identity
       den.aspects.network.base
       den.aspects.network.kube-tunnel
       den.aspects.nix.settings
       den.aspects.secrets
+      den.aspects.shell
+      den.aspects.shell.wezterm-vm
       den.aspects.ssh-pam
       den.aspects.virtualization.core
       den.aspects.virtualization.flatpak
       den.aspects.vmware
-      den.aspects.shell.wezterm-vm
       den.provides.hostname
     ];
   };
