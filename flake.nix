@@ -155,8 +155,9 @@
       # Home Manager host-level options belong on hm-host so the documented HM
       # integration context owns the OS-side wiring.
       den.schema.hm-host.includes = [
-        ({ host, ... }:
+        ({ user, ... }:
           let
+            host = user.host;
             systemModule = { pkgs, ... }:
               let
                 homeManagerRotateBackup = pkgs.writeShellScript "home-manager-rotate-backup" ''
@@ -179,6 +180,8 @@
                 home-manager.useGlobalPkgs = true;
                 home-manager.useUserPackages = true;
                 home-manager.backupFileExtension = "backup";
+                home-manager.users.m.home.stateVersion = "18.09";
+                home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
                 # Rotate stale *.backup files so repeated activations stay idempotent.
                 home-manager.backupCommand = homeManagerRotateBackup;
               };

@@ -37,9 +37,6 @@
       config.den.aspects.touchid
       config.den.aspects.uniclip
       config.den.aspects.window-manager
-      config.den.provides.define-user
-      config.den.provides.primary-user
-      (config.den.provides.user-shell "zsh")
     ];
   };
 
@@ -79,10 +76,6 @@
       config.den.aspects.virtualization.core
       config.den.aspects.virtualization.flatpak
       config.den.aspects.vmware
-      config.den.provides.hostname
-      config.den.provides.define-user
-      config.den.provides.primary-user
-      (config.den.provides.user-shell "zsh")
     ];
   };
 
@@ -101,10 +94,6 @@
       config.den.aspects.services.vllm
       config.den.aspects.shell
       config.den.aspects.ssh-pam.jimi
-      config.den.provides.hostname
-      config.den.provides.define-user
-      config.den.provides.primary-user
-      (config.den.provides.user-shell "zsh")
 
       ({ host, ... }: {
         nixos = { config, pkgs, lib, ... }: {
