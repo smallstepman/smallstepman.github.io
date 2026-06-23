@@ -41,23 +41,6 @@
     corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
     ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
 
-    # Python/uv packaging toolchain (used for APM and other uv-based Python tools)
-    pyproject-nix = {
-      url = "github:pyproject-nix/pyproject.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    uv2nix = {
-      url = "github:pyproject-nix/uv2nix";
-      inputs.pyproject-nix.follows = "pyproject-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    pyproject-build-systems = {
-      url = "github:pyproject-nix/build-system-pkgs";
-      inputs.pyproject-nix.follows = "pyproject-nix";
-      inputs.uv2nix.follows = "uv2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    #
     # Doom Emacs via nix-doom-emacs-unstraightened (builds Doom + deps with Nix). Don't pull in its nixpkgs — neither the module nor overlay uses it
     nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; };
     git-repo-manager = { url = "github:hakoerber/git-repo-manager"; inputs.nixpkgs.follows = "nixpkgs"; };
@@ -67,7 +50,6 @@
     noctalia = { url = "github:noctalia-dev/noctalia-shell"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
     rbw.url = "github:smallstepman/rbw"; # rbw (Bitwarden CLI) with inject/run support
     rust-overlay = { url = "github:oxalica/rust-overlay"; inputs.nixpkgs.follows = "nixpkgs"; };
-    sonar.url = "github:smallstepman/sonar";
     yeetnyoink.url = "github:smallstepman/yeetnyoink"; # yeetnyoink - window/app focus orchestrator 
 
     # Non-flake sources for packages we build ourselves
@@ -79,7 +61,6 @@
   };
   outputs = { self, nixpkgs, ... }@inputs:
   let
-    # ── Overlays ─────────────────────────────────────────────────────────
     overlays = [
       inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri
@@ -127,44 +108,41 @@
       };
 
     denModule = { inputs, lib, overlays, ... }:
-      let
-        osModule = {
-          nixpkgs.overlays = overlays;
-          nixpkgs.config.allowUnfree = true;
-        };
+      let osModule = {
+        nixpkgs.overlays = overlays;
+        nixpkgs.config.allowUnfree = true;
+      };
       in {
         imports = [ inputs.den.flakeModule ];
-
-        den.default = { nixos = osModule; darwin = osModule; };
-
-        den.schema.hm-host.includes = [
-          ({ user, ... }:
-            let
-              host = user.host;
-              systemModule = { pkgs, ... }: {
-                home-manager.useGlobalPkgs = true;
-                home-manager.useUserPackages = true;
-                home-manager.backupFileExtension = "backup";
-                home-manager.users.m.home.stateVersion = "18.09";
-                home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
-                home-manager.backupCommand = ''
-                  set -eu
-                  for ((s=1; ; s++)); do [[ -e "$1.backup.$s" || -L "$1.backup.$s" ]] || break; done
-                  exec ${pkgs.coreutils}/bin/mv "$1" "$1.backup.$s"
-                '';
-              };
-            in
-            lib.optionalAttrs (builtins.elem host.class [ "nixos" "darwin" ]) {
-              ${host.class} = systemModule;
-            })
-        ];
-
-        den.schema.user = { ... }: {
-          config.classes = lib.mkDefault [ "homeManager" ];
+        den = {
+          default = { nixos = osModule; darwin = osModule; };
+          schema = {
+            user.classes = lib.mkDefault [ "homeManager" ];
+            hm-host.includes = [
+              ({ user, ... }:
+                let
+                  host = user.host;
+                  systemModule = { pkgs, ... }: {
+                    home-manager.useGlobalPkgs = true;
+                    home-manager.useUserPackages = true;
+                    home-manager.backupFileExtension = "backup";
+                    home-manager.users.m.home.stateVersion = "18.09";
+                    home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
+                    home-manager.backupCommand = ''
+                      set -eu
+                      for ((s=1; ; s++)); do [[ -e "$1.backup.$s" || -L "$1.backup.$s" ]] || break; done
+                      exec ${pkgs.coreutils}/bin/mv "$1" "$1.backup.$s"
+                    '';
+                  };
+                in
+                lib.optionalAttrs (builtins.elem host.class [ "nixos" "darwin" ]) {
+                  ${host.class} = systemModule;
+                })
+            ];
+          };
         };
       };
 
-    # ── Den evaluation ───────────────────────────────────────────────────
     mkDen = { generated }: (nixpkgs.lib.evalModules {
       modules = [ denModule ./hosts.nix (inputs.import-tree ./aspects) ];
       specialArgs = { inherit generated inputs overlays; };
