@@ -2,56 +2,44 @@
   description = "NixOS systems and tools by smallstepman";
 
   inputs = {
-    # Pin our primary nixpkgs repository. This is the main nixpkgs repository
-    # we'll use for our configurations. Be very careful changing this because
-    # it'll impact your entire system.
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    inputs.den.url = "github:vic/den";  # Den - aspect-oriented context-driven Nix configurations
+    import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree (required by den)
+    # flake-aspects must be a direct input here because den's lib.nix accesses
+    # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
+    inputs.flake-aspects.url = "github:vic/flake-aspects";
 
-    # We use the unstable nixpkgs repo for some packages.
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-
-    # Master nixpkgs is used for really bleeding edge packages. Warning
-    # that this is extremely unstable and shouldn't be relied on. Its
-    # mostly for testing.
-    nixpkgs-master.url = "github:nixos/nixpkgs";
-
-    # Build a custom WSL installer
-    nixos-wsl.url = "github:nix-community/NixOS-WSL";
-    nixos-wsl.inputs.nixpkgs.follows = "nixpkgs";
-
-    # snapd
-    nix-snapd.url = "github:nix-community/nix-snapd";
-    nix-snapd.inputs.nixpkgs.follows = "nixpkgs";
-
-    home-manager = {
-      url = "github:nix-community/home-manager/release-26.05";
+    # Unattended NixOS installer
+    unattended-installer = {
+      url = "github:chrillefkr/nixos-unattended-installer";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.disko.follows = "disko";
+    };
+    # Declarative disk partitioning
+    disko = {
+      url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    darwin = {
-      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05"; # primary nixpkgs repository, changing this will impact your entire system
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable"; # We use the unstable nixpkgs repo for some packages
+    nixpkgs-master.url = "github:nixos/nixpkgs"; # bleeding edge packages, this is extremely unstable and shouldn't be relied on, mostly for testing
+    nix-snapd = { url = "github:nix-community/nix-snapd"; inputs.nixpkgs.follows = "nixpkgs"; };
+    home-manager = { url = "github:nix-community/home-manager/release-26.05"; inputs.nixpkgs.follows = "nixpkgs"; };
+    darwin = { url = "github:nix-darwin/nix-darwin/nix-darwin-26.05"; inputs.nixpkgs.follows = "nixpkgs"; };
     mac-app-util.url = "github:hraban/mac-app-util";
 
-    # codex.url = "github:openai/codex";  # disabled: missing libwebrtc outputHash in upstream flake
-    # Other packages
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
+    # Secrets management
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # Niri - scrollable-tiling Wayland compositor
-    niri.url = "github:sodiboo/niri-flake";
-
-    # LLM agents for Nix
-    llm-agents.url = "github:numtide/llm-agents.nix";
-
-    # OpenCode upstream flake (the repository's current branch with flake support)
-    opencode = {
-      url = "github:anomalyco/opencode/dev";
-      inputs.nixpkgs.follows = "nixpkgs-unstable";
+    sopsidy = {
+      url = "github:timewave-computer/sopsidy";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
+    # CoolerControl plugins for jimi bare-metal server
+    corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
+    ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
 
     # Python/uv packaging toolchain (used for APM and other uv-based Python tools)
     pyproject-nix = {
@@ -69,97 +57,26 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # LazyVim Nix (declarative Neovim + LazyVim)
-    lazyvim.url = "github:pfassina/lazyvim-nix";
+    #
+    # Doom Emacs via nix-doom-emacs-unstraightened (builds Doom + deps with Nix). Don't pull in its nixpkgs — neither the module nor overlay uses it
+    nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; };
+    git-repo-manager = { url = "github:hakoerber/git-repo-manager"; inputs.nixpkgs.follows = "nixpkgs"; };
+    lazyvim.url = "github:pfassina/lazyvim-nix"; # LazyVim Nix (declarative Neovim + LazyVim)
+    llm-agents.url = "github:numtide/llm-agents.nix";
+    niri.url = "github:sodiboo/niri-flake";
+    noctalia = { url = "github:noctalia-dev/noctalia-shell"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
+    rbw.url = "github:smallstepman/rbw"; # rbw (Bitwarden CLI) with inject/run support
+    rust-overlay = { url = "github:oxalica/rust-overlay"; inputs.nixpkgs.follows = "nixpkgs"; };
+    sonar.url = "github:smallstepman/sonar";
+    yeetnyoink.url = "github:smallstepman/yeetnyoink"; # yeetnyoink - window/app focus orchestrator 
 
     # Non-flake sources for packages we build ourselves
+    aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
     glowm-src = { url = "github:atani/glowm"; flake = false; };
     btop-src = { url = "github:aristocratos/btop"; flake = false; };
-
     tmux-menus-src = { url = "github:jaclu/tmux-menus"; flake = false; };
-
-    # rbw (Bitwarden CLI) with inject/run support
-    rbw.url = "github:smallstepman/rbw";
-    aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
-
-    # yeetnyoink - window/app focus orchestrator for niri
-    yeetnyoink.url = "github:smallstepman/yeetnyoink";
-
-    # Mango window control for Wayland
-    mangowc = {
-      url = "github:DreamMaoMao/mangowc";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # Noctalia shell for Wayland
-    noctalia = {
-      url = "github:noctalia-dev/noctalia-shell";
-      inputs.nixpkgs.follows = "nixpkgs-unstable";
-    };
-
-    # Declarative disk partitioning
-    disko = {
-      url = "github:nix-community/disko";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # Declarative git repo management
-    git-repo-manager = {
-      url = "github:hakoerber/git-repo-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # Secrets management
-    sops-nix = {
-      url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    sopsidy = {
-      url = "github:timewave-computer/sopsidy";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # Doom Emacs via nix-doom-emacs-unstraightened (builds Doom + deps with Nix)
-    nix-doom-emacs-unstraightened = {
-      url = "github:marienz/nix-doom-emacs-unstraightened";
-      # Don't pull in its nixpkgs — neither the module nor overlay uses it
-      inputs.nixpkgs.follows = "";
-    };
-
-    # Gastown - multi-agent orchestration system for Claude Code
-    gastown = {
-      url = "github:steveyegge/gastown";
-      inputs.nixpkgs.follows = "nixpkgs-master";
-    };
-
-    # import-tree - import Nix modules by directory tree (required by den)
-    import-tree.url = "github:vic/import-tree";
-
-    # sonar - CLI to manage processes running on localhost ports
-    sonar.url = "github:smallstepman/sonar";
-
-    # CoolerControl plugins for jimi bare-metal server
-    corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
-    ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
-
-    # Unattended NixOS installer
-    unattended-installer = {
-      url = "github:chrillefkr/nixos-unattended-installer";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.disko.follows = "disko";
-    };
   };
-
-  # Den - aspect-oriented context-driven Nix configurations (top-level dotted path
-  # so that `inputs.den.url = "github:vic/den";` is unambiguous in this file)
-  inputs.den.url = "github:vic/den";
-
-  # flake-aspects must be a direct input here because den's lib.nix accesses
-  # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
-  inputs.flake-aspects.url = "github:vic/flake-aspects";
-
   outputs = { self, nixpkgs, ... }@inputs:
   let
     # ── Overlays ─────────────────────────────────────────────────────────
