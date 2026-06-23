@@ -147,21 +147,10 @@
                 home-manager.backupFileExtension = "backup";
                 home-manager.users.m.home.stateVersion = "18.09";
                 home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
-                home-manager.backupCommand = pkgs.writeShellScript "home-manager-rotate-backup" ''
+                home-manager.backupCommand = ''
                   set -eu
-
-                  target_path="$1"
-                  backup_ext="''${HOME_MANAGER_BACKUP_EXT:-backup}"
-                  backup_path="$target_path.$backup_ext"
-                  candidate="$backup_path"
-                  suffix=1
-
-                  while [[ -e "$candidate" || -L "$candidate" ]]; do
-                    candidate="$backup_path.$suffix"
-                    suffix=$((suffix + 1))
-                  done
-
-                  exec ${pkgs.coreutils}/bin/mv "$target_path" "$candidate"
+                  for ((s=1; ; s++)); do [[ -e "$1.backup.$s" || -L "$1.backup.$s" ]] || break; done
+                  exec ${pkgs.coreutils}/bin/mv "$1" "$1.backup.$s"
                 '';
               };
             in
