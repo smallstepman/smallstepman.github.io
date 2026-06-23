@@ -65,7 +65,6 @@ case "$menu" in
     ;;
   ai)
     tmux display-menu -T "tmux ai" -x R -y P \
-      "Opencode" o "run-shell 'sh $self act-opencode'" \
       "Claude" c "run-shell 'sh $self act-claude'" \
       "Copilot CLI" p "run-shell 'sh $self act-copilot'" \
       "Codex" x "run-shell 'sh $self act-codex'" \
@@ -131,9 +130,6 @@ case "$menu" in
     ;;
   act-magit)
     tmux new-window -c "#{pane_current_path}" "TERM=xterm-24bits emacsclient -a "" -nw -e -q '(progn (magit-status))'"
-    ;;
-  act-opencode)
-    spawn_tool opencode
     ;;
   act-claude)
     spawn_first claude claude-code

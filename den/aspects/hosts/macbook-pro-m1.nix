@@ -16,11 +16,6 @@
       den.aspects.uniclip
       den.aspects.window-manager
 
-      den.aspects.darwin-core
-      den.aspects.darwin-desktop
-      den.aspects.macos
-      den.aspects.opencode
-      den.aspects.openwebui
 
         {
           homeManager = { ... }: {

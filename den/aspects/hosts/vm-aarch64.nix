@@ -669,16 +669,6 @@
 
           networking.hosts."127.0.0.1" = [ "vm-macbook" "localhost" ];
 
-          systemd.services.openwebui-local-proxy = {
-            description = "Expose tunneled Open WebUI on localhost:80";
-            wantedBy = [ "multi-user.target" ];
-            after = [ "network.target" ];
-            serviceConfig = {
-              ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:80,bind=127.0.0.1,reuseaddr,fork TCP:127.0.0.1:18080";
-              Restart = "always";
-              RestartSec = 1;
-            };
-          };
 
           systemd.services.vm-touchid-sudo-bridge-key = {
             description = "Create the dedicated root SSH key for the macOS Touch ID sudo bridge";
@@ -1322,7 +1312,6 @@ EOF
               exec "$git_bin" "$@"
             '';
 
-            opencode = import ../../../dotfiles/common/opencode/modules/common.nix;
           in {
             home.packages = [
               pkgs.docker-client
@@ -1413,35 +1402,6 @@ EOF
               Install.WantedBy = [ "default.target" ];
             };
 
-            systemd.user.services.opencode-serve = {
-              Unit = {
-                Description = "OpenCode stable server (serve mode)";
-                After = [ "default.target" ];
-              };
-              Service = {
-                Type = "simple";
-                ExecStartPre = "${pkgs.opencode}/bin/opencode models --refresh";
-                ExecStart = "${pkgs.opencode}/bin/opencode serve --mdns --mdns-domain ${opencode.stableMdnsDomain} --port ${toString opencode.stablePort}";
-                Restart = "on-failure";
-                RestartSec = 5;
-              };
-              Install.WantedBy = [ "default.target" ];
-            };
-
-            systemd.user.services.opencode-web = {
-              Unit = {
-                Description = "OpenCode web interface";
-                After = [ "default.target" ];
-              };
-              Service = {
-                Type = "simple";
-                ExecStartPre = "${pkgs.opencode}/bin/opencode models --refresh";
-                ExecStart = "${pkgs.opencode}/bin/opencode web --mdns --mdns-domain ${opencode.webMdnsDomain} --port ${toString opencode.webPort}";
-                Restart = "on-failure";
-                RestartSec = 5;
-              };
-              Install.WantedBy = [ "default.target" ];
-            };
 
             systemd.user.services.uniclip = {
               Unit = {

@@ -162,7 +162,7 @@ macOS (host)                              VM (guest)
 |------|---------|
 | `den/aspects/features/shell/bashrc`, `inputrc`, `zsh-manydot.sh`, `oh-my-posh.json`, `yazi/` | Shell configurations (moved from `dotfiles/common/` into the shell aspect) |
 | `dotfiles/common/doom/`, `lazyvim/`, `tmux/`, `vscode/` | Shared editor and terminal assets |
-| `dotfiles/common/opencode/` | OpenCode config, modules, commands, and agent/theme assets |
+|
 | `dotfiles/common/grm-repos.yaml` | Declarative git-repo-manager repo list |
 | `dotfiles/by-host/darwin/skhdrc`, `wezterm.lua`, `kanata/`, `activitywatch/` | macOS-specific assets |
 | `dotfiles/by-host/vm/wezterm.lua`, `ghostty.cfg`, `mangowc.cfg`, `noctalia.json` | VM-specific assets |
@@ -477,7 +477,7 @@ sudo nixos-rebuild switch --flake "path:$WRAPPER#vm-aarch64" --specialisation gn
 - **Editors:** Doom Emacs (Nix-managed via `nix-doom-emacs-unstraightened`, runs as systemd daemon on Linux), Neovim (nightly via LazyVim)
 - **Languages:** Rust (latest stable via overlay, with rust-src + rust-analyzer), Go, Python 3.12 + uv, Node.js 22 + fnm
 - **VCS:** Git (with GPG signing, key `247AE5FC6A838272`, user `smallstepman`), programs.gh
-- **AI Tools:** claude-code, codex, 70+ agents from llm-agents.nix (amp, crush, droid, forge, gemini-cli, opencode, etc.)
+- **AI Tools:** claude-code, codex, 70+ agents from llm-agents.nix (amp, crush, droid, forge, gemini-cli, etc.)
 - **Secrets:** rbw (Bitwarden) on Linux and macOS
 
 ## Doom Emacs Configuration (`dotfiles/common/doom/`)
@@ -506,14 +506,7 @@ This replaces the old approach of symlinking `./doom` to `~/.config/doom` and ru
 
 ## Custom Launchd Services (macOS)
 
-**Nix-managed (`den/aspects/features/launchd.nix` + `dotfiles/common/opencode/modules/darwin.nix`):**
-
-| Label | Purpose |
-|-------|---------|
-| `org.nixos.uniclip` | Uniclip server (encrypted clipboard sharing, `192.168.130.1:53701`) |
-| `org.nixos.openwebui` / `org.nixos.openwebui-tunnel` | Open WebUI plus VM-facing SSH reverse tunnel |
-| `org.nixos.activitywatch-*` | ActivityWatch automation and VM-facing tunnel |
-| `org.nixos.opencode-serve` / `org.nixos.opencode-web` | OpenCode background services |
+**Nix-managed (`den/aspects/features/launchd.nix`):**
 
 **Manually managed (~/Library/LaunchAgents/):**
 

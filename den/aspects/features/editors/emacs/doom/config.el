@@ -178,10 +178,7 @@
   :commands (agent-shell)
   :config
   (setq agent-shell-github-acp-command '("agent-shell-copilot-acp")
-        agent-shell-anthropic-claude-acp-command '("agent-shell-claude-code-acp")
-        agent-shell-opencode-acp-command '("agent-shell-opencode-acp")
-        agent-shell-opencode-authentication
-        (agent-shell-opencode-make-authentication :none t)))
+        agent-shell-anthropic-claude-acp-command '("agent-shell-claude-code-acp")))
 ;; we recommend using use-package to organize your init.el
 ;; (use-package! codeium
 ;;     ;; if you use straight

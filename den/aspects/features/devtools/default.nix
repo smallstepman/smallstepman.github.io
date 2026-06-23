@@ -2,28 +2,58 @@
   den.aspects.devtools = {
     homeManager = { pkgs, lib, config, ... }: {
       home.packages = [
-        pkgs.devenv pkgs.just pkgs.gnumake pkgs.pixi
+        pkgs.devenv
+        pkgs.just
+        pkgs.gnumake
 
-        pkgs.harlequin pkgs.btop pkgs.glowm pkgs.dust pkgs.tree
-        pkgs.watch pkgs.websocat pkgs.yq pkgs.jq pkgs.d2 pkgs.adrs
+        pkgs.harlequin
+        pkgs.btop
+        pkgs.glowm
+        pkgs.dust
+        pkgs.tree
+        pkgs.watch
+        pkgs.websocat
+        pkgs.yq
+        pkgs.jq
+        pkgs.d2
+        pkgs.adrs
 
         pkgs.dbeaver-bin
 
-        pkgs.bws pkgs.fluxcd pkgs.kubernetes-helm pkgs.terragrunt pkgs.kubecm
+        pkgs.bws
+        pkgs.fluxcd
+        pkgs.kubernetes-helm
+        pkgs.terragrunt
+        pkgs.kubecm
 
         pkgs.parallel
-        (pkgs.bats.withLibraries (libs: with libs; [ bats-assert bats-file ]))
+        (pkgs.bats.withLibraries (libs: [
+          libs.bats-support
+          libs.bats-assert
+          libs.bats-file
+          libs.bats-detik
+        ]))
 
-        pkgs.go pkgs.gopls pkgs.protobuf pkgs.bun
+        pkgs.pixi
+        pkgs.uv
+        pkgs.go
+        pkgs.gopls
+        pkgs.protobuf
+        pkgs.bun
         (pkgs.rust-bin.nightly.latest.default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
+          targets = [ "wasm32-wasip1" "wasm32-unknown-unknown" "wasm32-wasip2" ];
         })
         (lib.hiPrio pkgs.python314)
-        pkgs.uv pkgs.nodejs_22
+        pkgs.nodejs_22
+        pkgs.cmake
         pkgs.llvmPackages_21.clang-tools
-        pkgs.llvmPackages_21.lld pkgs.llvmPackages_21.lldb pkgs.llvmPackages_21.libcxx
+        pkgs.llvmPackages_21.lld
+        pkgs.llvmPackages_21.lldb
+        pkgs.llvmPackages_21.libcxx
 
-        pkgs.s3fs pkgs.cmake pkgs.ninja
+        pkgs.s3fs
+        pkgs.ninja
 
         pkgs.uniclip
       ];

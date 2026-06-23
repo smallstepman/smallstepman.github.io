@@ -1984,56 +1984,6 @@ PY
 @test "devtools: ai-tools.nix owns AI package and program entries" {
   grep -Fq 'pkgs.claude-code-acp'                    den/aspects/features/ai-tools.nix
   grep -Fq 'pkgs.llm-agents.copilot-cli'             den/aspects/features/ai-tools.nix
-  grep -Fq 'programs.opencode'                        den/aspects/features/ai-tools.nix
-  grep -Fq 'package = pkgs.opencode;'                 den/aspects/features/ai-tools.nix
-  grep -Fq 'agent-shell-copilot-acp'                 den/aspects/features/ai-tools.nix
-  grep -Fq 'agent-shell-claude-code-acp'             den/aspects/features/ai-tools.nix
-  grep -Fq 'agent-shell-opencode-acp'                den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode-auth-refresh'                   den/aspects/features/ai-tools.nix
-  grep -Fq '.local/share/opencode'                   den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode-auth-bailian-coding-plan'       den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode-auth-github-copilot'            den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode-auth-opencode-go'               den/aspects/features/ai-tools.nix
-  grep -Fq 'export PATH=${pkgs.rbw}/bin:/opt/homebrew/bin:$PATH' den/aspects/features/ai-tools.nix
-  grep -Fq 'bailian-coding-plan'                     den/aspects/features/ai-tools.nix
-  grep -Fq 'github-copilot'                          den/aspects/features/ai-tools.nix
-  grep -Fq 'opencode-go'                             den/aspects/features/ai-tools.nix
-  if grep -Fq 'cp "$authJson" "$tmpJson"' den/aspects/features/ai-tools.nix; then
-    fail 'opencode auth generation must overwrite from rbw, not merge existing auth.json'
-  fi
-  grep -Fq 'rbw stop-agent || true'                  den/aspects/features/ai-tools.nix
-  grep -Fq 'export XDG_CONFIG_HOME="$HOME/.config"' den/aspects/features/ai-tools.nix
-  grep -Fq 'opencodeAwesome'                          den/aspects/features/ai-tools.nix
-  grep -Fq 'ensureOpencodePackageJsonWritable'        den/aspects/features/ai-tools.nix
-  grep -Fq 'pkgs.dotagents'                           den/aspects/features/ai-tools.nix
-  grep -Fq 'pkgs.apm'                                 den/aspects/features/ai-tools.nix
-  grep -Fq 'pkgs.llm-agents.beads'                    den/aspects/features/ai-tools.nix
-  grep -Fq 'pkgs.llm-agents.openspec'                 den/aspects/features/ai-tools.nix
-  grep -Fq 'pkgs.llm-agents.copilot-language-server'  den/aspects/features/ai-tools.nix
-  grep -Fq 'ocd = "opencode";'                        den/aspects/features/shell/default.nix
-  if grep -Fq 'opencode/modules/home-manager.nix' den/aspects/features/ai-tools.nix; then
-    fail 'ai-tools.nix must not import opencode/modules/home-manager.nix (deleted)'
-  fi
-  if rg -n 'pkgs\.llm-agents\.opencode|pkgs\.opencode-dev|opencode-dev' \
-    den/aspects/features/ai-tools.nix \
-    den/aspects/features/shell/default.nix \
-    den/aspects/hosts/vm-aarch64.nix \
-    dotfiles/common/opencode/modules/darwin.nix \
-    den/mk-config-outputs.nix \
-    >/dev/null; then
-    fail 'OpenCode must use a single upstream package; stale llm-agents/opencode-dev references remain'
-  fi
-  grep -Fq 'opencode-serve' den/aspects/hosts/vm-aarch64.nix
-  grep -Fq 'opencode-web'   den/aspects/hosts/vm-aarch64.nix
-}
-
-# bats test_tags=devtools
-@test "devtools: ai-tools.nix does not fetch opencode auth during home-manager activation" {
-  grep -Fq 'opencode-auth-refresh' den/aspects/features/ai-tools.nix
-
-  if grep -Fq 'home.activation.ensureOpencodeAuthJson' den/aspects/features/ai-tools.nix; then
-    fail 'opencode auth refresh must not run during Home Manager activation'
-  fi
 }
 
 # bats test_tags=devtools
@@ -2041,8 +1991,6 @@ PY
   grep -Fq 'exec-path-from-shell-initialize'                            den/aspects/features/editors/emacs/doom/config.el
   grep -Fq 'agent-shell-copilot-acp'                                    den/aspects/features/editors/emacs/doom/config.el
   grep -Fq 'agent-shell-claude-code-acp'                                den/aspects/features/editors/emacs/doom/config.el
-  grep -Fq 'agent-shell-opencode-acp'                                   den/aspects/features/editors/emacs/doom/config.el
-  grep -Fq 'agent-shell-opencode-make-authentication :none t'           den/aspects/features/editors/emacs/doom/config.el
 }
 
 # bats test_tags=devtools
@@ -2066,7 +2014,7 @@ PY
 }
 
 # bats test_tags=devtools
-@test "devtools: vm-aarch64 doom-emacs, vscode, emacs service, go GOPATH, opencode enabled" {
+@test "devtools: vm-aarch64 doom-emacs, vscode, emacs service, go GOPATH" {
   local actual
 
   actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.doom-emacs.enable)
@@ -2081,8 +2029,6 @@ PY
   actual=$(nix_eval_raw .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.go.env.GOPATH 2>/dev/null || echo "")
   assert_equal "$actual" "Documents/go"
 
-  actual=$(nix_eval_json .#nixosConfigurations.vm-aarch64.config.home-manager.users.m.programs.opencode.enable)
-  assert_equal "$actual" "true"
 }
 
 # bats test_tags=devtools
@@ -2098,8 +2044,6 @@ PY
   actual=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.vscode.enable)
   assert_equal "$actual" "true"
 
-  actual=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.home-manager.users.m.programs.opencode.enable)
-  assert_equal "$actual" "true"
 }
 
 # bats test_tags=devtools
@@ -2115,14 +2059,12 @@ PY
 }
 
 # bats test_tags=devtools
-@test "devtools: wsl emacs service enabled and opencode enabled" {
+@test "devtools: wsl emacs service enabled" {
   local actual
 
   actual=$(nix_eval_json .#nixosConfigurations.wsl.config.home-manager.users.m.services.emacs.enable)
   assert_equal "$actual" "true"
 
-  actual=$(nix_eval_json .#nixosConfigurations.wsl.config.home-manager.users.m.programs.opencode.enable)
-  assert_equal "$actual" "true"
 }
 
 
@@ -2172,7 +2114,6 @@ PY
 
 # bats test_tags=linux-core
 @test "linux-core: vm-aarch64 host aspect owns host-specific remnants" {
-  grep -Fq 'openwebui-local-proxy' den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'authorizedKeys'        den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'extraGroups'           den/aspects/hosts/vm-aarch64.nix
   grep -Fq 'sops.hostPubKey'       den/aspects/hosts/vm-aarch64.nix
@@ -2964,7 +2905,6 @@ PY
   grep -Fq 'services.yabai.enable = true;'           den/aspects/features/darwin-desktop.nix
   grep -Fq 'services.skhd = {'                       den/aspects/features/darwin-desktop.nix
   grep -Fq 'homebrew.enable = true;'                 den/aspects/features/homebrew.nix
-  grep -Fq '../../../dotfiles/common/opencode/modules/darwin.nix' den/aspects/features/launchd.nix
   grep -Fq 'launchd.user.agents.uniclip'             den/aspects/features/launchd.nix
   grep -Fq 'AW_IMPORT_SRC'                           den/aspects/features/launchd.nix
 }
@@ -3075,21 +3015,12 @@ PY
 }
 
 # bats test_tags=darwin
-@test "darwin: Darwin launchd agents (uniclip, opencode-serve, opencode-web) present" {
+@test "darwin: Darwin launchd agents (uniclip) present" {
   local actual
 
   actual=$(nix_eval_json .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents.uniclip.serviceConfig.RunAtLoad)
   assert_equal "$actual" "true"
 
-  actual=$(nix_eval_apply_raw \
-    .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents \
-    'agents: if agents ? "opencode-serve" then "yes" else "no"')
-  assert_equal "$actual" "yes"
-
-  actual=$(nix_eval_apply_raw \
-    .#darwinConfigurations.macbook-pro-m1.config.launchd.user.agents \
-    'agents: if agents ? "opencode-web" then "yes" else "no"')
-  assert_equal "$actual" "yes"
 }
 
 # bats test_tags=darwin

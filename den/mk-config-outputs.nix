@@ -12,13 +12,6 @@ let
 
     # Build non-flake packages from source
     (final: prev: {
-        opencode = (inputs.opencode.packages.${prev.stdenv.hostPlatform.system}.default.override {
-          bun = prev.bun;
-        }).overrideAttrs (oa: {
-          postPatch = (oa.postPatch or "") + ''
-            sed -i 's/if (!semver.satisfies/if (false \&\& !semver.satisfies/' packages/script/src/index.ts
-          '';
-        });
         rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
         gastown = inputs.gastown.packages.${prev.stdenv.hostPlatform.system}.default;
 
