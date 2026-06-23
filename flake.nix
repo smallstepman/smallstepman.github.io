@@ -98,32 +98,43 @@
       (import ./den/aspects/authorization/_wayprompt-overlay.nix { inherit inputs; })
     ];
 
-    # ── Generated input helper ───────────────────────────────────────────
-    generated =
-      let
-        requireFile = relative:
-          let
-            path =
-              if inputs.generated == null then
-                null
-              else
-                inputs.generated + "/${relative}";
-          in
-            if path != null && builtins.pathExists path then
-              path
-            else
-              throw ''
-                Missing generated input file `${relative}`.
-                Create a wrapper flake with `scripts/external-input-flake.sh`
-                or call `lib.mkOutputs { generated = <path>; }`.
-                Supported default locations are `~/.local/share/nix-config-generated` on macOS
-                and `/nixos-generated` inside the VMware guest.
-              '';
-      in {
-        root = inputs.generated;
-        inherit requireFile;
-        readFile = relative: builtins.readFile (requireFile relative);
+  systems = [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ];
+
+  mkPackages = flake:
+    builtins.listToAttrs (map (system: {
+      name = system;
+      value.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
+        pkgs = import nixpkgs { inherit system; };
+        hosts = { inherit (flake.nixosConfigurations) vm-aarch64; };
       };
+    }) systems);
+  mkGenerated = gen:
+    let
+      requireFile = relative:
+        let
+          path =
+            if gen == null then
+              null
+            else
+              gen + "/${relative}";
+        in
+          if path != null && builtins.pathExists path then
+            path
+          else
+            throw ''
+              Missing generated input file `${relative}`.
+              Create a wrapper flake with `scripts/external-input-flake.sh`
+              or call `lib.mkOutputs { generated = <path>; }`.
+              Supported default locations are `~/.local/share/nix-config-generated` on macOS
+              and `/nixos-generated` inside the VMware guest.
+            '';
+    in {
+      root = gen;
+      inherit requireFile;
+      readFile = relative: builtins.readFile (requireFile relative);
+    };
+
+  generated = mkGenerated inputs.generated;
 
     # ── Den base module (formerly den/default.nix) ───────────────────────
     denModule = { inputs, lib, overlays, ... }: {
@@ -192,100 +203,28 @@
       specialArgs = { inherit generated inputs overlays; };
     }).config;
 
-    # ── Outputs ──────────────────────────────────────────────────────────
     mkOutputs = { generated }:
       let
         inputs' = inputs // { inherit generated; };
-
-        requireFile = relative:
-          let
-            path =
-              if generated == null then
-                null
-              else
-                generated + "/${relative}";
-          in
-            if path != null && builtins.pathExists path then
-              path
-            else
-              throw ''
-                Missing generated input file `${relative}`.
-                Create a wrapper flake with `scripts/external-input-flake.sh`
-                or call `lib.mkOutputs { generated = <path>; }.
-              '';
-
         den' = (nixpkgs.lib.evalModules {
           modules = [
             denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
           ];
           specialArgs = {
-            generated = {
-              root = generated;
-              requireFile = requireFile;
-              readFile = relative: builtins.readFile (requireFile relative);
-            };
+            generated = mkGenerated generated;
             inputs = inputs';
             inherit overlays;
           };
         }).config;
       in den'.flake // {
-        packages = let
-          pkgsForHost = hostName: import nixpkgs { system = hostName; };
-        in {
-          aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-            pkgs = pkgsForHost "aarch64-darwin";
-            hosts = {
-              inherit (den'.flake.nixosConfigurations) vm-aarch64;
-            };
-          };
-          x86_64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-            pkgs = pkgsForHost "x86_64-darwin";
-            hosts = {
-              inherit (den'.flake.nixosConfigurations) vm-aarch64;
-            };
-          };
-          aarch64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-            pkgs = pkgsForHost "aarch64-linux";
-            hosts = {
-              inherit (den'.flake.nixosConfigurations) vm-aarch64;
-            };
-          };
-          x86_64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-            pkgs = pkgsForHost "x86_64-linux";
-            hosts = {
-              inherit (den'.flake.nixosConfigurations) vm-aarch64;
-            };
-          };
-        };
+        packages = mkPackages den'.flake;
       };
   in {
     lib.mkOutputs = mkOutputs;
 
     inherit (den.flake) nixosConfigurations darwinConfigurations;
 
-    packages.aarch64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-      pkgs = import nixpkgs { system = "aarch64-darwin"; };
-      hosts = {
-        inherit (den.flake.nixosConfigurations) vm-aarch64;
-      };
-    };
-    packages.x86_64-darwin.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-      pkgs = import nixpkgs { system = "x86_64-darwin"; };
-      hosts = {
-        inherit (den.flake.nixosConfigurations) vm-aarch64;
-      };
-    };
-    packages.aarch64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-      pkgs = import nixpkgs { system = "aarch64-linux"; };
-      hosts = {
-        inherit (den.flake.nixosConfigurations) vm-aarch64;
-      };
-    };
-    packages.x86_64-linux.collect-secrets = inputs.sopsidy.lib.buildSecretsCollector {
-      pkgs = import nixpkgs { system = "x86_64-linux"; };
-      hosts = {
-        inherit (den.flake.nixosConfigurations) vm-aarch64;
-      };
-    };
-  };
+    packages = mkPackages den.flake;
+
+};
 }

@@ -1,4 +1,4 @@
-{
+{ config, pkgs, ... }: {
   # ── Host declarations ─────────────────────────────────────────────────
   den.hosts.aarch64-linux.vm-aarch64.hostName = "vm-macbook";
   den.hosts.aarch64-linux.vm-aarch64.users.m = { };
@@ -17,96 +17,94 @@
   # ── MacBook Pro M1 ────────────────────────────────────────────────────
   den.aspects.macbook-pro-m1 = {
     includes = [
-      den.aspects.activitywatch
-      den.aspects.authorization
-      den.aspects.containers
-      den.aspects.desktop-apps
-      den.aspects.devtools
-      den.aspects.editors.emacs
-      den.aspects.editors.neovim
-      den.aspects.editors.vscode
-      den.aspects.git
-      den.aspects.identity
-      den.aspects.keyboard.kanata
-      den.aspects.keyboard.skhd
-      den.aspects.network
-      den.aspects.nix-daemon
-      den.aspects.shell
-      den.aspects.ssh-pam
-      den.aspects.storage
-      den.aspects.system-defaults
-      den.aspects.touchid
-      den.aspects.uniclip
-      den.aspects.window-manager
-      den.provides.define-user
-      den.provides.primary-user
-      (den.provides.user-shell "zsh")
+      config.den.aspects.activitywatch
+      config.den.aspects.authorization
+      config.den.aspects.containers
+      config.den.aspects.desktop-apps
+      config.den.aspects.devtools
+      config.den.aspects.editors.emacs
+      config.den.aspects.editors.neovim
+      config.den.aspects.editors.vscode
+      config.den.aspects.git
+      config.den.aspects.keyboard.kanata
+      config.den.aspects.keyboard.skhd
+      config.den.aspects.network
+      config.den.aspects.nix-daemon
+      config.den.aspects.shell
+      config.den.aspects.ssh-pam
+      config.den.aspects.storage
+      config.den.aspects.system-defaults
+      config.den.aspects.touchid
+      config.den.aspects.uniclip
+      config.den.aspects.window-manager
+      config.den.provides.define-user
+      config.den.provides.primary-user
+      (config.den.provides.user-shell "zsh")
     ];
   };
 
   # ── VM (aarch64) ──────────────────────────────────────────────────────
   den.aspects.vm-aarch64 = {
     includes = [
-      den.aspects.activitywatch
-      den.aspects.authorization.sudo
-      den.aspects.authorization.touchid.vm
-      den.aspects.authorization.wayprompt
-      den.aspects.desktop-apps
-      den.aspects.desktop.browsers
-      den.aspects.desktop.cursor
-      den.aspects.desktop.greetd
-      den.aspects.desktop.input
-      den.aspects.desktop.niri
-      den.aspects.desktop.noctalia
-      den.aspects.desktop.power
-      den.aspects.desktop.wlr-which-key
-      den.aspects.devtools
-      den.aspects.editors.emacs
-      den.aspects.editors.neovim
-      den.aspects.editors.vscode
-      den.aspects.git
-      den.aspects.git.vm-signing
-      den.aspects.hardware.bluetooth
-      den.aspects.hardware.boot
-      den.aspects.hardware.disk.vm-default
-      den.aspects.hardware.fonts
-      den.aspects.identity
-      den.aspects.network.base
-      den.aspects.network.kube-tunnel
-      den.aspects.nix.settings
-      den.aspects.secrets
-      den.aspects.shell
-      den.aspects.shell.wezterm-vm
-      den.aspects.ssh-pam
-      den.aspects.virtualization.core
-      den.aspects.virtualization.flatpak
-      den.aspects.vmware
-      den.provides.hostname
-      den.provides.define-user
-      den.provides.primary-user
-      (den.provides.user-shell "zsh")
+      config.den.aspects.activitywatch
+      config.den.aspects.authorization.sudo
+      config.den.aspects.authorization.touchid.vm
+      config.den.aspects.authorization.wayprompt
+      config.den.aspects.desktop-apps
+      config.den.aspects.desktop.browsers
+      config.den.aspects.desktop.cursor
+      config.den.aspects.desktop.greetd
+      config.den.aspects.desktop.input
+      config.den.aspects.desktop.niri
+      config.den.aspects.desktop.noctalia
+      config.den.aspects.desktop.power
+      config.den.aspects.desktop.wlr-which-key
+      config.den.aspects.devtools
+      config.den.aspects.editors.emacs
+      config.den.aspects.editors.neovim
+      config.den.aspects.editors.vscode
+      config.den.aspects.git
+      config.den.aspects.git.vm-signing
+      config.den.aspects.hardware.bluetooth
+      config.den.aspects.hardware.boot
+      config.den.aspects.hardware.disk.vm-default
+      config.den.aspects.hardware.fonts
+      config.den.aspects.network.base
+      config.den.aspects.network.kube-tunnel
+      config.den.aspects.nix.settings
+      config.den.aspects.secrets
+      config.den.aspects.shell
+      config.den.aspects.shell.wezterm-vm
+      config.den.aspects.ssh-pam
+      config.den.aspects.virtualization.core
+      config.den.aspects.virtualization.flatpak
+      config.den.aspects.vmware
+      config.den.provides.hostname
+      config.den.provides.define-user
+      config.den.provides.primary-user
+      (config.den.provides.user-shell "zsh")
     ];
   };
 
   # ── Jimi (x86_64) ─────────────────────────────────────────────────────
   den.aspects.jimi = {
     includes = [
-      den.aspects.devtools
-      den.aspects.hardware.boot.jimi
-      den.aspects.hardware.cooling
-      den.aspects.hardware.disk.jimi
-      den.aspects.hardware.nvidia
-      den.aspects.hardware.nvidia.gpu-monitoring
-      den.aspects.monitoring
-      den.aspects.network.tailscale
-      den.aspects.nix.settings.jimi
-      den.aspects.services.vllm
-      den.aspects.shell
-      den.aspects.ssh-pam.jimi
-      den.provides.hostname
-      den.provides.define-user
-      den.provides.primary-user
-      (den.provides.user-shell "zsh")
+      config.den.aspects.devtools
+      config.den.aspects.hardware.boot.jimi
+      config.den.aspects.hardware.cooling
+      config.den.aspects.hardware.disk.jimi
+      config.den.aspects.hardware.nvidia
+      config.den.aspects.hardware.nvidia.gpu-monitoring
+      config.den.aspects.monitoring
+      config.den.aspects.network.tailscale
+      config.den.aspects.nix.settings.jimi
+      config.den.aspects.services.vllm
+      config.den.aspects.shell
+      config.den.aspects.ssh-pam.jimi
+      config.den.provides.hostname
+      config.den.provides.define-user
+      config.den.provides.primary-user
+      (config.den.provides.user-shell "zsh")
 
       ({ host, ... }: {
         nixos = { config, pkgs, lib, ... }: {
