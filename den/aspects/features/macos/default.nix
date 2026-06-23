@@ -1,5 +1,5 @@
 {
-  den.aspects.darwin-desktop = {
+  den.aspects.macos = {
     darwin = { pkgs, ... }: {};
   };
 }
