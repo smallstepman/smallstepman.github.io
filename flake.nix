@@ -91,11 +91,11 @@
         rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
       })
 
-      (import ./den/aspects/clipboard/_overlay.nix { inherit inputs; })
-      (import ./den/aspects/devtools/_overlay.nix { inherit inputs; })
-      (import ./den/aspects/shell/tmux/_overlay.nix { inherit inputs; })
-      (import ./den/aspects/shell/_overlay.nix { inherit inputs; })
-      (import ./den/aspects/authorization/_wayprompt-overlay.nix { inherit inputs; })
+      (import ./aspects/clipboard/_overlay.nix { inherit inputs; })
+      (import ./aspects/devtools/_overlay.nix { inherit inputs; })
+      (import ./aspects/shell/tmux/_overlay.nix { inherit inputs; })
+      (import ./aspects/shell/_overlay.nix { inherit inputs; })
+      (import ./aspects/authorization/_wayprompt-overlay.nix { inherit inputs; })
     ];
 
   systems = [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ];
@@ -136,7 +136,6 @@
 
   generated = mkGenerated inputs.generated;
 
-    # ── Den base module (formerly den/default.nix) ───────────────────────
     denModule = { inputs, lib, overlays, ... }: {
       imports = [ inputs.den.flakeModule ];
 
@@ -200,9 +199,7 @@
 
     # ── Den evaluation ───────────────────────────────────────────────────
     den = (nixpkgs.lib.evalModules {
-      modules = [
-        denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
-      ];
+      modules = [ denModule ./hosts.nix (inputs.import-tree ./aspects) ];
       specialArgs = { inherit generated inputs overlays; };
     }).config;
 
@@ -211,7 +208,7 @@
         inputs' = inputs // { inherit generated; };
         den' = (nixpkgs.lib.evalModules {
           modules = [
-            denModule ./den/hosts.nix (inputs.import-tree ./den/aspects)
+            denModule ./hosts.nix (inputs.import-tree ./aspects)
           ];
           specialArgs = {
             generated = mkGenerated generated;
