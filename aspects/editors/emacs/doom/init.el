@@ -116,7 +116,7 @@
        (javascript +lsp)
        ;;  latex
        markdown
-       ;;  nix
+       (nix +tree-sitter)
        ;; (org
        ;;  +pretty
        ;;  +roam2
@@ -136,7 +136,7 @@
        rest
        (rust +lsp +tree-sitter)
        ;;   (scheme +guile)
-       (sh +lsp)
+       (sh +lsp +tree-sitter)
        ;;   solidity
        (web +lsp)
        yaml

@@ -14,6 +14,7 @@
 (package! vterm-toggle)
 (package! ruff-format)
 (package! flymake-ruff)
+;; (package! ghostel)  ; built via nixpkgs + pre-built module, see default.nix
 
 ;; (package! dired-dragon :recipe (:host github :repo "jeetelongname/dired-dragon"))
 ;; (package! graphviz-dot-mode)

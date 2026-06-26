@@ -28,18 +28,12 @@
       den.aspects.shell
       den.aspects.editors.emacs
       den.aspects.editors.neovim
-      den.aspects.editors.vscode
       den.aspects.git
       den.aspects.devtools
-      den.aspects.activitywatch
-      den.aspects.desktop-apps
-      den.aspects.uniclip
-      den.aspects.storage
-      den.aspects.network
     ];
   };
 
-  # ── MacBook Pro M1 ────────────────────────────────────────────────────
+  # ── MacBook Pro ────────────────────────────────────────────────────
   den.aspects.macbook-pro-m1 = {
     includes = [
       den.aspects.activitywatch

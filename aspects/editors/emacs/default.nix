@@ -1,6 +1,51 @@
 { inputs, ... }: {
   den.aspects.editors.emacs = {
-    homeManager = { pkgs, ... }: {
+    homeManager = { pkgs, ... }: let
+      ghostelVersion = "0.38.0";
+
+      ghostelSrc = pkgs.fetchFromGitHub {
+        owner = "dakra";
+        repo = "ghostel";
+        rev = "v${ghostelVersion}";
+        hash = "sha256-om7zQadmKwfL59ydItJN9UfeAz2mw2OoFxOg6fcPY/s=";
+      };
+
+      ghostelModule = pkgs.stdenv.mkDerivation {
+        pname = "ghostel-module";
+        version = ghostelVersion;
+        src = pkgs.fetchurl {
+          url = "https://github.com/dakra/ghostel/releases/download/v${ghostelVersion}/ghostel-module-aarch64-macos.dylib";
+          hash = "sha256-f193xQ+VruO3aM+u9fxB4+iaRAWIO2lsUlStXMz3Gkc=";
+        };
+        dontUnpack = true;
+        installPhase = ''
+          mkdir -p $out/lib
+          cp $src $out/lib/libghostel-module.dylib
+          chmod +x $out/lib/libghostel-module.dylib
+          echo "${ghostelVersion}" > $out/ghostel-module.version
+        '';
+      };
+
+      libExt = pkgs.stdenv.hostPlatform.extensions.sharedLibrary;
+
+      ghostel = (pkgs.emacsPackagesFor pkgs.emacs-pgtk).melpaBuild {
+        pname = "ghostel";
+        version = ghostelVersion;
+        src = ghostelSrc;
+        files = ''
+          ("lisp/*.el"
+           "extensions/*.el"
+           "etc")
+        '';
+        postInstall = let
+          mod = ghostelModule;
+        in ''
+          dylib=$out/share/emacs/site-lisp/elpa/ghostel-${ghostelVersion}/ghostel-module${libExt}
+          install ${mod}/lib/libghostel-module${libExt} $dylib
+          install --mode=444 ${mod}/ghostel-module.version $out/share/emacs/site-lisp/elpa/ghostel-${ghostelVersion}/ghostel-module.version
+        '';
+      };
+    in {
       imports = [ inputs.nix-doom-emacs-unstraightened.homeModule ];
 
       home.packages = [ pkgs.emacs-all-the-icons-fonts ];
@@ -9,6 +54,10 @@
         enable = true;
         doomDir = ./doom;
         emacs = pkgs.emacs-pgtk;
+        extraPackages = epkgs: [ epkgs.vterm epkgs.treesit-grammars.with-all-grammars epkgs.ghostel ];
+        emacsPackageOverrides = eself: esuper: {
+          inherit ghostel;
+        };
       };
 
       services.emacs = {

@@ -154,9 +154,26 @@
           ];
 
         home.packages = [
-          pkgs.bat pkgs.dua pkgs.dust pkgs.eza pkgs.fd pkgs.fnm pkgs.fzf
-          pkgs.ghostty-bin pkgs.jq pkgs.kubecolor pkgs.kubectl pkgs.mdfried pkgs.rbw pkgs.ripgrep
-          pkgs.basalt pkgs.trash-cli pkgs.zellij pkgs.kitty pkgs.alacritty pkgs.wezterm
+          pkgs.basalt 
+          pkgs.bat 
+          pkgs.btop
+          pkgs.dua 
+          pkgs.dust
+          pkgs.eza 
+          pkgs.fd 
+          pkgs.fnm 
+          pkgs.fzf
+          pkgs.glowm
+          pkgs.jq 
+          pkgs.mdfried 
+          pkgs.rbw 
+          pkgs.ripgrep
+          pkgs.trash-cli 
+          pkgs.tree
+          pkgs.watch
+          pkgs.websocat
+          pkgs.wezterm
+          pkgs.yq
         ] ++ lib.optionals (niksWorktree != null) [ niksWorktree ];
 
         programs.yazi = {

@@ -1,4 +1,4 @@
-(setq
+ ;;; config.el -*- no-byte-compile: t; -*-
  doom-font (font-spec :family (if (eq system-type 'darwin) "Menlo" "DejaVu Sans Mono")
                       :size 14 :weight 'medium)
  fancy-splash-image (concat doom-private-dir "themes/splash.png")
@@ -123,7 +123,8 @@
       "o"             #'smerge-next)
 
 
-(start-process "yabai" nil "yabai" "-m" "window" "--focus" "south")
+ (when (and (eq system-type 'darwin) (executable-find "yabai"))
+   (start-process "yabai" nil "yabai" "-m" "window" "--focus" "south"))
 
 (defun yabai-move-on-error (direction move-fn)
   (interactive)
@@ -169,10 +170,11 @@
 (defun aerospace-window-down ()
   (interactive)
   (aerospace-move-on-error "down" #'windmove-down))
-(use-package! exec-path-from-shell
-  :if (eq system-type 'darwin)
-  :config
-  (exec-path-from-shell-initialize))
+ (use-package! exec-path-from-shell
+   :unless noninteractive
+   :defer 1
+   :config
+   (exec-path-from-shell-initialize))
 
 (use-package! agent-shell
   :commands (agent-shell)
@@ -248,26 +250,19 @@
 ;;      ("<tab>" . 'copilot-accept-completion)
 ;;     ("TAB" . 'copilot-accept-completion)))
 ;; (use-package! git-link)
-(use-package! gptel
-  :config
-  (setq! gptel-model "gpt-4o-mini")
-  (setq  gptel-directives '((default . "You are a large language model living in Emacs and a helpful coding assistant. Respond concisely.")
-                            (arbitrage . "As Arbitrage Expert, you specialize in advanced strategies, including cross-exchange trades, in financial markets. Your expertise encompasses risk, spatial, statistical, and triangular arbitrage, with a keen focus on exploiting price discrepancies across different exchanges. Tailored for professionals deeply versed in financial markets, you offer nuanced, data-driven insights into identifying and capitalizing on these opportunities. Your knowledge extends to sophisticated trading algorithms and the latest technologies facilitating efficient cross-exchange arbitrage. Your interactions are analytical and precise, essential for successful arbitrage trading.")
-                            (crypto . "As Crypto Commander, you are a specialized GPT model dedicated to advanced and professional-level discourse in the realm of cryptocurrency trading. Your role is to provide high-level, expert insights into cryptocurrency markets, trading strategies, and technological advancements. You cater to users with a deep understanding of cryptocurrency trading, ensuring that interactions remain sophisticated and professional. Your expertise includes detailed analysis of trading indicators, algorithms, and dashboards, tailored for professionals deeply ingrained in the cryptocurrency industry. Your responses are designed to be nuanced and in-depth, suitable for the complex and dynamic world of cryptocurrencies.")
-                            (programming . "You are a large language model and a careful programmer. Provide code and only code as output without any additional text, prompt or note.")
-                            (writing . "You are a large language model and a writing assistant. Respond concisely.")
-                            (chat . "You are a large language model and a conversation partner. Respond concisely.")
-                            (rust . "You are expert coder, staff software engineer in fintech company. You are expert at rust, concurrency, multithreading, and async code.")
-
-                            )))
-(setq lsp-rust-analyzer-inlay-hints-mode t)
-(setq lsp-rust-analyzer-server-display-inlay-hints t)
-(setq lsp-ui-sideline-enable nil)
-(setq lsp-ui-sideline-show-hover nil)
-(setq lsp-ui-peek-always-show t)
-(setq magit-todos-mode nil)
-(setq! magit-todos-mode nil)
-(setq! magit-todos-mode 'nil)
+ (use-package! gptel
+   :defer t
+   :config
+   (setq! gptel-model "gpt-4o-mini")
+   (setq  gptel-directives '((default . "You are a large language model living in Emacs and a helpful coding assistant. Respond concisely.")
+                             (arbitrage . "As Arbitrage Expert, you specialize in advanced strategies, including cross-exchange trades, in financial markets. Your expertise encompasses risk, spatial, statistical, and triangular arbitrage, with a keen focus on exploiting price discrepancies across different exchanges. Tailored for professionals deeply versed in financial markets, you offer nuanced, data-driven insights into identifying and capitalizing on these opportunities. Your knowledge extends to sophisticated trading algorithms and the latest technologies facilitating efficient cross-exchange arbitrage. Your interactions are analytical and precise, essential for successful arbitrage trading.")
+                             (crypto . "As Crypto Commander, you are a specialized GPT model dedicated to advanced and professional-level discourse in the realm of cryptocurrency trading. Your role is to provide high-level, expert insights into cryptocurrency markets, trading strategies, and technological advancements. You cater to users with a deep understanding of cryptocurrency trading, ensuring that interactions remain sophisticated and professional. Your expertise includes detailed analysis of trading indicators, algorithms, and dashboards, tailored for professionals deeply ingrained in the cryptocurrency industry. Your responses are designed to be nuanced and in-depth, suitable for the complex and dynamic world of cryptocurrencies.")
+                             (programming . "You are a large language model and a careful programmer. Provide code and only code as output without any additional text, prompt or note.")
+                             (writing . "You are a large language model and a writing assistant. Respond concisely.")
+                             (chat . "You are a large language model and a conversation partner. Respond concisely.")
+                             (rust . "You are expert coder, staff software engineer in fintech company. You are expert at rust, concurrency, multithreading, and async code.")
+                             )))
+ (setq magit-todos-mode -1)
 ;; (use-package! mermaid-mode)
 ;; (use-package! mini-modeline
 ;;   :after smart-mode-line
@@ -314,15 +309,24 @@
 ;;                  :unnarrowed t)))
 
 ;; (use-package! powerthesaurus)
-(setq projectile-project-search-path '("~/Desktop/"))
+ (use-package! ghostel
+   :defer t
+   :ensure t)
+ (after! projectile
+   (setq projectile-project-search-path '("~/Desktop/")))
 (use-package! rustic
   :config
   (setq lsp-rust-server 'rust-analyzer)
   (setq rustic-clippy-arguments "--verbose --tests --benches -- -D clippy::all")
   (setq rustic-lsp-server 'rust-analyzer))
-(after! lsp-mode
-  (setq lsp-inlay-hint-enable t)
-  (setq lsp-auto-guess-root nil))
+ (after! lsp-mode
+   (setq lsp-rust-analyzer-inlay-hints-mode t)
+   (setq lsp-rust-analyzer-server-display-inlay-hints t)
+   (setq lsp-ui-sideline-enable nil)
+   (setq lsp-ui-sideline-show-hover nil)
+   (setq lsp-ui-peek-always-show t)
+   (setq lsp-inlay-hint-enable t)
+   (setq lsp-auto-guess-root nil))
 ;; (after! rustic
 ;;   (setq lsp-rust-server 'rust-analyzer)
 ;;   (setq rustic-lsp-server 'rust-analyzer))
@@ -339,3 +343,9 @@
 (use-package! which-key
   :config
   (setq which-key-idle-delay 0))
+ 
+ ;; Start server in daemon mode — Doom only does this for GUI displays
+ (when (and (daemonp) (not (display-graphic-p)))
+   (require 'server)
+   (unless (server-running-p)
+     (server-start)))

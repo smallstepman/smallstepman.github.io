@@ -44,6 +44,7 @@
     # Doom Emacs via nix-doom-emacs-unstraightened (builds Doom + deps with Nix). Don't pull in its nixpkgs — neither the module nor overlay uses it
     nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; };
     git-repo-manager = { url = "github:hakoerber/git-repo-manager"; inputs.nixpkgs.follows = "nixpkgs"; };
+    herdr.url = "github:ogulcancelik/herdr";
     lazyvim.url = "github:pfassina/lazyvim-nix"; # LazyVim Nix (declarative Neovim + LazyVim)
     llm-agents.url = "github:numtide/llm-agents.nix";
     niri.url = "github:sodiboo/niri-flake";
@@ -71,6 +72,7 @@
       (final: prev: {
         rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
       })
+      inputs.herdr.overlays.default
     ] ++ map (f: import f { inherit inputs; }) [
       ./aspects/clipboard/_overlay.nix
       ./aspects/devtools/_overlay.nix
