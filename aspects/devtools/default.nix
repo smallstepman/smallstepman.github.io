@@ -11,7 +11,7 @@
       # Testing
       (bats.withLibraries (libs: with libs; [ bats-support bats-assert bats-file bats-detik ]))
       # Languages & Runtimes
-      go gopls protobuf bun uv nodejs_22 (lib.hiPrio python314)
+      go gopls protobuf bun uv nodejs_22 (lib.hiPrio python314) ty
       # LLVM
       llvmPackages_21.clang-tools llvmPackages_21.lld llvmPackages_21.lldb llvmPackages_21.libcxx
       # Rust Nightly
