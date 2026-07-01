@@ -170,11 +170,7 @@
 (defun aerospace-window-down ()
   (interactive)
   (aerospace-move-on-error "down" #'windmove-down))
- (use-package! exec-path-from-shell
-   :unless noninteractive
-   :defer 1
-   :config
-   (exec-path-from-shell-initialize))
+
 
 (use-package! agent-shell
   :commands (agent-shell)

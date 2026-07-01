@@ -1,7 +1,18 @@
 { inputs, ... }: {
   den.aspects.editors.emacs = {
-    homeManager = { pkgs, ... }: let
+    homeManager = { lib, pkgs, ... }: let
       ghostelVersion = "0.38.0";
+      emacsDaemonPath = [
+        "/etc/profiles/per-user/m/bin"
+        "/run/current-system/sw/bin"
+        "/nix/var/nix/profiles/default/bin"
+        "/opt/homebrew/bin"
+        "/opt/homebrew/sbin"
+        "/usr/local/bin"
+        "/usr/bin"
+        "/bin"
+      ];
+      emacsDaemonPathString = lib.concatStringsSep ":" emacsDaemonPath;
 
       ghostelSrc = pkgs.fetchFromGitHub {
         owner = "dakra";
@@ -45,6 +56,20 @@
           install --mode=444 ${mod}/ghostel-module.version $out/share/emacs/site-lisp/elpa/ghostel-${ghostelVersion}/ghostel-module.version
         '';
       };
+
+      emacs-lsp-booster = pkgs.rustPlatform.buildRustPackage rec {
+        pname = "emacs-lsp-booster";
+        version = "0.2.1";
+        src = pkgs.fetchFromGitHub {
+          owner = "blahgeek";
+          repo = pname;
+          rev = "v${version}";
+          hash = "sha256-uP/xJfXQtk8oaG5Zk+dw+C2fVFdjpUZTDASFuj1+eYs=";
+        };
+        cargoHash = "sha256-BR0IELLzm+9coaiLXQn+Rw6VLyiFEAk/nkO08qPwAac=";
+        doCheck = false;
+        meta.mainProgram = "emacs-lsp-booster";
+      };
     in {
       imports = [ inputs.nix-doom-emacs-unstraightened.homeModule ];
 
@@ -54,6 +79,7 @@
         enable = true;
         doomDir = ./doom;
         emacs = pkgs.emacs-pgtk;
+        extraBinPackages = [ emacs-lsp-booster ];
         extraPackages = epkgs: [ epkgs.vterm epkgs.treesit-grammars.with-all-grammars epkgs.ghostel ];
         emacsPackageOverrides = eself: esuper: {
           inherit ghostel;
@@ -63,6 +89,14 @@
       services.emacs = {
         enable = true;
         defaultEditor = false;
+      };
+
+      systemd.user.services.emacs.Service.Environment = lib.mkIf pkgs.stdenv.isLinux [
+        "PATH=${emacsDaemonPathString}"
+      ];
+
+      launchd.agents.emacs.config.EnvironmentVariables = lib.mkIf pkgs.stdenv.isDarwin {
+        PATH = emacsDaemonPathString;
       };
     };
   };

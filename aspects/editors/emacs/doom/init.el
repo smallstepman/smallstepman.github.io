@@ -81,7 +81,7 @@
        debugger      ; FIXME stepping through code, to help you add bugs
        (eval +overlay)     ; run code, run (also, repls)
        (lookup +dictionary +offline +docsets )              ; navigate your code and its documentation
-       (lsp +peek +elgot +booster)         ; M-x vscode
+       (lsp +peek +eglot +booster)         ; M-x vscode
        (magit +forge)      ; a git porcelain for Emacs
        make                ; run make tasks from Emacs
        pdf                 ; pdf enhancements

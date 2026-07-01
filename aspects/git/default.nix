@@ -32,6 +32,7 @@
       programs.gh = {
         enable = true;
         gitCredentialHelper.enable = isDarwin;
+        extensions = [ pkgs.gh-dash ];
       };
 
       programs.rbw = lib.mkIf isLinux {
