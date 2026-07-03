@@ -14,6 +14,8 @@
 ;;      Alternatively, press 'gd' (or 'C-c c d') on a module to browse its
 ;;      directory (for easy access to its source code).
 
+(add-to-list 'default-frame-alist '(inhibit-double-buffering . t))
+(add-to-list 'default-frame-alist '(undecorated . t))
 (doom! :input
        ;;layout            ; auie,ctsrnm is the superior home row
 
@@ -55,7 +57,7 @@
        (format +onsave +lsp)    ; automated prettiness
        multiple-cursors    ; editing in many places at once
        snippets            ; my elves. They type so I don't have to
-       objed             ; text object editing for the innocent
+       ;;objed             ; text object editing for the innocent
        rotate-text       ; cycle region at point between text candidates
        (whitespace +trim +guess)
        word-wrap         ; soft wrapping with language-aware indent

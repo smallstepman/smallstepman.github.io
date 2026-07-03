@@ -13,6 +13,7 @@
 (package! transient-posframe :recipe (:host github :repo "yanghaoxie/transient-posframe" :files ("*.el")))
 (package! vterm-toggle)
 (package! ruff-format)
+(package! popterm)
 (package! flymake-ruff)
 ;; (package! ghostel)  ; built via nixpkgs + pre-built module, see default.nix
 
