@@ -251,6 +251,7 @@
           autosuggestion.enable = true;
           syntaxHighlighting.enable = true;
           shellAliases = {
+            h = "herdr";
             g = "git"; gs = "git status"; ga = "git add"; gaa = "git add .";
             gc = "git commit"; gcc = "git commit -m"; gaacc = "git add . && git commit -m";
             gl = "git log --oneline"; gll = "git log"; gp = "git push";
@@ -278,9 +279,13 @@
             nikw = "${niksWorktree}/bin/niks-worktree";
             pinentry = "pinentry-mac";
           });
+            # if [[ -o interactive && -z "$HERDR_ENV" && -z "$HERDR_PANE_ID" ]]; then
+            #   exec herdr
+            # fi
           initContent = ''
             # VSCode shell integration
             [[ "$TERM_PROGRAM" == "vscode" ]] && . "$(code --locate-shell-integration-path zsh)"
+
 
             # fnm (Node version manager)
             eval "$(fnm env --use-on-cd)"
@@ -312,51 +317,11 @@
             zle -N tmux-leader-menu
             bindkey -M vicmd " " tmux-leader-menu
           '' + (lib.optionalString isDarwin ''
-
-            # Homebrew
             eval "$(/opt/homebrew/bin/brew shellenv)"
-
-            # NixOS VM management
             vm() { ~/.config/nix/docs/vm.sh "$@"; }
           '') + (lib.optionalString isLinux ''
-
-            # gh: inject GITHUB_TOKEN per-invocation from rbw (no global env var)
             gh() { GITHUB_TOKEN=$(rbw get github-token) command gh "$@"; }
-
-            # Ad-hoc API key injection (usage: with-openai some-command --flag)
-            with-openai() { OPENAI_API_KEY=$(rbw get openai-api-key) "$@"; }
-            with-amp() { AMP_API_KEY=$(rbw get amp-api-key) "$@"; }
-            copilot() { COPILOT_GITHUB_TOKEN=$(rbw get github-token) command copilot "$@"; }
-            claude() { CLAUDE_CODE_OAUTH_TOKEN=$(rbw get claude-oauth-token) command claude "$@"; }
-          '') + ''
-
-            # Zummoner - AI CLI command helper (bound to Ctrl+L)
-            zummoner() {
-              local question="$BUFFER"
-              local prompt=$(cat ${./zummoner-prompt.txt})
-              BUFFER="$question ... thinking"
-              zle -R
-              local response
-              response=$(curl -sf http://localhost:1234/api/v1/chat \
-                -H "Content-Type: application/json" \
-                -d "$(jq -n \
-                  --arg model "google/gemma-4-e4b" \
-                  --arg system_prompt "$prompt" \
-                  --arg input "$question" \
-                  '{model: $model, system_prompt: $system_prompt, input: $input}')")
-              local command
-              command=$(printf '%s' "$response" | jq -r '.output[0].content // empty' | sed 's/```//g' | tr -d '\n')
-              if [[ -n "$command" ]]; then
-                QUESTION="$(echo $question | cut -d '#' -f 2)"
-                BUFFER="$command # $QUESTION"
-                CURSOR=''${#BUFFER}
-              else
-                BUFFER="$question ... no results"
-              fi
-            }
-            zle -N zummoner
-            bindkey '\C-e' zummoner
-          '';
+          '');
         };
 
         programs.bash = {

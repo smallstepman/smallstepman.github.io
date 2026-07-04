@@ -2,50 +2,39 @@
   description = "NixOS systems and tools by smallstepman";
 
   inputs = {
-    den.url = "github:vic/den";  # Den - aspect-oriented context-driven Nix configurations
-    import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree (required by den)
-    # flake-aspects must be a direct input here because den's lib.nix accesses
-    # inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
-    flake-aspects.url = "github:vic/flake-aspects";
+    den.url = "github:vic/den"; # aspect-oriented context-driven Nix configurations
+    import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree 
+    flake-aspects.url = "github:vic/flake-aspects"; # flake-aspects must be a direct input here because den's lib.nix accesses inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
 
-    # Unattended NixOS installer
-    unattended-installer = {
+    unattended-installer = { # Unattended NixOS installer
       url = "github:chrillefkr/nixos-unattended-installer";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.disko.follows = "disko";
     };
-    # Declarative disk partitioning
-    disko = {
+    disko = { # Declarative disk partitioning
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05"; # primary nixpkgs repository, changing this will impact your entire system
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable"; # We use the unstable nixpkgs repo for some packages
-    nixpkgs-master.url = "github:nixos/nixpkgs"; # bleeding edge packages, this is extremely unstable and shouldn't be relied on, mostly for testing
-    nix-snapd = { url = "github:nix-community/nix-snapd"; inputs.nixpkgs.follows = "nixpkgs"; };
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05"; # primary nixpkgs repository, changing this will impact entire system
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable"; # use the unstable for some packages
+    nixpkgs-master.url = "github:nixos/nixpkgs"; # bleeding edge packages, very unstable, shouldn't be relied on, mostly for testing
     home-manager = { url = "github:nix-community/home-manager/release-26.05"; inputs.nixpkgs.follows = "nixpkgs"; };
     darwin = { url = "github:nix-darwin/nix-darwin/nix-darwin-26.05"; inputs.nixpkgs.follows = "nixpkgs"; };
     mac-app-util.url = "github:hraban/mac-app-util";
+    nix-snapd = { url = "github:nix-community/nix-snapd"; inputs.nixpkgs.follows = "nixpkgs"; };
 
     # Secrets management
-    sops-nix = {
-      url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    sopsidy = {
-      url = "github:timewave-computer/sopsidy";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    sops-nix = { url = "github:Mic92/sops-nix"; inputs.nixpkgs.follows = "nixpkgs"; };
+    sopsidy = { url = "github:timewave-computer/sopsidy"; inputs.nixpkgs.follows = "nixpkgs"; };
     # CoolerControl plugins for jimi bare-metal server
     corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
     ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
 
-    # Doom Emacs via nix-doom-emacs-unstraightened (builds Doom + deps with Nix). Don't pull in its nixpkgs — neither the module nor overlay uses it
-    nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; };
+    nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; }; # don't pull in its nixpkgs — neither the module nor overlay uses it
     git-repo-manager = { url = "github:hakoerber/git-repo-manager"; inputs.nixpkgs.follows = "nixpkgs"; };
     herdr.url = "github:ogulcancelik/herdr";
-    lazyvim.url = "github:pfassina/lazyvim-nix"; # LazyVim Nix (declarative Neovim + LazyVim)
+    lazyvim.url = "github:pfassina/lazyvim-nix"; 
     llm-agents.url = "github:numtide/llm-agents.nix";
     niri.url = "github:sodiboo/niri-flake";
     noctalia = { url = "github:noctalia-dev/noctalia-shell"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
@@ -63,16 +52,13 @@
   outputs = { self, nixpkgs, ... }@inputs:
   let
     overlays = [
+      inputs.llm-agents.overlays.default
+      inputs.herdr.overlays.default
       inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri
-      inputs.llm-agents.overlays.default
       inputs.git-repo-manager.overlays.git-repo-manager
       inputs.yeetnyoink.overlays.default
-
-      (final: prev: {
-        rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default;
-      })
-      inputs.herdr.overlays.default
+      (final: prev: { rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default; })
     ] ++ map (f: import f { inherit inputs; }) [
       ./aspects/clipboard/_overlay.nix
       ./aspects/devtools/_overlay.nix
