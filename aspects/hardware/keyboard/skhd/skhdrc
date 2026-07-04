@@ -25,13 +25,12 @@ cmd - 0x1B [
 ]
 ctrl - x [
   "VMWare Fusion" ~
+  ".emacs-30.2-wrapped" ~
+  "Code" ~
   *   : shortcuts run OpenSpotlight
-  "Emacs" ~ 
-  "Code" ~ 
 ]
 cmd - b  [
   "VMWare Fusion" ~
-  *   ~
   "calendar" : osascript \
                 -e 'tell application "System Events"' \
                 -e '  tell process "Calendar"' \
@@ -44,49 +43,79 @@ cmd - b  [
                 -e 'end tell'
   "reminders" : osascript -e 'tell application "System Events" to keystroke "s" using {command down, option down}'
   "safari" : osascript -e 'tell application "System Events" to keystroke "l" using {command down, shift down}'
+  * : omniwmctl command toggle-workspace-bar && omniwmctl command toggle-hidden-bar
 ]
-ctrl - s [
-  "VMWare Fusion" ~
-  *   : open -a /Applications/Safari.app
-] 
-ctrl - return [
-  "VMWare Fusion" ~
-  *   : open -a /Applications/Ghostty.app
-] 
-ctrl - d [
-  "VMWare Fusion" ~
-  *   : open -a /Applications/Ghostty.app
-] 
 
-ctrl - n [
-  "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus west
-]
-ctrl - e [
-  "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus south
-]
-ctrl - i [
-  "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus north
-]
-ctrl - o [
-  "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus east
-]
 ctrl - l [
   "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move west
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move west
 ]
 ctrl - u [
   "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move south
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move south
 ]
 ctrl - y [
   "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move north
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move north
 ]
 ctrl - 0x29 [
   "VMWare Fusion" ~
-  *   : time /usr/bin/env /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move east
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move east
 ]
+ctrl - n [
+  "VMWare Fusion" ~
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus west
+]
+ctrl - e [
+  "VMWare Fusion" ~
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus south
+]
+ctrl - i [
+  "VMWare Fusion" ~
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus north
+]
+ctrl - o [
+  "VMWare Fusion" ~
+  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus east
+]
+
+alt + shift + cmd - v [
+  ".emacs-30.2-wrapped" ~
+  * : omniwmctl command toggle-quake-terminal
+]
+ctrl - f : omniwmctl command toggle-column-full-width
+ctrl + shift - f : omniwmctl command toggle-native-fullscreen
+ctrl - t : omniwmctl command toggle-column-tabbed
+# ctrl - 0x2C : omniwmctl command toggle-overview
+ctrl - 0x2C : omniwmctl command scratchpad toggle
+ctrl + shift - 0x2C : omniwmctl command scratchpad assign
+
+f1 : omniwmctl command switch-workspace 1
+f2 : omniwmctl command switch-workspace 2
+f3 : omniwmctl command switch-workspace 3
+f4 : omniwmctl command switch-workspace 4
+f5 : omniwmctl command switch-workspace 5
+shift - f1 : omniwmctl command move-to-workspace 1
+shift - f2 : omniwmctl command move-to-workspace 2
+shift - f3 : omniwmctl command move-to-workspace 3
+shift - f4 : omniwmctl command move-to-workspace 4
+shift - f5 : omniwmctl command move-to-workspace 5
+
+ctrl + shift - j : omniwmctl command move-column left
+ctrl + shift - l : omniwmctl command move left
+ctrl + shift - u : omniwmctl command move down
+ctrl + shift - y : omniwmctl command move up
+ctrl + shift - 0x29 : omniwmctl command move right
+
+ctrl + shift - i : omniwmctl command move-column-to-workspace up
+ctrl + shift - e : omniwmctl command move-column-to-workspace down
+
+ctrl + shift - return : omniwmctl command move-column right
+
+ctrl + shift - k : omniwmctl command set-column-width -10%
+ctrl + shift - m : omniwmctl command set-window-height -10%
+ctrl + shift - 0x2B : omniwmctl command set-window-height +10%
+ctrl + shift - 0x2C : omniwmctl command set-column-width +10%
+
+alt - 0x2F : omniwmctl command cycle-column-width forward
+alt - 0x2B : omniwmctl command cycle-column-width backward
