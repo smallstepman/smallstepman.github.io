@@ -8,18 +8,6 @@
 (add-to-list 'custom-theme-load-path "~/.local/share/noctalia/emacs-themes/")
 (add-hook 'after-init-hook (lambda () (ignore-errors (load-theme 'noctalia t))))
 
-;;(set-frame-parameter (selected-frame) 'alpha '(93 . 93))
-;;(set-frame-parameter nil 'alpha-background 93)
-;;(add-to-list 'default-frame-alist '(alpha-background . 93))
-
-;; (setq! +lookup--last-provider '((fundamental-mode . "Google") (org-mode . "Google") (rust-mode . "Google") (rustic-mode . "Google")))
-;; (custom-set-variables
-;; '(ns-control-modifier 'meta)
-;; '(ns-command-modifier 'control)
-;; '(ns-alternate-modifier 'option)
-;; '(ns-option-modifier 'option)
-;; )
-;; (setq aw-keys '(?n ?e ?i ?o ?m ?u ?y))
 (setq-default evil-escape-key-sequence "ii")
 (setq-default evil-escape-delay 0.2)
 (setq evil-snipe-scope 'buffer)
@@ -80,32 +68,44 @@
       "C-M-S-v"          #'popterm-toggle-cd
       "C-M-_"          #'powerthesaurus-hydra/body
       )
-;; (defhydra +hydra/window-nav (:hint nil) "resize window: _o_:increase width  _n_:decrease width  _i_:increase height  _e_:decrease height _q_:quit"
-;;     ("o" evil-window-increase-width)
-;;     ("n" evil-window-decrease-width)
-;;     ("i" evil-window-increase-height)
-;;     ("e" evil-window-decrease-height)
-;;     ("q" nil))
-(map! :map markdown-mode-map :niv
-      "C-M-S-v"          #'+vterm/toggle
-      "M-RET"            (λ! (if toggle-window-maximization
-                                 (progn (evil-resize-window (- (frame-width) 1) t)
-                                        (evil-resize-window (- (frame-width) 1) nil))
-                               (balance-windows))
-                             (setq toggle-window-maximization (not toggle-window-maximization))))
-(map! :map vterm-mode-map :niv
-      "C-M-S-v"          #'+vterm/toggle
-      "M-RET"            (λ! (if toggle-window-maximization
-                                 (progn (evil-resize-window (- (frame-width) 1) t)
-                                        (evil-resize-window (- (frame-width) 1) nil))
-                               (balance-windows))
-                             (setq toggle-window-maximization (not toggle-window-maximization))))
+
 (map! :map smerge-mode-map :nv
       "n"             #'smerge-prev
       "e"             #'smerge-keep-lower
       "i"             #'smerge-keep-upper
       "o"             #'smerge-next)
 
+(use-package! popterm
+  :config
+  (setq popterm-backend        'ghostel     ; or 'ghostel, 'eat, 'shell, 'eshell
+        popterm-display-method 'window  ; or 'posframe, 'fullscreen
+        popterm-scope          'project   ; or 'frame, 'dedicated, nil
+        popterm-auto-cd        t)
+  (popterm-global-mode 1))
+(use-package! ghostel
+  :defer t
+  :ensure t)
+(after! projectile
+  (setq projectile-project-search-path '("~/Desktop/")))
+
+(use-package! rustic
+  :config
+  (setq lsp-rust-server 'rust-analyzer)
+  (setq rustic-clippy-arguments "--verbose --tests --benches -- -D clippy::all")
+  (setq rustic-lsp-server 'rust-analyzer))
+(after! lsp-mode
+  (setq lsp-rust-analyzer-inlay-hints-mode t)
+  (setq lsp-rust-analyzer-server-display-inlay-hints t)
+  (setq lsp-ui-sideline-enable nil)
+  (setq lsp-ui-sideline-show-hover nil)
+  (setq lsp-ui-peek-always-show t)
+  (setq lsp-inlay-hint-enable t)
+  (setq lsp-auto-guess-root nil))
+(add-hook 'python-mode-hook 'ruff-format-on-save-mode)
+(add-hook 'python-mode-hook #'flymake-ruff-load)
+(use-package! which-key
+  :config
+  (setq which-key-idle-delay 0))
 
 
 (use-package! agent-shell
@@ -113,6 +113,35 @@
   :config
   (setq agent-shell-github-acp-command '("agent-shell-copilot-acp")
         agent-shell-anthropic-claude-acp-command '("agent-shell-claude-code-acp")))
+(use-package! gptel
+  :defer t
+  :config
+  (setq  gptel-directives '((default . "You are a large language model living in Emacs and a helpful coding assistant. Respond concisely.")
+                            (arbitrage . "As Arbitrage Expert, you specialize in advanced strategies, including cross-exchange trades, in financial markets. Your expertise encompasses risk, spatial, statistical, and triangular arbitrage, with a keen focus on exploiting price discrepancies across different exchanges. Tailored for professionals deeply versed in financial markets, you offer nuanced, data-driven insights into identifying and capitalizing on these opportunities. Your knowledge extends to sophisticated trading algorithms and the latest technologies facilitating efficient cross-exchange arbitrage. Your interactions are analytical and precise, essential for successful arbitrage trading.")
+                            (crypto . "As Crypto Commander, you are a specialized GPT model dedicated to advanced and professional-level discourse in the realm of cryptocurrency trading. Your role is to provide high-level, expert insights into cryptocurrency markets, trading strategies, and technological advancements. You cater to users with a deep understanding of cryptocurrency trading, ensuring that interactions remain sophisticated and professional. Your expertise includes detailed analysis of trading indicators, algorithms, and dashboards, tailored for professionals deeply ingrained in the cryptocurrency industry. Your responses are designed to be nuanced and in-depth, suitable for the complex and dynamic world of cryptocurrencies.")
+                            (programming . "You are a large language model and a careful programmer. Provide code and only code as output without any additional text, prompt or note.")
+                            (writing . "You are a large language model and a writing assistant. Respond concisely.")
+                            (chat . "You are a large language model and a conversation partner. Respond concisely.")
+                            (rust . "You are expert coder, staff software engineer in fintech company. You are expert at rust, concurrency, multithreading, and async code.")
+                            )))
+(setq magit-todos-mode -1)
+(use-package! kanata-kbd-mode
+  :mode ("\\.kbd\\'" . kanata-kbd-mode))
+
+;; (setq! +lookup--last-provider '((fundamental-mode . "Google") (org-mode . "Google") (rust-mode . "Google") (rustic-mode . "Google")))
+;; (custom-set-variables
+;; '(ns-control-modifier 'meta)
+;; '(ns-command-modifier 'control)
+;; '(ns-alternate-modifier 'option)
+;; '(ns-option-modifier 'option)
+;; )
+;; (setq aw-keys '(?n ?e ?i ?o ?m ?u ?y))
+;; (defhydra +hydra/window-nav (:hint nil) "resize window: _o_:increase width  _n_:decrease width  _i_:increase height  _e_:decrease height _q_:quit"
+;;     ("o" evil-window-increase-width)
+;;     ("n" evil-window-decrease-width)
+;;     ("i" evil-window-increase-height)
+;;     ("e" evil-window-decrease-height)
+;;     ("q" nil))
 ;; we recommend using use-package to organize your init.el
 ;; (use-package! codeium
 ;;     ;; if you use straight
@@ -182,19 +211,6 @@
 ;;      ("<tab>" . 'copilot-accept-completion)
 ;;     ("TAB" . 'copilot-accept-completion)))
 ;; (use-package! git-link)
-(use-package! gptel
-  :defer t
-  :config
-  (setq gptel-model "gpt-4o-mini")
-  (setq  gptel-directives '((default . "You are a large language model living in Emacs and a helpful coding assistant. Respond concisely.")
-                            (arbitrage . "As Arbitrage Expert, you specialize in advanced strategies, including cross-exchange trades, in financial markets. Your expertise encompasses risk, spatial, statistical, and triangular arbitrage, with a keen focus on exploiting price discrepancies across different exchanges. Tailored for professionals deeply versed in financial markets, you offer nuanced, data-driven insights into identifying and capitalizing on these opportunities. Your knowledge extends to sophisticated trading algorithms and the latest technologies facilitating efficient cross-exchange arbitrage. Your interactions are analytical and precise, essential for successful arbitrage trading.")
-                            (crypto . "As Crypto Commander, you are a specialized GPT model dedicated to advanced and professional-level discourse in the realm of cryptocurrency trading. Your role is to provide high-level, expert insights into cryptocurrency markets, trading strategies, and technological advancements. You cater to users with a deep understanding of cryptocurrency trading, ensuring that interactions remain sophisticated and professional. Your expertise includes detailed analysis of trading indicators, algorithms, and dashboards, tailored for professionals deeply ingrained in the cryptocurrency industry. Your responses are designed to be nuanced and in-depth, suitable for the complex and dynamic world of cryptocurrencies.")
-                            (programming . "You are a large language model and a careful programmer. Provide code and only code as output without any additional text, prompt or note.")
-                            (writing . "You are a large language model and a writing assistant. Respond concisely.")
-                            (chat . "You are a large language model and a conversation partner. Respond concisely.")
-                            (rust . "You are expert coder, staff software engineer in fintech company. You are expert at rust, concurrency, multithreading, and async code.")
-                            )))
-(setq magit-todos-mode -1)
 ;; (use-package! mermaid-mode)
 ;; (use-package! mini-modeline
 ;;   :after smart-mode-line
@@ -241,33 +257,6 @@
 ;;                  :unnarrowed t)))
 
 ;; (use-package! powerthesaurus)
-(use-package! popterm
-  :config
-  (setq popterm-backend        'ghostel     ; or 'ghostel, 'eat, 'shell, 'eshell
-        ;; popterm-display-method 'posframe  ; or 'window, 'fullscreen
-        popterm-display-method 'window  ; or 'window, 'fullscreen
-        popterm-scope          'project   ; or 'frame, 'dedicated, nil
-        popterm-auto-cd        t)
-  (popterm-global-mode 1))
-(use-package! ghostel
-  :defer t
-  :ensure t)
-(after! projectile
-  (setq projectile-project-search-path '("~/Desktop/")))
-
-(use-package! rustic
-  :config
-  (setq lsp-rust-server 'rust-analyzer)
-  (setq rustic-clippy-arguments "--verbose --tests --benches -- -D clippy::all")
-  (setq rustic-lsp-server 'rust-analyzer))
-(after! lsp-mode
-  (setq lsp-rust-analyzer-inlay-hints-mode t)
-  (setq lsp-rust-analyzer-server-display-inlay-hints t)
-  (setq lsp-ui-sideline-enable nil)
-  (setq lsp-ui-sideline-show-hover nil)
-  (setq lsp-ui-peek-always-show t)
-  (setq lsp-inlay-hint-enable t)
-  (setq lsp-auto-guess-root nil))
 ;; (after! rustic
 ;;   (setq lsp-rust-server 'rust-analyzer)
 ;;   (setq rustic-lsp-server 'rust-analyzer))
@@ -278,12 +267,7 @@
                                         ; (use-package! switch-window
 ;;   :config
 ;;   (setq switch-window-qwerty-shortcuts '("n" "e" "i" "o" "m" "u" "r")))
-(add-hook 'python-mode-hook 'ruff-format-on-save-mode)
-(add-hook 'python-mode-hook #'flymake-ruff-load)
 ;; (use-package! vc-msg)
-(use-package! which-key
-  :config
-  (setq which-key-idle-delay 0))
 ;; Start server in daemon mode — Doom only does this for GUI displays
 ;; (when (and (daemonp) (not (display-graphic-p)))
 ;;   (require 'server)

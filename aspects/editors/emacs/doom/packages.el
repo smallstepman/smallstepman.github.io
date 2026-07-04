@@ -1,20 +1,18 @@
 ;; -*- no-byte-compile: t; -*-
 ;;; $DOOMDIR/packages.el
-(package! exec-path-from-shell)
+(package! agent-shell :recipe (:host github :repo "xenodium/agent-shell"))
+(package! flymake-ruff)
 (package! flymake-shellcheck)
 (package! flyspell-lazy)
 (package! git-link)
-(package! git-timemachine)
-(package! gptel)
-(package! agent-shell :recipe (:host github :repo "xenodium/agent-shell"))
 (package! json-reformat)
+(package! kanata-kbd-mode :recipe (:host github :repo "chmouel/kanata-kbd-mode" :files ["kanaat-kbd-mode.el"]))
+(package! popterm)
 (package! powerthesaurus) ;; TODO https://github.com/SavchenkoValeriy/emacs-powerthesaurus
+(package! ruff-format)
 (package! string-inflection :recipe (:host github :repo "akicho8/string-inflection" :files ("string-inflection.el")))
 (package! transient-posframe :recipe (:host github :repo "yanghaoxie/transient-posframe" :files ("*.el")))
 (package! vterm-toggle)
-(package! ruff-format)
-(package! popterm)
-(package! flymake-ruff)
 ;; (package! ghostel)  ; built via nixpkgs + pre-built module, see default.nix
 
 ;; (package! dired-dragon :recipe (:host github :repo "jeetelongname/dired-dragon"))

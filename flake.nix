@@ -20,6 +20,7 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable"; # use the unstable for some packages
     nixpkgs-master.url = "github:nixos/nixpkgs"; # bleeding edge packages, very unstable, shouldn't be relied on, mostly for testing
     home-manager = { url = "github:nix-community/home-manager/release-26.05"; inputs.nixpkgs.follows = "nixpkgs"; };
+    nur.url = "github:nix-community/NUR";
     darwin = { url = "github:nix-darwin/nix-darwin/nix-darwin-26.05"; inputs.nixpkgs.follows = "nixpkgs"; };
     mac-app-util.url = "github:hraban/mac-app-util";
     nix-snapd = { url = "github:nix-community/nix-snapd"; inputs.nixpkgs.follows = "nixpkgs"; };
@@ -52,6 +53,7 @@
   outputs = { self, nixpkgs, ... }@inputs:
   let
     overlays = [
+      inputs.nur.overlays.default
       inputs.llm-agents.overlays.default
       inputs.herdr.overlays.default
       inputs.rust-overlay.overlays.default
