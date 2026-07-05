@@ -9,15 +9,7 @@
         fi
         # End Nix
       '';
-      programs.fish.enable = true;
-      programs.fish.shellInit = ''
-        # Nix
-        if test -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish'
-          source '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish'
-        end
-        # End Nix
-      '';
-      environment.shells = with pkgs; [ bashInteractive zsh fish ];
+      environment.shells = with pkgs; [ bashInteractive zsh ];
       environment.systemPackages = with pkgs; [ cachix ];
     };
 
@@ -221,27 +213,19 @@
         '';
 
         programs.tmux = {
-          enable = true;
-          keyMode = "vi";
-          mouse = true;
-          extraConfig = ''
+        enable = true;
+        keyMode = "vi";
+        mouse = true;
+        baseIndex = 1;
+        extraConfig = ''
             set -g @menus_location_x 'C'
             set -g @menus_trigger 'Space'
             set -g @menus_main_menu '${config.home.homeDirectory}/.config/tmux/menus/doomux.sh'
             set -g @menus_display_commands 'No'
             run-shell ~/.local/share/tmux/plugins/tmux-menus/menus.tmux
-            set -g status-keys vi
-            setw -g mode-keys vi
-            set -g base-index 1
-            setw -g pane-base-index 1
             set -g renumber-windows on
             set -g set-clipboard on
-          '';
-        };
-
-        programs.starship = {
-          enable = false;
-          settings = builtins.fromTOML (builtins.readFile ./starship.toml);
+        '';
         };
 
         programs.zsh = {
@@ -252,6 +236,7 @@
           syntaxHighlighting.enable = true;
           shellAliases = {
             h = "herdr";
+            e="emacsclient -nw"; eg="emacsclient -n -c";    # (e) terminal frame, blocking, (eg) gui, nonblocking
             g = "git"; gs = "git status"; ga = "git add"; gaa = "git add .";
             gc = "git commit"; gcc = "git commit -m"; gaacc = "git add . && git commit -m";
             gl = "git log --oneline"; gll = "git log"; gp = "git push";
