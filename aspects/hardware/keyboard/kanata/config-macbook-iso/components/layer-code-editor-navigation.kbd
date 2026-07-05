@@ -1,25 +1,38 @@
 (defalias
-  ewsf1 C-A-1
-  ewsf2 C-A-2
-  ewsf3 C-A-3
-  ewsf4 C-A-4
-  ewsf5 C-A-5
-  ewsf6 C-A-6
-  ewsf7 C-A-7
-  ewsprev C-A-8
-  ewsnext C-A-9
-  ewskill C-A-0
+  ;; space is app-specific notion, in emacs its workspaces, in browser its tabs, etc
+  space1 C-A-1
+  space2 C-A-2
+  space3 C-A-3
+  space4 C-A-4
+  space5 C-A-5
+  space6 C-A-6
+  space7 C-A-7
+  spc-prev C-A-8
+  spc-next C-A-9
+  spc-kill C-A-0
 
   ;; Emacs shortcuts
-  wkill C-M-q
   fn-up C-M-w
   class-up C-M-S-w
-  lsp-up (tap-dance-eager 190 (@fn-up @class-up))
+  lsp-up (tap-dance 190 (@fn-up @class-up))
   filesave C-M-f
-  snipe-search C-M-S-f
-  snipe-or-save (tap-dance-eager 190 (@snipe-search @filesave))
+  goto-char C-M-S-f
+  goto/save (tap-dance 190 (@goto-char @filesave))
   pg-up-ow C-M-p
   magit C-M-g
+
+  fn-dn C-M-r
+  class-dn C-M-S-r
+  lsp-dn (tap-dance 190 (@fn-dn @class-dn))
+  pg-dn-ow C-M-t
+  mcursor C-M-d
+
+  zap M-z
+  Mx C-x
+  clock-in C-M-c
+  lsp-ext-v C-M-v
+  yazi C-M-b
+
   lsp-diagnostic-popup C-M-j
   lsp-code-actions C-M-S-j
   lsp-show-definition C-M-l
@@ -30,24 +43,13 @@
   lsp-ui-imenu C-M-S-y
   lsp-open-in-other-window C-M-;
   lsp-rust-external-doc C-M-S-;
-  lsp-err (tap-dance-eager 300 (@lsp-diagnostic-popup @lsp-code-actions))
-  lsp-def (tap-dance-eager 300 (@lsp-show-definition @lsp-goto-parent-module))
-  lsp-ref (tap-dance-eager 300 (@lsp-show-reference @lsp-rust-related-tests))
-  lsp-sym (tap-dance-eager 300 (@lsp-imenu-multi @lsp-ui-imenu))
-  lsp-open (tap-dance-eager 300 (@lsp-open-in-other-window @lsp-rust-external-doc))
+  lsp-err (tap-dance 300 (@lsp-diagnostic-popup @lsp-code-actions))
+  lsp-def (tap-dance 300 (@lsp-show-definition @lsp-goto-parent-module))
+  lsp-ref (tap-dance 300 (@lsp-show-reference @lsp-rust-related-tests))
+  lsp-sym (tap-dance 300 (@lsp-imenu-multi @lsp-ui-imenu))
+  lsp-open (tap-dance 300 (@lsp-open-in-other-window @lsp-rust-external-doc))
 
-  ;; Additional Emacs shortcuts
-  fn-dn C-M-r
-  class-dn C-M-S-r
-  lsp-dn (tap-dance-eager 190 (@fn-dn @class-dn))
-  pg-dn-ow C-M-t
-  mcursor C-M-d
 
-  ;; Other shortcuts
-  zap M-z
-  clock-in C-M-c
-  lsp-ext-v C-M-v
-  yazi C-M-b
   bkill C-M-k
   bmax C-M-m
   bnext C-M-,
@@ -55,11 +57,20 @@
 )
 
 (deflayer code-navigation
-  _ _ _ _ _ _ _ _ _ _ _ _ _
-  _ @ewsf1 @ewsf2 @ewsf3 @ewsf4 @ewsf5 @ewsf6 @ewsf7 _ _ _ @ewsprev @ewsnext @ewskill
-  _ @wkill @lsp-up @snipe-or-save @pg-up-ow @magit _ _ @lsp-err @lsp-def @lsp-ref @lsp-sym @lsp-open _
-  _  _    @lsp-dn _   @pg-dn-ow @mcursor _ _ _ _ _ _ _
-  _ _ @zap  C-x   @clock-in @lsp-ext-v @yazi _ _ @bkill @bmax @bprev @bnext 
-  _ _ _ _                         _                    _ _ _ _ _ _
-)
+;; esc               f1       f2         f3          f4       f5       f6       f7       f8       f9       f10       f11       f12
+   XX                XX       XX         XX          XX       XX       XX       XX       XX       XX       XX        XX        XX
 
+;; nubs      1        2        3          4           5        6        7        8        9        0        -         =         bspc
+   XX        @space1  @space2  @space3    @space4     @space5  @space6  @space7  _        _        _        @spc-prev @spc-next @spc-kill
+
+;; tab        q        w        e          r           t        y        u        i        o        p         [         ]         ret
+   XX         XX       @lsp-up  @goto/save @pg-up-ow   @magit   _        _        @lsp-err @lsp-def @lsp-ref  @lsp-sym  @lsp-open _
+
+;; caps        a        s        d          f           g        h        j        k        l        ;         '           \
+   _           XX       @lsp-dn  _          @pg-dn-ow   @mcursor _        _        _        _        _         _           _
+
+;; lsft    grv  z        x        c          v           b        n        m        ,        .        /         rsft
+   XX      XX   @zap     @Mx      @clock-in  @lsp-ext-v  @yazi    _        _        @bkill   @bmax    @bprev    @bnext
+
+;; fn  lctl   lalt   lmet         spc                                               rmet      ralt     left down up rght
+   XX  XX     XX     XX           XX                                                XX        XX       XX   XX   XX XX)

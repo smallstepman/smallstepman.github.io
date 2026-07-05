@@ -6,6 +6,7 @@
     import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree 
     flake-aspects.url = "github:vic/flake-aspects"; # flake-aspects must be a direct input here because den's lib.nix accesses inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
 
+    kanata-tray = { url = "github:rszyma/kanata-tray"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
     unattended-installer = { # Unattended NixOS installer
       url = "github:chrillefkr/nixos-unattended-installer";
       inputs.nixpkgs.follows = "nixpkgs";
