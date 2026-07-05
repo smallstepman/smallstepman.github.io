@@ -23,7 +23,6 @@
  ophints                 ; highlight the region an operation acts on
  (popup +defaults)       ; tame sudden yet inevitable temporary windows
  smooth-scroll
- tabs                    ; a tab bar for Emacs
  treemacs                ; a project drawer, like neotree but cooler
  unicode                 ; extended unicode support for various languages
  vc-gutter               ; vcs diff in the fringe
@@ -32,6 +31,7 @@
  workspaces              ; tab emulation, persistence & separate workspaces
  ;; deft                 ; notational velocity for Emacs
  ;; doom-quit            ; DOOM quit-message prompts when you quit Emacs
+ ;; tabs                    ; a tab bar for Emacs
  ;; zen                  ; distraction-free coding or writing
 
  :editor
@@ -88,38 +88,25 @@
 
  :lang
  (cc +lsp +tree-sitter)
+ data
  emacs-lisp
+ (go +lsp +tree-sitter)
+ graphviz
  (javascript +lsp +tree-sitter)
+ (json +lsp +tree-sitter)
+ (latex +cdlatex +fold +lsp)
+ (lua +lsp +tree-sitter)
+ (markdown +lsp +tree-sitter +grip)
  (nix +lsp +tree-sitter)
+ (org +pretty +roam2 +journal);; +gnuplot +jupyter +pandoc +pomodoro +hugo +brain +noter +snippets-dir +dragndrop +present)
  (python +conda +uv +cython +lsp +pyright +tree-sitter)
+ rest
  (rust +lsp +tree-sitter)
  (sh +lsp)
- (go +lsp +tree-sitter)
  (web +lsp +tree-sitter)
- (latex +cdlatex +fold +lsp)
- graphviz
- (markdown +lsp +tree-sitter +grip)
  (yaml +lsp +tree-sitter)
- rest
- data
- (json +lsp +tree-sitter)
- (lua +lsp +tree-sitter)
  ;; beancount
  ;; julia
- ;; (org
- ;;  +pretty
- ;;  +roam2
- ;;  +gnuplot
- ;;  +jupyter
- ;;  +pandoc
- ;;  +pomodoro
- ;;  +hugo
- ;;  +brain
- ;;  +noter
- ;;  +snippets-dir
- ;;  +dragndrop
- ;;  +journal
- ;;  +present)
  ;; plantuml
  ;; (scheme +guile)
  ;; (swift +lsp)
@@ -131,12 +118,11 @@
  ;; (wanderlust +gmail)
 
  :app
- irc                  ; how neckbeards socialize
+ irc
  ;; calendar
  ;; emms
  ;; everywhere        ; *leave* Emacs!? You must be joking
  ;; (rss +org)        ; emacs as an RSS reader
- ;; twitter           ; twitter client https://twitter.com/vnought
 
  :config
  ;; literate
