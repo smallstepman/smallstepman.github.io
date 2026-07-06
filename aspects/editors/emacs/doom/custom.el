@@ -4,6 +4,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(ns-command-modifier 'control)
+ '(ns-alternate-modifier 'super)
  '(ns-control-modifier 'meta))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

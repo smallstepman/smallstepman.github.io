@@ -15,6 +15,15 @@
 (package! string-inflection :recipe (:host github :repo "akicho8/string-inflection" :files ("string-inflection.el")) :pin "4a2f87d7b47f5efe702a78f8a40a98df36eeba13")
 (package! transient-posframe :recipe (:host github :repo "yanghaoxie/transient-posframe" :files ("*.el")) :pin "dcd898d1d35183a7d4f2c8f0ebcb43b4f8e70ebe")
 (package! vterm-toggle)
+(package! combobulate
+  :pin "3946aa40ea7f41f1be43accd54ddb197dd403fd7"
+  :recipe (:host github
+           :repo "mickeynp/combobulate"))
+(package! eldoc-box)
+(package! sideline)
+(package! sideline-eglot)
+(package! python-pytest :recipe (:host github :repo "wbolster/emacs-python-pytest") :pin "8c0e048a771f355903a8c2ce78fa0974a077214e")
+(package! uv :recipe (:host github :repo "johannes-mueller/uv.el" :files ("uv.el")) :pin "90f71913662982ffbac768ed5f0f6dc1d3bbd138")
 ;; (package! ghostel)  ; built via nixpkgs + pre-built module, see default.nix
 ;; (package! activity-watch-mode)
 ;; (package! anki-editor)

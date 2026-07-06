@@ -14,14 +14,161 @@
       confirm-kill-emacs nil)
 (defvar toggle-window-maximization t)
 
+;; (with-eval-after-load 'eglot
+;;   (require 'browse-url)
+;;   (require 'map)
+;;   (require 'seq)
+;;   (require 'subr-x))
 (after! eglot
   (setq eldoc-idle-delay 0.2) ; Speed up documentation appearance
   (setq eglot-extend-to-xref t)
-  (add-hook 'eglot-managed-mode-hook #'sideline-mode))
+  (add-hook 'eglot-managed-mode-hook #'sideline-mode)
+  (defun my-eglot-rust--seq (x)
+    (cond
+     ((null x) nil)
+     ((vectorp x) (append x nil))
+     ((listp x) x)
+     (t (list x))))
+
+  (defun my-eglot-rust--env-alist (env)
+    "Convert rust-analyzer env object ENV to process-environment entries."
+    (cond
+     ((null env) nil)
+     ((hash-table-p env)
+      (let (out)
+        (maphash (lambda (k v)
+                   (push (format "%s=%s" k v) out))
+                 env)
+        out))
+     ((listp env)
+      (cl-loop for (k v) on env by #'cddr
+               collect (format "%s=%s"
+                               (string-remove-prefix ":" (symbol-name k))
+                               v)))))
+
+  (defun my-eglot-rust--run-runnable (runnable)
+    "Run a rust-analyzer RUNNABLE in a compilation buffer."
+    (let* ((kind (map-elt runnable :kind))
+           (label (or (map-elt runnable :label) "rust-analyzer runnable"))
+           (args (map-elt runnable :args))
+           (cargo-args (my-eglot-rust--seq (map-elt args :cargoArgs)))
+           (executable-args (my-eglot-rust--seq (map-elt args :executableArgs)))
+           (workspace-root (map-elt args :workspaceRoot))
+           (expect-test (map-elt args :expectTest))
+           (environment (map-elt args :environment))
+           (default-directory
+            (file-name-as-directory
+             (or workspace-root default-directory))))
+      (unless (string= kind "cargo")
+        (user-error "Unsupported rust-analyzer runnable kind: %s" kind))
+      (let ((process-environment
+             (append
+              (when expect-test '("UPDATE_EXPECT=1"))
+              (my-eglot-rust--env-alist environment)
+              process-environment))
+            (cmd (mapconcat
+                  #'shell-quote-argument
+                  (append '("cargo")
+                          cargo-args
+                          (when executable-args '("--"))
+                          executable-args)
+                  " ")))
+        (compilation-start
+         cmd
+         (when (fboundp 'cargo-process-mode) 'cargo-process-mode)
+         (lambda (_) (format "*%s*" label))))))
+
+  (defun lsp-find-related-rust-tests ()
+    "Find and run tests related to the Rust symbol at point."
+    (interactive)
+    (unless (eglot-current-server)
+      (user-error "No Eglot server running"))
+    (let* ((resp (jsonrpc-request
+                  (eglot-current-server)
+                  :rust-analyzer/relatedTests
+                  (eglot--TextDocumentPositionParams)))
+           (tests (my-eglot-rust--seq resp))
+           (runnables
+            (delq nil
+                  (mapcar (lambda (test)
+                            (map-elt test :runnable))
+                          tests))))
+      (unless runnables
+        (user-error "No related tests found"))
+      (let* ((choices
+              (mapcar (lambda (r)
+                        (cons (or (map-elt r :label) "<unnamed test>") r))
+                      runnables))
+             (choice (completing-read "Related test: " choices nil t)))
+        (my-eglot-rust--run-runnable (cdr (assoc choice choices))))))
+
+  (defun lsp-find-parent-module ()
+    "Jump to the Rust parent module using rust-analyzer via Eglot."
+    (interactive)
+    (unless (eglot-current-server)
+      (user-error "No Eglot server running"))
+    (let* ((locs (jsonrpc-request
+                  (eglot-current-server)
+                  :experimental/parentModule
+                  (eglot--TextDocumentPositionParams)))
+           (locs (and locs (seq-into locs 'list))))
+      (unless locs
+        (user-error "No parent module found"))
+      (let* ((loc
+              (if (= (length locs) 1)
+                  (car locs)
+                (let* ((choices
+                        (mapcar
+                         (lambda (loc)
+                           (let* ((uri (or (map-elt loc :targetUri)
+                                           (map-elt loc :uri)))
+                                  (path (eglot--uri-to-path uri)))
+                             (cons (abbreviate-file-name path) loc)))
+                         locs))
+                       (choice (completing-read "Parent module: " choices nil t)))
+                  (cdr (assoc choice choices)))))
+             (uri (or (map-elt loc :targetUri)
+                      (map-elt loc :uri)))
+             (range (or (map-elt loc :targetSelectionRange)
+                        (map-elt loc :targetRange)
+                        (map-elt loc :range))))
+        (find-file (eglot--uri-to-path uri))
+        (goto-char (car (eglot--range-region range))))))
+
+  (defun lsp-rust-analyzer-open-external-docs ()
+    "Open external Rust docs for the symbol at point using rust-analyzer."
+    (interactive)
+    (unless (eglot-current-server)
+      (user-error "No Eglot server running"))
+    (let* ((res (jsonrpc-request
+                 (eglot-current-server)
+                 :experimental/externalDocs
+                 (eglot--TextDocumentPositionParams)))
+           (url
+            (cond
+             ;; Older/common response: plain URL string.
+             ((stringp res) res)
+             ;; Newer response when local docs are supported:
+             ;; { web?: string, local?: string }
+             ((hash-table-p res)
+              (or (gethash "local" res)
+                  (gethash "web" res)
+                  (gethash :local res)
+                  (gethash :web res)))
+             ((listp res)
+              (or (map-elt res :local)
+                  (map-elt res :web)
+                  (map-elt res "local")
+                  (map-elt res "web"))))))
+      (unless url
+        (user-error "No external docs found"))
+      (browse-url url))))
 (use-package sideline-eglot
   :hook (eglot-managed-mode . sideline-mode)
   :init
-  (setq sideline-backends-right '(sideline-eglot)))
+  (setq sideline-backends-right '(sideline-eglot))
+  :config
+  (setq sideline-eglot-code-actions-prefix ""))
 (use-package! eldoc-box
   :hook (eglot-managed-mode . eldoc-box-hover-at-point-mode)
   :config
@@ -35,58 +182,55 @@
 (map! :nv "C-M-d"        #'+multiple-cursors/evil-mc-toggle-cursor-here) ;; dumb, but it is what it is
 (map! :gnv
       ;; num row
-      "C-M-1"            #'+workspace/switch-to-0
-      "C-M-2"            #'+workspace/switch-to-1
-      "C-M-3"            #'+workspace/switch-to-2
-      "C-M-4"            #'+workspace/switch-to-3
-      "C-M-5"            #'+workspace/switch-to-4
-      "C-M-6"            #'+workspace/switch-to-5
-      "C-M-7"            #'+workspace/switch-to-6
-      "C-M-8"            #'+workspace:switch-previous
-      "C-M-9"            #'+workspace:switch-next
-      "C-M-0"            #'+workspace/delete
-      ;; top row
+      "M-s-1"            #'+workspace/switch-to-0
+      "M-s-2"            #'+workspace/switch-to-1
+      "M-s-3"            #'+workspace/switch-to-2
+      "M-s-4"            #'+workspace/switch-to-3
+      "M-s-5"            #'+workspace/switch-to-4
+      "M-s-6"            #'+workspace/switch-to-5
+      "M-s-7"            #'+workspace/switch-to-6
+      "M-s-8"            #'+workspace:switch-previous
+      "M-s-9"            #'+workspace:switch-next
+      "M-s-0"            #'+workspace/kill
+
       "C-M-w"            #'+goto-previous-function.outer
       "C-M-S-w"          #'+goto-previous-class.outer
       "C-M-f"            #'save-buffer
       "C-M-S-f"          #'evil-avy-goto-char-timer
       ;; "C-M-p"            #'scroll-other-window
       "C-M-g"            #'magit-status ;; g
-
-      "C-M-j"            #'+default/diagnostics
-      "C-M-S-j"          #'lsp-execute-code-action
-      "C-M-l"            #'+lookup/definition
-      "C-M-S-l"          #'lsp-rust-find-parent-module
-      "C-M-u"            #'+lookup/references
-      "C-M-S-u"          #'lsp-rust-analyzer-related-tests
-      "C-M-y"            #'consult-imenu-multi
-      "C-M-S-y"          #'lsp-ui-imenu
-      "C-M-;"            #'lsp-ui-peek--goto-xref-other-window
-      "C-M-:"            #'lsp-rust-analyzer-open-external-docs
-      ;; mid row
       "C-M-r"            #'+goto-function.outer
       "C-M-S-r"          #'+goto-class.outer
-      "C-M-S-s"            #'gptel-send
+      "C-M-S-s"          #'gptel-send
       ;; "C-M-S-s"          #'gptel-menu
       ;; "C-M-t"            #'scroll-other-window-down
       "C-M-d"            #'+multiple-cursors/evil-mc-toggle-cursor-here
-
-      ;; bottom row
       "C-M-v"            #'lsp-extend-selection
+      "C-s-v"            #'popterm-toggle-cd
 
+      "C-M-j"            #'+default/diagnostics
+      "C-M-S-j"          #'eglot-code-actions
+      "C-M-l"            #'+lookup/definition
+      "C-M-S-l"          #'lsp-find-parent-module
+      "C-M-u"            #'+lookup/references
+      "C-M-S-u"          #'lsp-find-related-rust-tests
+      "C-M-y"            #'consult-imenu
+      "C-M-S-y"          #'consult-imenu-multi
+      "C-M-s-y"          #'consult-eglot-symbols
+      "C-M-;"            #'lsp-ui-peek--goto-xref-other-window
+      "C-M-:"            #'lsp-rust-analyzer-open-external-docs
       "C-M-k"            #'kill-current-buffer
       "M-RET"            (λ! (if toggle-window-maximization ;; C-M-m, for some reason registered as M-RET
                                  (progn (evil-resize-window (- (frame-width) 1) t)
                                         (evil-resize-window (- (frame-width) 1) nil))
                                (balance-windows))
                              (setq toggle-window-maximization (not toggle-window-maximization)))
+
       "C-M-,"            #'previous-buffer
       "C-M-/"            #'next-buffer
-      ;; thumbs
-      "C-M-S-v"          #'popterm-toggle-cd
-      "C-M-_"          #'powerthesaurus-hydra/body
       )
-
+(use-package! uv)
+(use-package! combobulate)
 (map! :map smerge-mode-map :nv
       "n"             #'smerge-prev
       "e"             #'smerge-keep-lower
@@ -121,10 +265,40 @@
   (setq lsp-auto-guess-root nil))
 (add-hook 'python-mode-hook 'ruff-format-on-save-mode)
 (add-hook 'python-mode-hook #'flymake-ruff-load)
+(add-hook 'python-ts-mode-hook 'ruff-format-on-save-mode)
+(add-hook 'python-ts-mode-hook #'flymake-ruff-load)
 (use-package! which-key
   :config
   (setq which-key-idle-delay 0))
 
+(define-prefix-command 'uv-command-prefix)
+
+(defvar uv-command-map uv-command-prefix
+  "Prefix command map for uv and Python workflow commands.")
+
+(use-package! python-pytest
+  :defer t)
+
+(map! :map uv-command-map
+      :desc "Repeat uv run"        "C-c" #'uv-repeat-run
+      :desc "Run pytest"           "C-t" #'python-pytest
+      :desc "Pytest dispatch"      "C-d" #'python-pytest-dispatch
+      :desc "Run uv"               "C-u" #'uv
+      :desc "Format with Ruff"     "C-f" #'ruff-format-buffer
+      :desc "Add dependency"       "C-a" #'uv-add
+      :desc "Remove dependency"    "C-<delete>" #'uv-remove
+      :desc "Lock dependencies"    "C-l" #'uv-lock
+      :desc "Sync environment"     "C-s" #'uv-sync
+      :desc "Create venv"          "C-v" #'uv-venv
+      :desc "Run command"          "C-r" #'uv-run)
+
+(after! python
+  (map! :map python-mode-map
+        "C-c C-c" #'uv-command-prefix
+        "C-c C-w" #'python-shell-send-buffer)
+  (map! :map python-ts-mode-map
+        "C-c C-c" #'uv-command-prefix
+        "C-c C-w" #'python-shell-send-buffer))
 
 (use-package! agent-shell
   :commands (agent-shell))

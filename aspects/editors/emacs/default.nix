@@ -83,6 +83,12 @@
         extraPackages = epkgs: [ epkgs.vterm epkgs.treesit-grammars.with-all-grammars epkgs.ghostel ];
         emacsPackageOverrides = eself: esuper: {
           inherit ghostel;
+          combobulate = esuper.combobulate.overrideAttrs (old: {
+            patches = (old.patches or []) ++ [ ./doom/combobulate-rust.patch ];
+          });
+          uv = esuper.uv.overrideAttrs (old: {
+            patches = (old.patches or []) ++ [ ./doom/uv-transient-define-group.patch ];
+          });
         };
       };
 

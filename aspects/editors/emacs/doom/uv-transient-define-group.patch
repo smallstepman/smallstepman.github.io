@@ -1,0 +1,134 @@
+diff --git a/uv.el b/uv.el
+index 117cec3..b4b4ab5 100644
+--- a/uv.el
++++ b/uv.el
+@@ -500,51 +500,16 @@ Example:
+             (push "dev" selection))))
+     (oset suffix value new-selection)))
+ 
+-(defmacro uv--transient-define-group (name &rest groups)
+-  "Temporary hack."
+-  (declare (indent defun))
+-  `(if (macrop 'transient-define-group)
+-       (transient-define-group ,name ,@groups)
+-     (defconst ,name ,@groups)))
+-
+-(uv--transient-define-group uv--dependency-options
+-  ["Dependency options"
+-   (uv--extra-multiswitch)
+-   ("E" "(de)select all extras" uv--select-or-deselect-all-extras)
+-   (uv--group-multiswitch)
+-   ("G" "(de)select all groups" uv--select-or-deselect-all-groups)
+-   ("d" "with dev dependency group" uv--toggle-dev-group)
+-   ])
+-
+-(uv--transient-define-group uv--cache-options
+-  ["Cache options"
+-   ("nc" "Do not use the cache" "--no-cache")
+-   ("r" "Refresh all cached data" "--refresh")
+-   ("R" "Refresh given package" "--refresh-package "
+-    :prompt "Refresh package: "
+-    :class transient-option
+-    :reader (lambda (prompt initial history)
+-              (read-string prompt initial history)))])
+-
+-(uv--transient-define-group uv--resolver-options
+-  ["Resolver options"
+-   ("U" "Allow package upgrades" "--upgrade")
+-   ("P" "Allow upgrade for given package" "--package-upgrade "
+-    :prompt "Allow upgrade for package: "
+-    :class transient-option
+-    :reader (lambda (prompt initial history)
+-              (read-string prompt initial history)))
+-   ("s" "Resolution strategy" "--resolution "
+-    :class transient-switches
+-    :argument-format "--resolution %s"
+-    :argument-regexp "--resolution \\(.*\\)"
+-    :choices ("highest" "lowest" "lowest-direct"))])
+-
+  ;;;###autoload (autoload 'uv-sync "uv" nil t)
+ (transient-define-prefix uv-sync ()
+   "Update the project's environment"
+   :show-help (lambda (_) (uv-show-command-help "sync"))
+-  [uv--dependency-options
++  [["Dependency options"
++    (uv--extra-multiswitch)
++    ("E" "(de)select all extras" uv--select-or-deselect-all-extras)
++    (uv--group-multiswitch)
++    ("G" "(de)select all groups" uv--select-or-deselect-all-groups)
++    ("d" "with dev dependency group" uv--toggle-dev-group)]
+    ["Sync options"
+     ("ne" "Install editable dependencies non-editable." "--non-editable")
+     ("p" "From package in workspace member" "--package="
+@@ -556,8 +521,26 @@ Example:
+     ("l" "Assert that `uv.lock' will remain unchanged." "--locked")
+     ("f" "Sync without updating `uv.lock'" "--frozen")
+     (uv--select-python-version)]
+-   uv--cache-options
+-   uv--resolver-options]
++   ["Cache options"
++    ("nc" "Do not use the cache" "--no-cache")
++    ("r" "Refresh all cached data" "--refresh")
++    ("R" "Refresh given package" "--refresh-package "
++     :prompt "Refresh package: "
++     :class transient-option
++     :reader (lambda (prompt initial history)
++               (read-string prompt initial history)))]
++   ["Resolver options"
++    ("U" "Allow package upgrades" "--upgrade")
++    ("P" "Allow upgrade for given package" "--package-upgrade "
++     :prompt "Allow upgrade for package: "
++     :class transient-option
++     :reader (lambda (prompt initial history)
++               (read-string prompt initial history)))
++    ("s" "Resolution strategy" "--resolution "
++     :class transient-switches
++     :argument-format "--resolution %s"
++     :argument-regexp "--resolution \\(.*\\)"
++     :choices ("highest" "lowest" "lowest-direct"))]]
+   ["sync"
+    ("RET" "Run uv sync" uv-sync-cmd)])
+ 
+@@ -619,7 +602,12 @@ suitable.  Use `uv-run' instead."
+   "Run a command or script"
+   :show-help (lambda (_) (uv-show-command-help "run"))
+   :value #'uv--project-last-run-args
+-  [uv--dependency-options
++  [["Dependency options"
++    (uv--extra-multiswitch)
++    ("E" "(de)select all extras" uv--select-or-deselect-all-extras)
++    (uv--group-multiswitch)
++    ("G" "(de)select all groups" uv--select-or-deselect-all-groups)
++    ("d" "with dev dependency group" uv--toggle-dev-group)]
+    ["Run options"
+     ("m" "Run as a module" "--module")
+     ("ne" "Install editable dependencys non-editable." "--non-editable")
+@@ -695,8 +683,26 @@ suitable.  Use `uv-sync' instead."
+      :reader (lambda (prompt initial history)
+                (read-string prompt initial history)))
+     ("T" "Terminal: run in an ansi-term window rather than compile/comint" "terminal")]
+-   uv--cache-options
+-   uv--resolver-options]
++   ["Cache options"
++    ("nc" "Do not use the cache" "--no-cache")
++    ("r" "Refresh all cached data" "--refresh")
++    ("R" "Refresh given package" "--refresh-package "
++     :prompt "Refresh package: "
++     :class transient-option
++     :reader (lambda (prompt initial history)
++               (read-string prompt initial history)))]
++   ["Resolver options"
++    ("U" "Allow package upgrades" "--upgrade")
++    ("P" "Allow upgrade for given package" "--package-upgrade "
++     :prompt "Allow upgrade for package: "
++     :class transient-option
++     :reader (lambda (prompt initial history)
++               (read-string prompt initial history)))
++    ("s" "Resolution strategy" "--resolution "
++     :class transient-switches
++     :argument-format "--resolution %s"
++     :argument-regexp "--resolution \\(.*\\)"
++     :choices ("highest" "lowest" "lowest-direct"))]]
+   ["tool run"
+    ("RET" "tool run" uv-tool-run-cmd)])
+ 

@@ -38,14 +38,15 @@
   lsp-goto-parent-module C-M-S-l
   lsp-show-reference C-M-u
   lsp-rust-related-tests C-M-S-u
-  lsp-imenu-multi C-M-y
-  lsp-ui-imenu C-M-S-y
+  lsp-symbols-in-buffer   C-M-y      ;; Sends Cmd + Ctrl          (Emacs reads: C-M-y)
+  lsp-symbols-in-buffers  C-M-S-y    ;; Sends Cmd + Ctrl + Shift  (Emacs reads: C-M-S-y)
+  lsp-symbols-in-project  C-M-A-y    ;; Sends Cmd + Ctrl + Option (Emacs reads: C-M-s-y)
   lsp-open-in-other-window C-M-;
   lsp-rust-external-doc C-M-S-;
   lsp-err (tap-dance 300 (@lsp-diagnostic-popup @lsp-code-actions))
   lsp-def (tap-dance 300 (@lsp-show-definition @lsp-goto-parent-module))
   lsp-ref (tap-dance 300 (@lsp-show-reference @lsp-rust-related-tests))
-  lsp-sym (tap-dance 300 (@lsp-imenu-multi @lsp-ui-imenu))
+  lsp-sym (tap-dance 300 (@lsp-symbols-in-buffer @lsp-symbols-in-buffers @lsp-symbols-in-project))
   lsp-open (tap-dance 300 (@lsp-open-in-other-window @lsp-rust-external-doc))
 
 
