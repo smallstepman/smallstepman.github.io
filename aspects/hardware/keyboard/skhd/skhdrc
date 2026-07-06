@@ -80,14 +80,15 @@ ctrl - o [
 ]
 
 alt + shift + cmd - v [
+  "VMWare Fusion" ~
   ".emacs-30.2-wrapped" ~
   * : omniwmctl command toggle-quake-terminal
 ]
 ctrl - f : omniwmctl command toggle-column-full-width
 ctrl + shift - f : omniwmctl command toggle-native-fullscreen
 ctrl - t : omniwmctl command toggle-column-tabbed
-# ctrl - 0x2C : omniwmctl command toggle-overview
 ctrl - 0x2C : omniwmctl command scratchpad toggle
+ctrl - ` : omniwmctl command toggle-overview
 ctrl + shift - 0x2C : omniwmctl command scratchpad assign
 
 f1 : omniwmctl command switch-workspace 1

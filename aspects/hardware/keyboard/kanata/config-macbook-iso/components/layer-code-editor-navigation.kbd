@@ -27,7 +27,6 @@
   pg-dn-ow C-M-t
   mcursor C-M-d
 
-  zap M-z
   Mx C-x
   clock-in C-M-c
   lsp-ext-v C-M-v
@@ -70,7 +69,7 @@
    _           XX       @lsp-dn  _          @pg-dn-ow   @mcursor _        _        _        _        _         _           _
 
 ;; lsft    grv  z        x        c          v           b        n        m        ,        .        /         rsft
-   XX      XX   @zap     @Mx      @clock-in  @lsp-ext-v  @yazi    _        _        @bkill   @bmax    @bprev    @bnext
+   XX      XX   XX       @Mx      @clock-in  @lsp-ext-v  @yazi    _        _        @bkill   @bmax    @bprev    @bnext
 
 ;; fn  lctl   lalt   lmet         spc                                               rmet      ralt     left down up rght
    XX  XX     XX     XX           XX                                                XX        XX       XX   XX   XX XX)
