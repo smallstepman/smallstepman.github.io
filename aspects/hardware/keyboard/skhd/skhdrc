@@ -1,37 +1,38 @@
+.shell "/bin/bash"
+.blacklist [ "leagueoflegends" "vmware fusion" ]
+.define no_popups [ ".emacs-30.2-wrapped" "Code" ]
+.define system_keykind : osascript -e 'tell application "System Events" to keystroke "{{1}}" using {{2}}'
+.define wm             : omniwmctl command {{1}}
+.define yny            : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append {{1}} 
 # https://cloud.githubusercontent.com/assets/6175959/18551554/35137fc6-7b59-11e6-81a0-bef19ed5db5e.png
-f11 [
-  "VMWare Fusion" : osascript -e 'tell app "System Events"' -e 'key code 14 using control down' -e 'delay 0.05' -e 'key code 123 using control down' -e 'end'
-  *               : osascript -e 'tell application "System Events" to key code 123 using control down'
-] 
-f12 [
-  "VMWare Fusion" : osascript -e 'tell app "System Events"' -e 'key code 14 using control down' -e 'delay 0.05' -e 'key code 124 using control down' -e 'end'
-  *               : osascript -e 'tell application "System Events" to key code 124 using control down'
-] 
-ctrl - 0x1B [
-  "VMWare Fusion" ~
-  *    : open -g "rectangle://execute-action?name=smaller"
-] 
-ctrl - 0x18 [
-  "VMWare Fusion" ~
-  *    : open -g "rectangle://execute-action?name=larger"
-] 
-cmd - 0x18 [
-  "notes" : osascript -e 'tell application "System Events" to keystroke "." using {command down, shift down}'
-  * ~
+.alias $CS    ctrl + shift
+.alias $semi  0x29
+.alias $slash 0x2C
+.alias $grave 0x32
+.alias $esc   0x35
+.alias $minus 0x1B
+.alias $equal 0x18
+.alias $comma 0x2B 
+.alias $dot   0x2F
+
+alt + shift + cmd - v [  
+  @no_popups ~
+  *           : @wm("toggle-quake-terminal")
 ]
-cmd - 0x1B [
-  "notes" : osascript -e 'tell application "System Events" to keystroke "," using {command down, shift down}'
-  * ~
+ctrl - x [  
+  @no_popups ~
+  *           : shortcuts run OpenSpotlight 
 ]
-ctrl - x [
-  "VMWare Fusion" ~
-  ".emacs-30.2-wrapped" ~
-  "Code" ~
-  *   : shortcuts run OpenSpotlight
+cmd - $minus [
+  "notes"     : @system_keykind(".", "{command down, shift down}")
+  * ~ 
 ]
-cmd - b  [
-  "VMWare Fusion" ~
-  "calendar" : osascript \
+cmd - $equal [
+  "notes"     : @system_keykind(",", "{command down, shift down}")
+  * ~ 
+]
+cmd - b  [  
+  "calendar"  : osascript \
                 -e 'tell application "System Events"' \
                 -e '  tell process "Calendar"' \
                 -e '    if (exists menu item "Hide Calendar List" of menu "View" of menu bar 1) then' \
@@ -41,172 +42,51 @@ cmd - b  [
                 -e '    end if' \
                 -e '  end tell' \
                 -e 'end tell'
-  "reminders" : osascript -e 'tell application "System Events" to keystroke "s" using {command down, option down}'
-  "safari" : osascript -e 'tell application "System Events" to keystroke "l" using {command down, shift down}'
-  * : omniwmctl command toggle-workspace-bar && omniwmctl command toggle-hidden-bar
+  "reminders" : @system_keykind("s", "{command down, option down}")
+  "safari"    : @system_keykind("l", "{command down, shift down}")
+  *           : @wm("toggle-workspace-bar && omniwmctl command toggle-hidden-bar")
 ]
 
-ctrl - l [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move west
-]
-ctrl - u [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move south
-]
-ctrl - y [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move north
-]
-ctrl - 0x29 [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append move east
-]
-ctrl - n [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus west
-]
-ctrl - e [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus south
-]
-ctrl - i [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus north
-]
-ctrl - o [
-  "VMWare Fusion" ~
-  *   : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append focus east
-]
+ctrl - l      : @yny("move west") 
+ctrl - u      : @yny("move south") 
+ctrl - y      : @yny("move north") 
+ctrl - $semi  : @yny("move east") 
+ctrl - n      : @yny("focus west") 
+ctrl - e      : @yny("focus south") 
+ctrl - i      : @yny("focus north") 
+ctrl - o      : @yny("focus east") 
 
-alt + shift + cmd - v [
-  "VMWare Fusion" ~
-  ".emacs-30.2-wrapped" ~
-  * : omniwmctl command toggle-quake-terminal
-]
-ctrl - f [
-  "VMWare Fusion" ~
-  * : omniwmctl command toggle-column-full-width
-]
-ctrl + shift - f [
-  "VMWare Fusion" ~
-  * : omniwmctl command toggle-native-fullscreen
-]
-ctrl - t [
-  "VMWare Fusion" ~
-  * : omniwmctl command toggle-column-tabbed
-]
-ctrl - 0x2C [
-  "VMWare Fusion" ~
-  * : omniwmctl command scratchpad toggle
-]
-ctrl - 0x32 [
-  "VMWare Fusion" ~
-  * : omniwmctl command toggle-overview
-]
-ctrl + shift - 0x2C [
-  "VMWare Fusion" ~
-  * : omniwmctl command scratchpad assign
-]
+ctrl - f      : @wm("toggle-column-full-width")
+$CS - f       : @wm("toggle-native-fullscreen")
+ctrl - t      : @wm("toggle-column-tabbed")
+ctrl - $slash : @wm("scratchpad toggle")
+ctrl - $grave : @wm("toggle-overview")
+$CS - $slash  : @wm("scratchpad assign")
 
-f1 [
-  "VMWare Fusion" ~
-  * : omniwmctl command switch-workspace 1
-]
-f2 [
-  "VMWare Fusion" ~
-  * : omniwmctl command switch-workspace 2
-]
-f3 [
-  "VMWare Fusion" ~
-  * : omniwmctl command switch-workspace 3
-]
-f4 [
-  "VMWare Fusion" ~
-  * : omniwmctl command switch-workspace 4
-]
-f5 [
-  "VMWare Fusion" ~
-  * : omniwmctl command switch-workspace 5
-]
-shift - f1 [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-to-workspace 1
-]
-shift - f2 [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-to-workspace 2
-]
-shift - f3 [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-to-workspace 3
-]
-shift - f4 [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-to-workspace 4
-]
-shift - f5 [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-to-workspace 5
-]
+f1            : @wm("switch-workspace 1")
+f2            : @wm("switch-workspace 2")
+f3            : @wm("switch-workspace 3")
+f4            : @wm("switch-workspace 4")
+f5            : @wm("switch-workspace 5")
+shift - f1    : @wm("move-to-workspace 1")
+shift - f2    : @wm("move-to-workspace 2")
+shift - f3    : @wm("move-to-workspace 3")
+shift - f4    : @wm("move-to-workspace 4")
+shift - f5    : @wm("move-to-workspace 5")
+ 
+$CS - j       : @wm("move-column left")
+$CS - l       : @wm("move left")
+$CS - u       : @wm("move down")
+$CS - y       : @wm("move up")
+$CS - $semi   : @wm("move right")
 
-ctrl + shift - j [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-column left
-]
-ctrl + shift - l [
-  "VMWare Fusion" ~
-  * : omniwmctl command move left
-]
-ctrl + shift - u [
-  "VMWare Fusion" ~
-  * : omniwmctl command move down
-]
-ctrl + shift - y [
-  "VMWare Fusion" ~
-  * : omniwmctl command move up
-]
-ctrl + shift - 0x29 [
-  "VMWare Fusion" ~
-  * : omniwmctl command move right
-]
+$CS - i       : @wm("move-column-to-workspace up")
+$CS - e       : @wm("move-column-to-workspace down")
 
-ctrl + shift - i [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-column-to-workspace up
-]
-ctrl + shift - e [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-column-to-workspace down
-]
+$CS - return  : @wm("move-column right")
 
-ctrl + shift - return [
-  "VMWare Fusion" ~
-  * : omniwmctl command move-column right
-]
+$CS - k       : @wm("set-window-height -10%") 
+$CS - $comma  : @wm("set-window-height +10%")
 
-ctrl + shift - k [
-  "VMWare Fusion" ~
-  * : omniwmctl command set-column-width -10%
-]
-ctrl + shift - m [
-  "VMWare Fusion" ~
-  * : omniwmctl command set-window-height -10%
-]
-ctrl + shift - 0x2B [
-  "VMWare Fusion" ~
-  * : omniwmctl command set-window-height +10%
-]
-ctrl + shift - 0x2C [
-  "VMWare Fusion" ~
-  * : omniwmctl command set-column-width +10%
-]
-
-alt - 0x2F [
-  "VMWare Fusion" ~
-  * : omniwmctl command cycle-column-width forward
-]
-alt - 0x2B [
-  "VMWare Fusion" ~
-  * : omniwmctl command cycle-column-width backward
-]
+alt - $dot    : @wm("cycle-column-width forward")
+alt - $comma  : @wm("cycle-column-width backward")

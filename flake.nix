@@ -62,6 +62,7 @@
       inputs.git-repo-manager.overlays.git-repo-manager
       inputs.yeetnyoink.overlays.default
       (final: prev: { rbw = inputs.rbw.packages.${prev.stdenv.hostPlatform.system}.default; })
+      (final: prev: { skhd-zig = final.callPackage (import ./aspects/hardware/keyboard/skhd/_pkg.skhd-zig.nix).package { }; })
     ] ++ map (f: import f { inherit inputs; }) [
       ./aspects/clipboard/_overlay.nix
       ./aspects/devtools/_overlay.nix

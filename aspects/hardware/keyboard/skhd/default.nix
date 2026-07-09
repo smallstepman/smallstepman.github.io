@@ -19,14 +19,14 @@
 
       home-manager.users.m.services.skhd = {
         enable = true;
-        package = pkgs.skhd;
+        package = pkgs.skhd-zig;
         config = ./skhdrc;
         errorLogFile = "/tmp/skhd.err.log";
         outLogFile = "/tmp/skhd.out.log";
       };
 
       home-manager.users.m.launchd.agents.skhd.config.ProgramArguments = lib.mkForce [
-        (lib.getExe pkgs.skhd)
+        (lib.getExe pkgs.skhd-zig)
         "-c"
         "/Users/m/.config/skhd/skhdrc"
         "-h"
@@ -39,7 +39,7 @@
     };
 
     homeManager = { lib, pkgs, ... }: {
-      home.packages = lib.optionals pkgs.stdenv.isDarwin [ pkgs.skhd ];
+      home.packages = lib.optionals pkgs.stdenv.isDarwin [ pkgs.skhd-zig ];
     };
   };
 }
