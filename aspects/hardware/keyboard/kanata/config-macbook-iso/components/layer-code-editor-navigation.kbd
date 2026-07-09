@@ -57,20 +57,20 @@
 )
 
 (deflayer code-navigation
-;; esc               f1       f2         f3          f4       f5       f6       f7       f8       f9       f10       f11       f12
-   XX                XX       XX         XX          XX       XX       XX       XX       XX       XX       XX        XX        XX
+;; esc               f1         f2         f3          f4       f5       f6       f7       f8       f9       f10       f11       f12
+   XX                XX         XX         XX          XX       XX       XX       XX       XX       XX       XX        XX        XX
 
-;; nubs      1        2        3          4           5        6        7        8        9        0        -         =         bspc
-   XX        @space1  @space2  @space3    @space4     @space5  @space6  @space7  _        _        _        @spc-prev @spc-next @spc-kill
+;; nubs      1        2          3          4           5        6        7        8        9        0        -         =         bspc
+   XX        @space1  @space2    @space3    @space4     @space5  @space6  @space7  _        _        _        @spc-prev @spc-next @spc-kill
 
-;; tab        q        w        e          r           t        y        u        i        o        p         [         ]         ret
-   XX         XX       @lsp-up  @goto/save @pg-up-ow   @magit   _        _        @lsp-err @lsp-def @lsp-ref  @lsp-sym  @lsp-open _
+;; tab        q        w          e          r           t        y        u        i        o        p         [         ]         ret
+   XX         XX       @win-other @goto/save @pg-up-ow   @magit   _        _        @lsp-err @lsp-def @lsp-ref  @lsp-sym  @lsp-open _
 
-;; caps        a        s        d          f           g        h        j        k        l        ;         '           \
-   _           XX       @lsp-dn  _          @pg-dn-ow   @mcursor _        _        _        _        _         _           _
+;; caps        a        s          d          f           g        h        j        k        l        ;         '           \
+   _           XX       @lsp-dn    _          @pg-dn-ow   @mcursor _        _        _        _        _         _           _
 
-;; lsft    grv  z        x        c          v           b        n        m        ,        .        /         rsft
-   XX      XX   XX       @Mx      @clock-in  @lsp-ext-v  @yazi    _        _        @bkill   @bmax    @bprev    @bnext
+;; lsft    grv  z        x          c          v           b        n        m        ,        .        /         rsft
+   XX      XX   XX       @Mx        @clock-in  @lsp-ext-v  @yazi    _        _        @bkill   @bmax    @bprev    @bnext
 
-;; fn  lctl   lalt   lmet         spc                                               rmet      ralt     left down up rght
-   XX  XX     XX     XX           XX                                                XX        XX       XX   XX   XX XX)
+;; fn  lctl   lalt   lmet           spc                                               rmet      ralt     left down up rght
+   XX  XX     XX     XX             XX                                                XX        XX       XX   XX   XX XX)

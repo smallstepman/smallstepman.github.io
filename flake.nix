@@ -6,7 +6,6 @@
     import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree 
     flake-aspects.url = "github:vic/flake-aspects"; # flake-aspects must be a direct input here because den's lib.nix accesses inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
 
-    kanata-tray = { url = "github:rszyma/kanata-tray"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
     unattended-installer = { # Unattended NixOS installer
       url = "github:chrillefkr/nixos-unattended-installer";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -33,16 +32,17 @@
     corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
     ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
 
-    nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; }; # don't pull in its nixpkgs — neither the module nor overlay uses it
     git-repo-manager = { url = "github:hakoerber/git-repo-manager"; inputs.nixpkgs.follows = "nixpkgs"; };
     herdr.url = "github:ogulcancelik/herdr";
+    kanata-tray = { url = "github:rszyma/kanata-tray"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
     lazyvim.url = "github:pfassina/lazyvim-nix"; 
     llm-agents.url = "github:numtide/llm-agents.nix";
     niri.url = "github:sodiboo/niri-flake";
+    nix-doom-emacs-unstraightened = { url = "github:marienz/nix-doom-emacs-unstraightened"; inputs.nixpkgs.follows = ""; }; # don't pull in its nixpkgs — neither the module nor overlay uses it
     noctalia = { url = "github:noctalia-dev/noctalia-shell"; inputs.nixpkgs.follows = "nixpkgs-unstable"; };
     rbw.url = "github:smallstepman/rbw"; # rbw (Bitwarden CLI) with inject/run support
     rust-overlay = { url = "github:oxalica/rust-overlay"; inputs.nixpkgs.follows = "nixpkgs"; };
-    yeetnyoink.url = "github:smallstepman/yeetnyoink"; # yeetnyoink - window/app focus orchestrator 
+    yeetnyoink.url = "github:smallstepman/yeetnyoink"; # yeetnyoink - window/app focus orchestrator
 
     # Non-flake sources for packages we build ourselves
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };

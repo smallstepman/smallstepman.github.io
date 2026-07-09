@@ -5,7 +5,7 @@
       llm-agents.omp llm-agents.pi llm-agents.codex llm-agents.skills herdr
       # Dev Tools
       devenv just gnumake pixi cmake 
-      harlequin dbeaver-bin d2 adrs bws parallel uniclip wezterm ninja 
+      harlequin dbeaver-bin d2 adrs bws parallel ninja exercism tinymist
       # DevOps & Cloud
       fluxcd kubecm kubecolor kubectl kubernetes-helm terragrunt s3fs k9s lazydocker
       # Testing

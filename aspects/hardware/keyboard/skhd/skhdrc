@@ -84,39 +84,129 @@ alt + shift + cmd - v [
   ".emacs-30.2-wrapped" ~
   * : omniwmctl command toggle-quake-terminal
 ]
-ctrl - f : omniwmctl command toggle-column-full-width
-ctrl + shift - f : omniwmctl command toggle-native-fullscreen
-ctrl - t : omniwmctl command toggle-column-tabbed
-ctrl - 0x2C : omniwmctl command scratchpad toggle
-ctrl - ` : omniwmctl command toggle-overview
-ctrl + shift - 0x2C : omniwmctl command scratchpad assign
+ctrl - f [
+  "VMWare Fusion" ~
+  * : omniwmctl command toggle-column-full-width
+]
+ctrl + shift - f [
+  "VMWare Fusion" ~
+  * : omniwmctl command toggle-native-fullscreen
+]
+ctrl - t [
+  "VMWare Fusion" ~
+  * : omniwmctl command toggle-column-tabbed
+]
+ctrl - 0x2C [
+  "VMWare Fusion" ~
+  * : omniwmctl command scratchpad toggle
+]
+ctrl - 0x32 [
+  "VMWare Fusion" ~
+  * : omniwmctl command toggle-overview
+]
+ctrl + shift - 0x2C [
+  "VMWare Fusion" ~
+  * : omniwmctl command scratchpad assign
+]
 
-f1 : omniwmctl command switch-workspace 1
-f2 : omniwmctl command switch-workspace 2
-f3 : omniwmctl command switch-workspace 3
-f4 : omniwmctl command switch-workspace 4
-f5 : omniwmctl command switch-workspace 5
-shift - f1 : omniwmctl command move-to-workspace 1
-shift - f2 : omniwmctl command move-to-workspace 2
-shift - f3 : omniwmctl command move-to-workspace 3
-shift - f4 : omniwmctl command move-to-workspace 4
-shift - f5 : omniwmctl command move-to-workspace 5
+f1 [
+  "VMWare Fusion" ~
+  * : omniwmctl command switch-workspace 1
+]
+f2 [
+  "VMWare Fusion" ~
+  * : omniwmctl command switch-workspace 2
+]
+f3 [
+  "VMWare Fusion" ~
+  * : omniwmctl command switch-workspace 3
+]
+f4 [
+  "VMWare Fusion" ~
+  * : omniwmctl command switch-workspace 4
+]
+f5 [
+  "VMWare Fusion" ~
+  * : omniwmctl command switch-workspace 5
+]
+shift - f1 [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-to-workspace 1
+]
+shift - f2 [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-to-workspace 2
+]
+shift - f3 [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-to-workspace 3
+]
+shift - f4 [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-to-workspace 4
+]
+shift - f5 [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-to-workspace 5
+]
 
-ctrl + shift - j : omniwmctl command move-column left
-ctrl + shift - l : omniwmctl command move left
-ctrl + shift - u : omniwmctl command move down
-ctrl + shift - y : omniwmctl command move up
-ctrl + shift - 0x29 : omniwmctl command move right
+ctrl + shift - j [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-column left
+]
+ctrl + shift - l [
+  "VMWare Fusion" ~
+  * : omniwmctl command move left
+]
+ctrl + shift - u [
+  "VMWare Fusion" ~
+  * : omniwmctl command move down
+]
+ctrl + shift - y [
+  "VMWare Fusion" ~
+  * : omniwmctl command move up
+]
+ctrl + shift - 0x29 [
+  "VMWare Fusion" ~
+  * : omniwmctl command move right
+]
 
-ctrl + shift - i : omniwmctl command move-column-to-workspace up
-ctrl + shift - e : omniwmctl command move-column-to-workspace down
+ctrl + shift - i [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-column-to-workspace up
+]
+ctrl + shift - e [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-column-to-workspace down
+]
 
-ctrl + shift - return : omniwmctl command move-column right
+ctrl + shift - return [
+  "VMWare Fusion" ~
+  * : omniwmctl command move-column right
+]
 
-ctrl + shift - k : omniwmctl command set-column-width -10%
-ctrl + shift - m : omniwmctl command set-window-height -10%
-ctrl + shift - 0x2B : omniwmctl command set-window-height +10%
-ctrl + shift - 0x2C : omniwmctl command set-column-width +10%
+ctrl + shift - k [
+  "VMWare Fusion" ~
+  * : omniwmctl command set-column-width -10%
+]
+ctrl + shift - m [
+  "VMWare Fusion" ~
+  * : omniwmctl command set-window-height -10%
+]
+ctrl + shift - 0x2B [
+  "VMWare Fusion" ~
+  * : omniwmctl command set-window-height +10%
+]
+ctrl + shift - 0x2C [
+  "VMWare Fusion" ~
+  * : omniwmctl command set-column-width +10%
+]
 
-alt - 0x2F : omniwmctl command cycle-column-width forward
-alt - 0x2B : omniwmctl command cycle-column-width backward
+alt - 0x2F [
+  "VMWare Fusion" ~
+  * : omniwmctl command cycle-column-width forward
+]
+alt - 0x2B [
+  "VMWare Fusion" ~
+  * : omniwmctl command cycle-column-width backward
+]

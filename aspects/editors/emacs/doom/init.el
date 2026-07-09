@@ -118,7 +118,7 @@
  ;; (wanderlust +gmail)
 
  :app
- irc
+ irc        
  ;; calendar
  ;; emms
  ;; everywhere        ; *leave* Emacs!? You must be joking
