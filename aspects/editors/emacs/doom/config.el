@@ -24,65 +24,79 @@
       projectile-project-search-path '("~/Projects/"))
 
 (defvar toggle-window-maximization t)
-(define-prefix-command 'uv-command-prefix)
 ;; (use-package! combobulate)
-(map! :gnv
-      "M-s-1"            #'+workspace/switch-to-0
-      "M-s-2"            #'+workspace/switch-to-1
-      "M-s-3"            #'+workspace/switch-to-2
-      "M-s-4"            #'+workspace/switch-to-3
-      "M-s-5"            #'+workspace/switch-to-4
-      "M-s-6"            #'+workspace/switch-to-5
-      "M-s-7"            #'+workspace/switch-to-6
-      "M-s-8"            #'+workspace:switch-previous
-      "M-s-9"            #'+workspace:switch-next
-      "M-s-0"            #'+workspace/kill
+(define-prefix-command 'uv-command-prefix)
+(map! :gnvm
+      "C-b"       #'dirvish-side
+      "M-s-1"     #'+workspace/switch-to-0
+      "M-s-2"     #'+workspace/switch-to-1
+      "M-s-3"     #'+workspace/switch-to-2
+      "M-s-4"     #'+workspace/switch-to-3
+      "M-s-5"     #'+workspace/switch-to-4
+      "M-s-6"     #'+workspace/switch-to-5
+      "M-s-7"     #'+workspace/switch-to-6
+      "M-s-8"     #'+workspace:switch-previous
+      "M-s-9"     #'+workspace:switch-next
+      "M-s-0"     #'+workspace/kill
 
-      "C-q"              #'evil-quit
-      "C-M-S-w"          #'ace-delete-window
-      "C-M-w"            #'ace-window
-      "C-M-f"            #'save-buffer
-      "C-M-S-f"          #'evil-avy-goto-char-timer
-      "C-M-p"            #'scroll-other-window
-      "C-M-S-p"          #'scroll-other-window-down
-      "C-M-g"            #'magit-status
-      "C-M-r"            #'+goto-function.outer
-      "C-M-S-r"          #'+goto-class.outer
-      "C-M-S-s"          #'gptel-send
-      ;; "C-M-S-s"          #'gptel-menu
-      ;; "C-M-t"            #'scroll-other-window-down
-      "C-M-d"            #'+multiple-cursors/evil-mc-toggle-cursor-here
-      "C-M-v"            #'lsp-extend-selection
-      "C-s-v"            #'popterm-toggle-cd
+      "C-q"       #'evil-quit
+      "C-M-S-w"   #'ace-delete-window
+      "C-M-w"     #'ace-window
+      "C-M-f"     #'save-buffer
+      "C-M-S-f"   #'evil-avy-goto-char-timer
+      "C-M-p"     #'scroll-other-window
+      "C-M-S-p"   #'scroll-other-window-down
+      "C-M-g"     #'magit-status
+      "C-M-r"     #'+goto-function.outer
+      "C-M-S-r"   #'+goto-class.outer
+      "C-M-S-s"   #'gptel-send
+      ;; "C-M-S-s"   #'gptel-menu
+      ;; "C-M-t"     #'scroll-other-window-down
+      "C-M-d"     #'+multiple-cursors/evil-mc-toggle-cursor-here
+      "C-M-v"     #'lsp-extend-selection
+      "C-s-v"     #'popterm-toggle-cd
 
-      "C-M-j"            #'+default/diagnostics
-      "C-M-S-j"          #'eglot-code-actions
-      "C-M-l"            #'+lookup/definition
-      "C-M-S-l"          #'lsp-find-parent-module
-      "C-M-u"            #'+lookup/references
-      "C-M-S-u"          #'lsp-find-related-rust-tests
-      "C-M-y"            #'consult-imenu
-      "C-M-S-y"          #'consult-imenu-multi
-      "C-M-s-y"          #'consult-eglot-symbols
-      "C-M-;"            #'lsp-ui-peek--goto-xref-other-window
-      "C-M-:"            #'lsp-rust-analyzer-open-external-docs
-      "C-M-k"            #'kill-current-buffer
-      "M-RET"            (λ! (if toggle-window-maximization ;; C-M-m, for some reason registered as M-RET
-                                 (progn (evil-resize-window (- (frame-width) 1) t)
-                                        (evil-resize-window (- (frame-width) 1) nil))
-                               (balance-windows))
-                             (setq toggle-window-maximization (not toggle-window-maximization)))
-
-      "C-M-,"            #'previous-buffer
-      "C-M-/"            #'next-buffer
+      "C-M-j"     #'+default/diagnostics
+      "C-M-S-j"   #'eglot-code-actions
+      "C-M-l"     #'+lookup/definition
+      "C-M-S-l"   #'lsp-find-parent-module
+      "C-M-u"     #'+lookup/references
+      "C-M-S-u"   #'lsp-find-related-rust-tests
+      "C-M-y"     #'consult-imenu
+      "C-M-S-y"   #'consult-imenu-multi
+      "C-M-s-y"   #'consult-eglot-symbols
+      "C-M-;"     #'lsp-ui-peek--goto-xref-other-window
+      "C-M-:"     #'lsp-rust-analyzer-open-external-docs
+      "C-M-k"     #'kill-current-buffer
+      "M-RET"     (λ! (if toggle-window-maximization ;; C-M-m, for some reason registered as M-RET
+                          (progn (evil-resize-window (- (frame-width) 1) t)
+                                 (evil-resize-window (- (frame-width) 1) nil))
+                        (balance-windows))
+                      (setq toggle-window-maximization (not toggle-window-maximization)))
+      "C-M-,"     #'previous-buffer
+      "C-M-/"     #'next-buffer
+      :map dirvish-mode-map :localleader
+      :desc "File attributes"      "c" #'dirvish-chxxx-menu
+      :desc "Emerge menu"          "e" #'dirvish-emerge-menu
+      :desc "fd switches"          "f" #'dirvish-fd-switches-menu
+      :desc "File information"     "i" #'dirvish-file-info-menu
+      :desc "History menu"         "h" #'dirvish-history-menu
+      :desc "ls switches"          "l" #'dirvish-ls-switches-menu
+      :desc "Mark commands"        "m" #'dirvish-mark-menu
+      :desc "Rename files"         "r" #'dirvish-renaming-menu
+      :desc "Subtree commands"     "t" #'dirvish-subtree-menu
+      :desc "Setup menu"           "s" #'dirvish-setup-menu
+      :desc "rsync switches"       "R" #'dirvish-rsync-switches-menu
+      :desc "Version control"      "v" #'dirvish-vc-menu
+      :desc "Yank commands"        "y" #'dirvish-yank-menu
       :map smerge-mode-map :nv
-      "n"             #'smerge-prev
-      "e"             #'smerge-keep-lower
-      "i"             #'smerge-keep-upper
-      "o"             #'smerge-next
+      "n"         #'smerge-prev
+      "e"         #'smerge-keep-lower
+      "i"         #'smerge-keep-upper
+      "o"         #'smerge-next
       :map (python-mode-map python-ts-mode-map)
-      "C-c C-c" #'uv-command-prefix
-      "C-c C-w" #'python-shell-send-buffer
+      "C-c C-c"   #'uv-command-prefix
+      "C-c C-w"   #'python-shell-send-buffer
       :map uv-command-map
       :desc "Repeat uv run"        "C-c" #'uv-repeat-run
       :desc "Run pytest"           "C-t" #'python-pytest
@@ -95,7 +109,7 @@
       :desc "Sync environment"     "C-s" #'uv-sync
       :desc "Create venv"          "C-v" #'uv-venv
       :desc "Run command"          "C-r" #'uv-run
-      ;; dumb fixes I made on macOS, may be OS dependent
+      ;; fixes, may be macOS dependent
       :nv "C-M-d"        #'+multiple-cursors/evil-mc-toggle-cursor-here ;
       :i  "<end>"        #'move-end-of-line
       :i  "<kp-end>"     #'move-end-of-line
@@ -106,11 +120,11 @@
 (use-package! ghostel :defer t :ensure t)
 (use-package! popterm
   :config
+  (popterm-global-mode 1)
   (setq popterm-backend        'ghostel
         popterm-display-method 'window  ; or 'posframe, 'fullscreen
         popterm-scope          'project   ; or 'frame, 'dedicated, nil
-        popterm-auto-cd        t)
-  (popterm-global-mode 1))
+        popterm-auto-cd        t))
 
 
 (use-package! agent-shell :commands (agent-shell))
@@ -124,7 +138,7 @@
                         :key ""
                         :endpoint "/v1/chat/completions"
                         :stream t
-                        :models '("Qwen3.6-35B-A3B-MXFP8-CRACK-MTP", "Qwen3.6-27B-oQ4-fp16-mtp"))))
+                        :models '(Qwen3.6-35B-A3B-MXFP8-CRACK-MTP Qwen3.6-27B-oQ4-fp16-mtp))))
 (use-package! minuet
   :defer t
   :init
@@ -142,9 +156,8 @@
   (plist-put minuet-openai-compatible-options :model "Qwen3.6-35B-A3B-MXFP8-CRACK-MTP")
   ;; (plist-put minuet-openai-compatible-options :model "sweep-next-edit-v2-7B-mlx-8Bit")
   (plist-put minuet-openai-compatible-options :name "omlx-qwen")
-  (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 400)
+  (minuet-set-optional-options minuet-openai-compatible-options :max_tokens 128)
   (minuet-set-optional-options minuet-openai-compatible-options :chat_template_kwargs `(:enable_thinking :false)))
-
 
 (use-package! rustic
   :config
@@ -313,7 +326,7 @@
         eldoc-box-max-pixel-height 400))
 
 
-(use-package! exercism :defer t)
+(use-package! exercism)
 (use-package! leetcode
   :commands (leetcode-list-all
              leetcode-show
@@ -321,6 +334,33 @@
              leetcode-submit
              leetcode-test
              leetcode-interactive))
+;; ---------------------------------------------------------------------------
+;; Difftastic
+;; ---------------------------------------------------------------------------
+
+(use-package! difftastic
+  :commands (difftastic-magit-diff-buffer-file
+             difftastic-magit-diff
+             difftastic-magit-show
+             difftastic-files
+             difftastic-buffers)
+  :config
+  ;; Optional Magit integration.
+  (difftastic-bindings-mode 1))
+
+;; ---------------------------------------------------------------------------
+;; Experimental editable full-file inline diff
+;; ---------------------------------------------------------------------------
+
+(use-package! inline-diff)
+
+(map! :leader
+      (:prefix ("g" . "git")
+       :desc "Toggle full inline diff"
+       "i" #'my-inline-diff
+
+       :desc "Difftastic current file"
+       "D" #'difftastic-magit-diff-buffer-file))
 ;; (setq! +lookup--last-provider '((fundamental-mode . "Google") (org-mode . "Google") (rust-mode . "Google") (rustic-mode . "Google")))
 ;; (custom-set-variables
 ;; '(ns-control-modifier 'meta)

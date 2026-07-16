@@ -27,7 +27,8 @@
 (package! eca :recipe (:host github :repo "editor-code-assistant/eca-emacs" :files ("*.el")) :pin "f04a58052576789f1807112cb7494478bf45a412")
 (package! minuet :recipe (:host github :repo "milanglacier/minuet-ai.el" :files ("*.el")) :pin "13fb314a795951b9190c53c59ef281abf7a2cb4f")
 (package! typst-ts-mode :recipe (:host sourcehut :repo "meow_king/typst-ts-mode") :pin "1367003e2ad55a2f6f9e43178584683028ab56e9")
-
+(package! inline-diff :recipe (:type git :repo "https://gist.github.com/codecoll/84245ad37efd947a4d8e3fd494a00091.git" :files ("inline-diff.el")) :pin "d79c02537d2e0e8c57a91f3239424bcdee83845a")
+(package! difftastic :recipe (:host github :repo "pkryger/difftastic.el") :pin "7db20929cac31687a529943c3d8d5b44fd8d69e2")
 ;; (package! activity-watch-mode)
 ;; (package! blamer)
 ;; (package! burly)

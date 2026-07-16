@@ -1,13 +1,13 @@
 { lib, pkgs, ... }:
 let
-  omniwmVersion = "v0.5.2.1";
+  omniwmVersion = "v0.5.6";
 
   # NUR's zip extraction leaves AppleDouble files that invalidate the signed app.
   omniwm = pkgs.nur.repos.doomhammer.omniwm.overrideAttrs (old: {
     version = omniwmVersion;
     src = pkgs.fetchurl {
       url = "https://github.com/BarutSRB/OmniWM/releases/download/${omniwmVersion}/OmniWM-${omniwmVersion}.zip";
-      hash = "sha256-V0Zj6P94iAou3rYpA+CCz1Vq8Ko3cETuzFtveGD4idc=";
+      hash = "sha256-GjNl1iXCEjjGMU17F3V3Je/c3fTiwjFHwJzzJJcDo6U=";
     };
 
     postInstall = (old.postInstall or "") + ''

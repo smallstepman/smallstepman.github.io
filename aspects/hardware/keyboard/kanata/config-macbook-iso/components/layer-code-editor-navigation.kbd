@@ -12,11 +12,15 @@
   spc-kill C-A-0
 
   ;; Emacs shortcuts
+  close-buffer C-q
+  close-other-buffer M-q
+  close (tap-dance 190 (@close-buffer @close-other-buffer))
+
   fn-up C-M-w
   class-up C-M-S-w
-  lsp-up (tap-dance 190 (@fn-up @class-up))
-  filesave C-M-f
+  win-other (tap-dance 190 (@fn-up @class-up))
   goto-char C-M-S-f
+  filesave C-M-f
   goto/save (tap-dance 190 (@goto-char @filesave))
   pg-up-ow C-M-p
   magit C-M-g
@@ -64,7 +68,7 @@
    XX        @space1  @space2    @space3    @space4     @space5  @space6  @space7  _        _        _        @spc-prev @spc-next @spc-kill
 
 ;; tab        q        w          e          r           t        y        u        i        o        p         [         ]         ret
-   XX         XX       @win-other @goto/save @pg-up-ow   @magit   _        _        @lsp-err @lsp-def @lsp-ref  @lsp-sym  @lsp-open _
+   XX         @close   @win-other @goto/save @pg-up-ow   @magit   _        _        @lsp-err @lsp-def @lsp-ref  @lsp-sym  @lsp-open _
 
 ;; caps        a        s          d          f           g        h        j        k        l        ;         '           \
    _           XX       @lsp-dn    _          @pg-dn-ow   @mcursor _        _        _        _        _         _           _

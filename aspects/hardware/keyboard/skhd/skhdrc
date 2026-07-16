@@ -1,11 +1,12 @@
 .shell "/bin/bash"
-.blacklist [ "leagueoflegends" "vmware fusion" ]
-.define no_popups [ ".emacs-30.2-wrapped" "Code" ]
+.blacklist [ "vmware fusion" "league of legends" ]
+.define editors [ ".emacs-30.2-wrapped" "Code" ]
 .define system_keykind : osascript -e 'tell application "System Events" to keystroke "{{1}}" using {{2}}'
 .define wm             : omniwmctl command {{1}}
 .define yny            : time /Users/m/.cargo/bin/yny --config /Users/m/.config/yeet-and-yoink/config.toml --log-file=/tmp/yeetnyoink/debug.log --profile --log-append {{1}} 
 # https://cloud.githubusercontent.com/assets/6175959/18551554/35137fc6-7b59-11e6-81a0-bef19ed5db5e.png
 .alias $CS    ctrl + shift
+.alias $hyper ctrl + cmd + alt + shift
 .alias $semi  0x29
 .alias $slash 0x2C
 .alias $grave 0x32
@@ -15,12 +16,13 @@
 .alias $comma 0x2B 
 .alias $dot   0x2F
 
+$hyper - v    : @wm("toggle-quake-terminal")
 alt + shift + cmd - v [  
-  @no_popups ~
+  @editors    ~
   *           : @wm("toggle-quake-terminal")
 ]
 ctrl - x [  
-  @no_popups ~
+  @editors    ~
   *           : shortcuts run OpenSpotlight 
 ]
 cmd - $minus [
@@ -31,7 +33,8 @@ cmd - $equal [
   "notes"     : @system_keykind(",", "{command down, shift down}")
   * ~ 
 ]
-cmd - b  [  
+cmd - b  [
+  @editors    ~
   "calendar"  : osascript \
                 -e 'tell application "System Events"' \
                 -e '  tell process "Calendar"' \
@@ -42,9 +45,10 @@ cmd - b  [
                 -e '    end if' \
                 -e '  end tell' \
                 -e 'end tell'
-  "reminders" : @system_keykind("s", "{command down, option down}")
   "safari"    : @system_keykind("l", "{command down, shift down}")
-  *           : @wm("toggle-workspace-bar && omniwmctl command toggle-hidden-bar")
+  "spotify"   : @system_keykind("l", "{shift down, option down}")
+  "launchcontrol" : @system_keykind("b", "{command down, option down}")
+  *           : @system_keykind("s", "{command down, control down}")
 ]
 
 ctrl - l      : @yny("move west") 
@@ -52,15 +56,19 @@ ctrl - u      : @yny("move south")
 ctrl - y      : @yny("move north") 
 ctrl - $semi  : @yny("move east") 
 ctrl - n      : @yny("focus west") 
-ctrl - e      : @yny("focus south") 
+ctrl - e      : @yny("focus south")
 ctrl - i      : @yny("focus north") 
-ctrl - o      : @yny("focus east") 
+ctrl - o      : @yny("focus east")
+ctrl - k      : @yny("resize west")
+ctrl - m      : @yny("resize south")
+ctrl - $comma : @yny("resize north")
+ctrl - $dot   : @yny("resize east")
 
 ctrl - f      : @wm("toggle-column-full-width")
 $CS - f       : @wm("toggle-native-fullscreen")
 ctrl - t      : @wm("toggle-column-tabbed")
-ctrl - $slash : @wm("scratchpad toggle")
 ctrl - $grave : @wm("toggle-overview")
+ctrl - $slash : @wm("scratchpad toggle")
 $CS - $slash  : @wm("scratchpad assign")
 
 f1            : @wm("switch-workspace 1")
@@ -73,20 +81,23 @@ shift - f2    : @wm("move-to-workspace 2")
 shift - f3    : @wm("move-to-workspace 3")
 shift - f4    : @wm("move-to-workspace 4")
 shift - f5    : @wm("move-to-workspace 5")
- 
+# : @wm("omniwmctl command focus-column 1")
+# : @wm("omniwmctl command focus-column 2")
+# : @wm("omniwmctl command focus-column 3")
+# : @wm("omniwmctl command focus-column 4")
+# : @wm("omniwmctl command focus-column 5")
+
 $CS - j       : @wm("move-column left")
 $CS - l       : @wm("move left")
 $CS - u       : @wm("move down")
 $CS - y       : @wm("move up")
 $CS - $semi   : @wm("move right")
+$CS - return  : @wm("move-column right")
 
 $CS - i       : @wm("move-column-to-workspace up")
 $CS - e       : @wm("move-column-to-workspace down")
 
-$CS - return  : @wm("move-column right")
 
 $CS - k       : @wm("set-window-height -10%") 
-$CS - $comma  : @wm("set-window-height +10%")
-
 alt - $dot    : @wm("cycle-column-width forward")
 alt - $comma  : @wm("cycle-column-width backward")

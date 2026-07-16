@@ -156,6 +156,7 @@
           pkgs.fnm 
           pkgs.fzf
           pkgs.glowm
+          pkgs.hwatch
           pkgs.jq 
           pkgs.mdfried 
           pkgs.rbw 

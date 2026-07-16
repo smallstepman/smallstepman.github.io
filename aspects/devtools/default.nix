@@ -2,10 +2,10 @@
   den.aspects.devtools.homeManager = { pkgs, lib, config, ... }: {
     home.packages = with pkgs; [
       # LLM 
-      llm-agents.omp llm-agents.pi llm-agents.codex llm-agents.skills herdr
+      llm-agents.omp llm-agents.pi llm-agents.codex llm-agents.codex-acp llm-agents.skills llm-agents.workmux
       # Dev Tools
       devenv just gnumake pixi cmake 
-      harlequin dbeaver-bin d2 adrs bws parallel ninja exercism tinymist
+      harlequin dbeaver-bin d2 adrs bws parallel ninja exercism tinymist difftastic
       # DevOps & Cloud
       fluxcd kubecm kubecolor kubectl kubernetes-helm terragrunt s3fs k9s lazydocker
       # Testing

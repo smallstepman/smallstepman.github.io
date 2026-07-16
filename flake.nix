@@ -55,7 +55,61 @@
   let
     overlays = [
       inputs.nur.overlays.default
-      inputs.llm-agents.overlays.default
+      inputs.llm-agents.overlays.shared-nixpkgs
+      (final: prev:
+        let
+          system = prev.stdenv.hostPlatform.system;
+          rolldownBinding = {
+            aarch64-darwin = "@rolldown/binding-darwin-arm64";
+            x86_64-darwin = "@rolldown/binding-darwin-x64";
+            aarch64-linux = "@rolldown/binding-linux-arm64-gnu";
+            x86_64-linux = "@rolldown/binding-linux-x64-gnu";
+          }.${system} or null;
+          patchCodexAcpLock = ''
+            ${prev.nodejs}/bin/node <<'NODE'
+            const fs = require("fs");
+            const lockPath = "package-lock.json";
+            const keep = process.env.ROLLDOWN_BINDING;
+            const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+            const rolldown = lock.packages["node_modules/rolldown"];
+
+            if (!rolldown?.optionalDependencies?.[keep]) {
+              throw new Error("missing expected rolldown binding " + keep);
+            }
+
+            for (const name of Object.keys(rolldown.optionalDependencies)) {
+              if (name.startsWith("@rolldown/binding-") && name !== keep) {
+                delete rolldown.optionalDependencies[name];
+              }
+            }
+
+            for (const path of Object.keys(lock.packages)) {
+              if (path.startsWith("node_modules/@rolldown/binding-") && path !== "node_modules/" + keep) {
+                delete lock.packages[path];
+              }
+            }
+
+            fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
+            NODE
+          '';
+        in
+        prev.lib.optionalAttrs (rolldownBinding != null) {
+          llm-agents = prev.llm-agents // {
+            codex-acp = prev.llm-agents.codex-acp.overrideAttrs (old: {
+              postPatch = (old.postPatch or "") + patchCodexAcpLock;
+              npmDepsHash = "sha256-YD6e+M5EchYBFqF+d1nPD0e4tfooDwCm8I6v5yTs8tY=";
+              npmDeps = prev.fetchNpmDeps {
+                inherit (old) src;
+                name = "${old.pname}-${old.version}-npm-deps";
+                hash = "sha256-YD6e+M5EchYBFqF+d1nPD0e4tfooDwCm8I6v5yTs8tY=";
+                fetcherVersion = old.npmDepsFetcherVersion;
+                postPatch = (old.postPatch or "") + patchCodexAcpLock;
+                ROLLDOWN_BINDING = rolldownBinding;
+              };
+              ROLLDOWN_BINDING = rolldownBinding;
+            });
+          };
+        })
       inputs.herdr.overlays.default
       inputs.rust-overlay.overlays.default
       inputs.niri.overlays.niri

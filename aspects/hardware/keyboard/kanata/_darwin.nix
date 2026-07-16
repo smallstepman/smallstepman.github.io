@@ -6,21 +6,8 @@
   '';
 
   home-manager.users.m = { config, lib, pkgs, ... }: let
-    kanata = pkgs.kanata.overrideAttrs (finalAttrs: _: rec {
-      version = "1.12.0";
-      src = pkgs.fetchFromGitHub {
-        owner = "jtroo";
-        repo = "kanata";
-        rev = "v${version}";
-        hash = "sha256-WjdmjgEMoo3QNqT4yWxaKOkfuRLdNg4Im+V1Hy5vWgY=";
-      };
-      cargoHash = "sha256-4UBN4I35ZPPPL68LxxPna9Fs9sATCiwoTbWgHYwqOjs=";
-      cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-        inherit src;
-        name = "${finalAttrs.pname}-${version}-vendor";
-        hash = cargoHash;
-      };
-      postPatch = ''
+    kanata = inputs.nixpkgs-master.legacyPackages.${pkgs.stdenv.hostPlatform.system}.kanata.overrideAttrs (old: {
+      postPatch = (old.postPatch or "") + ''
         substituteInPlace src/oskbd/macos.rs \
           --replace-fail "        ensure_accessibility_permission()?;" \
             "        // AXIsProcessTrusted reports the launchd/sudo responsible process for CLI services.
@@ -62,9 +49,15 @@
           kanata_executable = "${config.home.profileDirectory}/bin/kanata";
         };
 
-        presets."Default Preset" = {
-          kanata_config = "${config.xdg.configHome}/kanata/config.kbd";
-          autorun = true;
+        presets = {
+          "Default Preset" = {
+            kanata_config = "${config.xdg.configHome}/kanata/config.kbd";
+            autorun = true;
+          };
+          "Gaming Preset" = {
+            kanata_config = "${config.xdg.configHome}/kanata/gaming.kbd";
+            autorun = false;
+          };
         };
       };
     };
