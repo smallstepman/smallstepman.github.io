@@ -44,19 +44,49 @@
       fileSystems."/nixos-config" = {
         fsType = "fuse./run/current-system/sw/bin/vmhgfs-fuse";
         device = ".host:/nixos-config";
-        options = [ "umask=22" "uid=1000" "gid=1000" "allow_other" "auto_unmount" "defaults" ];
+        options = [
+          "umask=22"
+          "uid=1000"
+          "gid=1000"
+          "allow_other"
+          "auto_unmount"
+          "defaults"
+          "nofail"
+          "x-systemd.automount"
+          "x-systemd.mount-timeout=5s"
+        ];
       };
 
       fileSystems."/nixos-generated" = {
         fsType = "fuse./run/current-system/sw/bin/vmhgfs-fuse";
         device = ".host:/nixos-generated";
-        options = [ "umask=22" "uid=1000" "gid=1000" "allow_other" "auto_unmount" "defaults" ];
+        options = [
+          "umask=22"
+          "uid=1000"
+          "gid=1000"
+          "allow_other"
+          "auto_unmount"
+          "defaults"
+          "nofail"
+          "x-systemd.automount"
+          "x-systemd.mount-timeout=5s"
+        ];
       };
 
       fileSystems."/Users/m/Projects" = {
         fsType = "fuse./run/current-system/sw/bin/vmhgfs-fuse";
         device = ".host:/Projects";
-        options = [ "umask=22" "uid=1000" "gid=1000" "allow_other" "auto_unmount" "defaults" ];
+        options = [
+          "umask=22"
+          "uid=1000"
+          "gid=1000"
+          "allow_other"
+          "auto_unmount"
+          "defaults"
+          "nofail"
+          "x-systemd.automount"
+          "x-systemd.mount-timeout=5s"
+        ];
       };
 
       networking.interfaces.enp2s0.useDHCP = true;

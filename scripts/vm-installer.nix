@@ -34,10 +34,11 @@ let
     lib.removeSuffix "\n" (builtins.readFile "${configDir}/aspects/network/ssh/m.pub");
 
   installer = f.inputs.unattended-installer.lib.diskoInstallerWrapper target {
-    # The source configuration is embedded, but the target closure is built on
-    # the fresh Linux VM. This keeps the ISO small enough to build on the
-    # existing aarch64-linux VM while remaining independent of a host share.
-    flake = "${configSource}#${targetName}";
+    # A real installer carries the prebuilt target closure. Installation then
+    # copies it directly to the target disk instead of compiling a large desktop
+    # closure into the live ISO's RAM-backed writable store. The secret-free
+    # demo remains small and exercises the flake-based build path.
+    flake = if hasAgeKey then null else "${configSource}#${targetName}";
     waitForNetwork = true;
     nixosInstallFlags = "--no-channel-copy --no-root-passwd";
     showProgress = true;
@@ -50,12 +51,36 @@ let
 
     config = {
       networking.hostName = "nixos-unattended-installer";
-      networking.useDHCP = lib.mkForce true;
+      networking.useDHCP = lib.mkForce false;
+      networking.networkmanager.enable = true;
+      services.resolved = {
+        enable = true;
+        settings.Resolve.FallbackDNS = [ "1.1.1.1" "8.8.8.8" ];
+      };
 
-      # The complete desktop target is built after boot. Give the live ISO's
-      # writable Nix-store overlay enough headroom for that closure.
+      # network-online.target is passive: making the installer wanted by that
+      # target does not cause either one to start. Pull it from multi-user.target
+      # and wait for the normal NetworkManager online synchronization instead.
+      systemd.services.unattended-installer = {
+        wantedBy = lib.mkForce [ "multi-user.target" ];
+        wants = [ "network-online.target" ];
+        after = [ "network-online.target" ];
+        path = [ pkgs.git ];
+        unitConfig = {
+          StartLimitIntervalSec = "30min";
+          StartLimitBurst = 3;
+        };
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = "15s";
+        };
+      };
+
+      # Generous fallback headroom for installer bookkeeping and for the small
+      # secret-free demo's build-on-target path. The real image does not depend
+      # on this capacity because its target closure is prebuilt into the ISO.
       fileSystems."/nix/.rw-store".options =
-        lib.mkForce [ "mode=0755" "size=30G" ];
+        lib.mkForce [ "mode=0755" "size=48G" ];
 
       virtualisation.vmware.guest.enable = true;
 

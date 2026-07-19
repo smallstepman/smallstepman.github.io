@@ -1,0 +1,221 @@
+# Native Noctalia v5 configuration. Runtime changes made through Settings are
+# written to ~/.local/state/noctalia/settings.toml and override these defaults.
+
+[shell]
+ui_scale = 1.0
+corner_radius_scale = 1.0
+avatar_path = "~/.face"
+offline_mode = false
+telemetry_enabled = false
+password_style = "default"
+clipboard_enabled = true
+clipboard_auto_paste = "off"
+
+[shell.animation]
+enabled = false
+speed = 2.0
+
+[shell.shadow]
+direction = "down_left"
+alpha = 0.0
+
+[shell.panel]
+transparency_mode = "soft"
+borders = false
+shadow = false
+launcher_placement = "centered"
+clipboard_placement = "centered"
+control_center_placement = "attached"
+wallpaper_placement = "attached"
+session_placement = "centered"
+
+[wallpaper]
+enabled = true
+fill_mode = "crop"
+fill_color = "#000000"
+transition = ["fade"]
+transition_duration = 500
+edge_smoothness = 1.0
+transition_on_startup = false
+directory = "~/Pictures/Wallpapers"
+
+[wallpaper.automation]
+enabled = false
+interval_seconds = 300
+order = "random"
+recursive = true
+
+[theme]
+mode = "auto"
+source = "wallpaper"
+builtin = "Noctalia"
+wallpaper_scheme = "vibrant"
+
+[theme.templates]
+enable_builtin_templates = true
+builtin_ids = ["btop", "ghostty", "wezterm"]
+enable_community_templates = false
+community_ids = []
+
+[backdrop]
+enabled = false
+blur_intensity = 0.0
+tint_intensity = 0.0
+
+[lockscreen]
+enabled = true
+fingerprint = false
+blurred_desktop = false
+blur_intensity = 0.0
+tint_intensity = 0.0
+
+[notification]
+enable_daemon = true
+position = "top_right"
+layer = "overlay"
+background_opacity = 1.0
+
+[osd]
+position = "top_right"
+orientation = "horizontal"
+background_opacity = 1.0
+
+[audio]
+enable_overdrive = false
+enable_sounds = false
+
+[brightness]
+enable_ddcutil = false
+
+[nightlight]
+enabled = false
+force = false
+temperature_day = 6500
+temperature_night = 4000
+
+[location]
+auto_locate = false
+address = "Warsaw, PL"
+
+[weather]
+enabled = true
+unit = "celsius"
+effects = true
+
+[system.monitor]
+enabled = true
+
+[dock]
+enabled = false
+
+[desktop_widgets]
+enabled = false
+
+[idle]
+pre_action_fade_seconds = 5.0
+
+[idle.behavior.screen-off]
+timeout = 600
+command = "noctalia:dpms-off"
+resume_command = "noctalia:dpms-on"
+enabled = false
+
+[idle.behavior.lock]
+timeout = 660
+command = "noctalia:session lock"
+enabled = false
+
+[idle.behavior.suspend]
+timeout = 1800
+command = "systemctl suspend"
+enabled = false
+
+[bar]
+order = ["main"]
+
+[bar.main]
+position = "right"
+enabled = true
+auto_hide = false
+reserve_space = false
+layer = "top"
+thickness = 48
+background_opacity = 0.93
+radius = 12
+margin_ends = 9
+margin_edge = 12
+padding = 2
+widget_spacing = 6
+scale = 1.0
+shadow = false
+capsule = true
+capsule_opacity = 1.0
+start = ["control-center", "workspaces"]
+center = []
+end = ["tray", "cpu", "memory", "wallpaper", "wallhaven"]
+
+[widget.workspaces]
+type = "workspaces"
+display = "id"
+max_label_chars = 2
+hide_when_empty = false
+
+[widget.tray]
+type = "tray"
+drawer = true
+hidden = []
+pinned = []
+
+[widget.cpu]
+type = "sysmon"
+stat = "cpu_usage"
+display = "text"
+show_label = true
+
+[widget.memory]
+type = "sysmon"
+stat = "ram_used"
+display = "text"
+show_label = true
+
+[widget.wallpaper]
+type = "wallpaper"
+
+[widget.wallhaven]
+type = "noctalia/wallhaven:wallhaven"
+
+[[control_center.shortcuts]]
+type = "power_profile"
+
+[[control_center.shortcuts]]
+type = "wifi"
+
+[[control_center.shortcuts]]
+type = "notification"
+
+[[control_center.shortcuts]]
+type = "caffeine"
+
+[[control_center.shortcuts]]
+type = "wallpaper"
+
+[[control_center.shortcuts]]
+type = "dark_mode"
+
+[hooks]
+wallpaper_changed = "noctalia-theme-reload"
+colors_changed = "noctalia-theme-reload"
+theme_mode_changed = "noctalia-theme-reload"
+
+[plugins]
+enabled = ["noctalia/wallhaven"]
+
+[[plugins.source]]
+name = "official"
+kind = "git"
+location = "https://github.com/noctalia-dev/official-plugins"
+auto_update = false
+enabled = true
+
+[plugin_settings."noctalia/wallhaven"]
+download_dir = "~/Pictures/Wallpapers"

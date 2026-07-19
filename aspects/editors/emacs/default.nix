@@ -1,9 +1,9 @@
 { inputs, ... }: {
   den.aspects.editors.emacs = {
-    homeManager = { lib, pkgs, ... }: let
+    homeManager = { lib, pkgs, config, ... }: let
       ghostelVersion = "0.38.0";
       emacsDaemonPath = [
-        "/etc/profiles/per-user/m/bin"
+        "/etc/profiles/per-user/${config.home.username}/bin"
         "/run/current-system/sw/bin"
         "/nix/var/nix/profiles/default/bin"
         "/opt/homebrew/bin"
@@ -21,23 +21,43 @@
         hash = "sha256-om7zQadmKwfL59ydItJN9UfeAz2mw2OoFxOg6fcPY/s=";
       };
 
+      ghostelModuleAsset = {
+        aarch64-darwin = {
+          file = "ghostel-module-aarch64-macos.dylib";
+          hash = "sha256-f193xQ+VruO3aM+u9fxB4+iaRAWIO2lsUlStXMz3Gkc=";
+        };
+        aarch64-linux = {
+          file = "ghostel-module-aarch64-linux.so";
+          hash = "sha256-nx2ZUaf5SxLEZmdClLx3HRr6SBBdxBEEdr7zLAU6p/g=";
+        };
+        x86_64-darwin = {
+          file = "ghostel-module-x86_64-macos.dylib";
+          hash = "sha256-HVI/yTybZoPpVbV5mN9XjQKtApvFj3rOnblRq9Cs13k=";
+        };
+        x86_64-linux = {
+          file = "ghostel-module-x86_64-linux.so";
+          hash = "sha256-a/67Ad/J3EqP4CNaq3jIw+k6+gOmf1nSPwFxon0rftc=";
+        };
+      }.${pkgs.stdenv.hostPlatform.system} or
+        (throw "Ghostel ${ghostelVersion}: no native module for ${pkgs.stdenv.hostPlatform.system}");
+
+      libExt = pkgs.stdenv.hostPlatform.extensions.sharedLibrary;
+
       ghostelModule = pkgs.stdenv.mkDerivation {
         pname = "ghostel-module";
         version = ghostelVersion;
         src = pkgs.fetchurl {
-          url = "https://github.com/dakra/ghostel/releases/download/v${ghostelVersion}/ghostel-module-aarch64-macos.dylib";
-          hash = "sha256-f193xQ+VruO3aM+u9fxB4+iaRAWIO2lsUlStXMz3Gkc=";
+          url = "https://github.com/dakra/ghostel/releases/download/v${ghostelVersion}/${ghostelModuleAsset.file}";
+          inherit (ghostelModuleAsset) hash;
         };
         dontUnpack = true;
         installPhase = ''
           mkdir -p $out/lib
-          cp $src $out/lib/libghostel-module.dylib
-          chmod +x $out/lib/libghostel-module.dylib
+          cp $src $out/lib/libghostel-module${libExt}
+          chmod +x $out/lib/libghostel-module${libExt}
           echo "${ghostelVersion}" > $out/ghostel-module.version
         '';
       };
-
-      libExt = pkgs.stdenv.hostPlatform.extensions.sharedLibrary;
 
       ghostel = (pkgs.emacsPackagesFor pkgs.emacs-pgtk).melpaBuild {
         pname = "ghostel";

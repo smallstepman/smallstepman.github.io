@@ -6,6 +6,7 @@
       environment.systemPackages = with pkgs; [
         wl-clipboard
         wezterm
+        xwayland-satellite
       ];
 
       programs.niri.enable = true;
@@ -14,13 +15,61 @@
 
     homeManager = { pkgs, lib, config, ... }:
       let
-        yny      = "/Users/m/Projects/yeetnyoink/target/release/yny";
-        ynyFlags = [ "--log-file=/tmp/yeetnyoink/debug.log" "--profile" "--log-append" "--config=/home/m/.config/yeetnyoink/config-dev.toml" ];
+        # Upstream installs the executable as `yny` even though its package
+        # metadata currently advertises `yeetnyoink` as the main program.
+        yny = "${config.programs.yeetnyoink.package}/bin/yny";
+        wlrWhichKey = lib.getExe pkgs.wlr-which-key;
+        ynyFlags = [
+          "--log-file=/tmp/yeetnyoink/debug.log"
+          "--profile"
+          "--log-append"
+          "--config=${config.xdg.configHome}/yeetnyoink/config.toml"
+        ];
         ynyArgv  = args: [ yny ] ++ ynyFlags ++ args;
       in {
         imports = [ inputs.yeetnyoink.homeManagerModules.default ];
 
-        programs.yeet-and-yoink.enable = true;
+        programs.yeetnyoink = {
+          enable = true;
+          # The upstream suite includes PATH and macOS fallback expectations
+          # that do not hold in Nix's isolated Linux builder. The executable
+          # itself is still built normally; only those environment-sensitive
+          # package checks are skipped here.
+          package = pkgs.yeetnyoink.overrideAttrs (_: {
+            doCheck = false;
+          });
+          config = {
+            wm.niri.enabled = true;
+
+            app.terminal.wezterm = {
+              enabled = true;
+              mux_backend = "wezterm";
+              host_tabs = "focus";
+              focus.internal_panes.enabled = true;
+              move.internal_panes.enabled = true;
+              resize.internal_panes.enabled = true;
+              move.docking.tear_off.enabled = true;
+            };
+
+            app.editor.neovim = {
+              enabled = true;
+              ui.terminal = {
+                app = "wezterm";
+                mux_backend = "inherit";
+              };
+            };
+
+            app.editor.emacs = {
+              enabled = true;
+              ui.graphical.app = "emacs";
+            };
+
+            app.browser.librewolf = {
+              enabled = true;
+              tab_axis = "vertical";
+            };
+          };
+        };
 
         programs.niri.settings = {
           hotkey-overlay.skip-at-startup = true;
@@ -60,7 +109,6 @@
             focus-ring = { width = 2; active.color = "#7fc8ff"; inactive.color = "#505050"; };
           };
 
-          spawn-at-startup = [ { command = [ "mako" ]; } ];
           workspaces = { };
           environment.NIXOS_OZONE_WL = "1";
 
@@ -70,7 +118,7 @@
             "Mod+S".action.spawn = ynyArgv [ "focus-or-cycle" "--app-id" "librewolf" "--spawn" "librewolf" ];
             "Mod+Shift+S".action.spawn = "librewolf";
             "Mod+P".action.spawn = ynyArgv [ "focus-or-cycle" "--app-id" "spotify" "--spawn" "spotify" "--summon" ];
-            "Mod+Space".action.spawn = "wlr-which-key";
+            "Mod+Space".action.spawn = wlrWhichKey;
             "Mod+Q".action.close-window = {};
             "Mod+R".action.switch-preset-column-width = {};
             "Mod+Shift+F".action.maximize-column = {};

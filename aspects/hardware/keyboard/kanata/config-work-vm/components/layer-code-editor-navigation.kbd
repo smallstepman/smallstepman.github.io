@@ -1,0 +1,78 @@
+(defalias
+  ;; space is app-specific notion, in emacs its workspaces, in browser its tabs, etc
+  space1 C-A-1
+  space2 C-A-2
+  space3 C-A-3
+  space4 C-A-4
+  space5 C-A-5
+  space6 C-A-6
+  space7 C-A-7
+  spc-prev C-A-8
+  spc-next C-A-9
+  spc-kill C-A-0
+
+  ;; Emacs shortcuts
+  close-buffer C-q
+  close-other-buffer M-q
+  close (tap-dance 190 (@close-buffer @close-other-buffer))
+
+  fn-up C-M-w
+  class-up C-M-S-w
+  win-other (tap-dance 190 (@fn-up @class-up))
+  goto-char C-M-S-f
+  filesave C-M-f
+  goto/save (tap-dance 190 (@goto-char @filesave))
+  pg-up-ow C-M-p
+  magit C-M-g
+
+  fn-dn C-M-r
+  class-dn C-M-S-r
+  lsp-dn (tap-dance 190 (@fn-dn @class-dn))
+  pg-dn-ow C-M-t
+  mcursor C-M-d
+
+  Mx C-x
+  clock-in C-M-c
+  lsp-ext-v C-M-v
+  yazi C-M-b
+
+  lsp-diagnostic-popup C-M-j
+  lsp-code-actions C-M-S-j
+  lsp-show-definition C-M-l
+  lsp-goto-parent-module C-M-S-l
+  lsp-show-reference C-M-u
+  lsp-rust-related-tests C-M-S-u
+  lsp-symbols-in-buffer   C-M-y
+  lsp-symbols-in-buffers  C-M-S-y
+  lsp-symbols-in-project  C-M-A-y
+  lsp-open-in-other-window C-M-;
+  lsp-rust-external-doc C-M-S-;
+  lsp-err (tap-dance 300 (@lsp-diagnostic-popup @lsp-code-actions))
+  lsp-def (tap-dance 300 (@lsp-show-definition @lsp-goto-parent-module))
+  lsp-ref (tap-dance 300 (@lsp-show-reference @lsp-rust-related-tests))
+  lsp-sym (tap-dance 300 (@lsp-symbols-in-buffer @lsp-symbols-in-buffers @lsp-symbols-in-project))
+  lsp-open (tap-dance 300 (@lsp-open-in-other-window @lsp-rust-external-doc))
+
+  bkill C-M-k
+  bmax C-M-m
+  bnext C-M-,
+  bprev C-M-/)
+
+(deflayer code-navigation
+;; esc               f1         f2         f3          f4       f5       f6       f7       f8       f9       f10       f11       f12       home end ins del
+   XX                XX         XX         XX          XX       XX       XX       XX       XX       XX       XX        XX        XX        _    _   _   _
+
+;; grv      1        2          3          4           5        6        7        8        9        0        -         =         bspc      nlk kp/ kp* kp-
+   XX       @space1  @space2    @space3    @space4     @space5  @space6  @space7  _        _        _        @spc-prev @spc-next @spc-kill _   _   _   _
+
+;; tab        q        w          e          r           t        y        u        i        o        p         [         ]         ret     kp7 kp8 kp9 kp+
+   XX         @close   @win-other @goto/save @pg-up-ow   @magit   _        _        @lsp-err @lsp-def @lsp-ref  @lsp-sym  @lsp-open _       _   _   _   _
+
+;; caps        a        s          d          f           g        h        j        k        l        ;         '           \       kp4 kp5 kp6
+   _           XX       @lsp-dn    _          @pg-dn-ow   @mcursor _        _        _        _        _         _           _       _   _   _
+
+;; lsft    nubs z        x          c          v           b        n        m        ,        .        /         rsft pgup up pgdn kp1 kp2 kp3 kprt
+   XX      XX   XX       @Mx        @clock-in  @lsp-ext-v  @yazi    _        _        @bkill   @bmax    @bprev    @bnext _    _  _    _   _   _   _
+
+;; fn  lctl lmet lalt spc ralt work-prtsc rctl left down rght kp0 kp.
+   XX  XX   XX   XX   XX  XX   XX    XX   XX   XX   XX   _   _)

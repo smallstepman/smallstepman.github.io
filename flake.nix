@@ -6,15 +6,8 @@
     import-tree.url = "github:vic/import-tree"; # import-tree - import Nix modules by directory tree 
     flake-aspects.url = "github:vic/flake-aspects"; # flake-aspects must be a direct input here because den's lib.nix accesses inputs.flake-aspects.lib from the consumer flake's inputs, not den's own.
 
-    unattended-installer = { # Unattended NixOS installer
-      url = "github:chrillefkr/nixos-unattended-installer";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.disko.follows = "disko";
-    };
-    disko = { # Declarative disk partitioning
-      url = "github:nix-community/disko";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    unattended-installer = { url = "github:chrillefkr/nixos-unattended-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.disko.follows = "disko"; };
+    disko = { url = "github:nix-community/disko"; inputs.nixpkgs.follows = "nixpkgs"; };
 
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05"; # primary nixpkgs repository, changing this will impact entire system
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable"; # use the unstable for some packages
@@ -25,10 +18,9 @@
     mac-app-util.url = "github:hraban/mac-app-util";
     nix-snapd = { url = "github:nix-community/nix-snapd"; inputs.nixpkgs.follows = "nixpkgs"; };
 
-    # Secrets management
     sops-nix = { url = "github:Mic92/sops-nix"; inputs.nixpkgs.follows = "nixpkgs"; };
     sopsidy = { url = "github:timewave-computer/sopsidy"; inputs.nixpkgs.follows = "nixpkgs"; };
-    # CoolerControl plugins for jimi bare-metal server
+
     corsair-psu.url = "github:smallstepman/coolercontrol-plugin-corsair-ax1600i";
     ipmi-plugin.url = "github:smallstepman/coolercontrol-plugin-supermicro-h12ssli";
 
@@ -43,8 +35,7 @@
     rbw.url = "github:smallstepman/rbw"; # rbw (Bitwarden CLI) with inject/run support
     rust-overlay = { url = "github:oxalica/rust-overlay"; inputs.nixpkgs.follows = "nixpkgs"; };
     yeetnyoink.url = "github:smallstepman/yeetnyoink"; # yeetnyoink - window/app focus orchestrator
-
-    # Non-flake sources for packages we build ourselves
+    # non-flakes
     aw-import-screentime-src = { url = "github:ActivityWatch/aw-import-screentime/8d6bf4a84bac840c8af577652ee70514ef3e6bc1"; flake = false; };
     uniclip-src = { url = "github:quackduck/uniclip"; flake = false; };
     glowm-src = { url = "github:atani/glowm"; flake = false; };
@@ -64,6 +55,10 @@
             x86_64-darwin = "@rolldown/binding-darwin-x64";
             aarch64-linux = "@rolldown/binding-linux-arm64-gnu";
             x86_64-linux = "@rolldown/binding-linux-x64-gnu";
+          }.${system} or null;
+          codexAcpNpmDepsHash = {
+            aarch64-darwin = "sha256-YD6e+M5EchYBFqF+d1nPD0e4tfooDwCm8I6v5yTs8tY=";
+            aarch64-linux = "sha256-jOdosNvpP4TDcOJGaApnrihX9nkuR3rG0lkewRn8ZRw=";
           }.${system} or null;
           patchCodexAcpLock = ''
             ${prev.nodejs}/bin/node <<'NODE'
@@ -93,15 +88,15 @@
             NODE
           '';
         in
-        prev.lib.optionalAttrs (rolldownBinding != null) {
+        prev.lib.optionalAttrs (rolldownBinding != null && codexAcpNpmDepsHash != null) {
           llm-agents = prev.llm-agents // {
             codex-acp = prev.llm-agents.codex-acp.overrideAttrs (old: {
               postPatch = (old.postPatch or "") + patchCodexAcpLock;
-              npmDepsHash = "sha256-YD6e+M5EchYBFqF+d1nPD0e4tfooDwCm8I6v5yTs8tY=";
+              npmDepsHash = codexAcpNpmDepsHash;
               npmDeps = prev.fetchNpmDeps {
                 inherit (old) src;
                 name = "${old.pname}-${old.version}-npm-deps";
-                hash = "sha256-YD6e+M5EchYBFqF+d1nPD0e4tfooDwCm8I6v5yTs8tY=";
+                hash = codexAcpNpmDepsHash;
                 fetcherVersion = old.npmDepsFetcherVersion;
                 postPatch = (old.postPatch or "") + patchCodexAcpLock;
                 ROLLDOWN_BINDING = rolldownBinding;

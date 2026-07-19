@@ -1,11 +1,7 @@
-{ pkgs, lib, config, ... }: let
+{ ... }: let
   librewolfProfile = "default-release";
-in {
-  den.aspects.desktop.browsers = {
-    homeManager = { pkgs, lib, config, ... }: {
+  configuredLibrewolf = { pkgs, lib, config, ... }: {
       home.packages = [
-        pkgs.brave
-        pkgs.chromium
         (pkgs.librewolf.override {
           extraPolicies = config.programs.librewolf.policies;
         })
@@ -48,7 +44,7 @@ in {
           DontCheckDefaultBrowser = true;
           HardwareAcceleration = false;
           OfferToSaveLogins = false;
-          DefaultDownloadDirectory = "/home/m/Downloads";
+          DefaultDownloadDirectory = "${config.home.homeDirectory}/Downloads";
           Cookies = {
             "Allow" = [
               "https://addy.io" "https://element.io" "https://discord.com"
@@ -97,12 +93,28 @@ in {
           Type = "oneshot";
           ExecStart = "${pkgs.writeShellScript "pywalfox-boot" ''
             set -euo pipefail
-            ${pkgs.pywalfox-native}/bin/pywalfox install --browser librewolf
+            ${pkgs.pywalfox-native}/bin/pywalfox install \
+              --profile-path ${lib.escapeShellArg "${config.home.homeDirectory}/.librewolf"}
             ${pkgs.pywalfox-native}/bin/pywalfox update
           ''}";
         };
         Install.WantedBy = [ "graphical-session.target" ];
       };
+  };
+in {
+  den.aspects.desktop.browsers = {
+    homeManager = { pkgs, ... }: {
+      imports = [ configuredLibrewolf ];
+      home.packages = [
+        pkgs.brave
+        pkgs.chromium
+      ];
     };
+  };
+
+  # Reuse the complete managed LibreWolf profile without adding the other
+  # browsers from the general desktop browser aspect.
+  den.aspects.desktop.browsers.work-vm = {
+    homeManager = configuredLibrewolf;
   };
 }

@@ -1,7 +1,7 @@
-{ pkgs, lib, ... }: let
-  kubePassthroughBroker = pkgs.writeShellApplication {
+{ ... }: let
+  mkKubePassthroughBroker = pkgs: pkgs.writeShellApplication {
     name = "kubectl-passthrough-broker";
-    runtimeInputs = [ pkgs.coreutils pkgs.gawk pkgs.kubectl ];
+    runtimeInputs = [ pkgs.coreutils pkgs.gawk pkgs.gnugrep pkgs.kubectl pkgs.open-vm-tools ];
     text = ''
       set -euo pipefail
       source_kubeconfig="/nixos-generated/kubeconfig"
@@ -88,10 +88,15 @@
       mkdir -p "$HOME/.kube" "$state_dir" "$tunnels_dir"
       shopt -s nullglob
       while true; do
-        if [ -f "$source_kubeconfig" ]; then
+        if vmware-hgfsclient | grep -Fqx nixos-generated && [ -f "$source_kubeconfig" ]; then
           current_source_hash=$(sha256sum "$source_kubeconfig" | awk '{print $1}')
           if [ "$current_source_hash" != "$last_source_hash" ]; then
-            sync_local_kubeconfig && last_source_hash="$current_source_hash" && reconcile_tunnels || log "sync failed"
+            if sync_local_kubeconfig; then
+              last_source_hash="$current_source_hash"
+              reconcile_tunnels || log "tunnel reconciliation failed"
+            else
+              log "sync failed"
+            fi
           else
             reconcile_tunnels
           fi
@@ -110,7 +115,9 @@
   };
 in {
   den.aspects.network.kube-tunnel = {
-    homeManager = { ... }: {
+    homeManager = { pkgs, ... }: let
+      kubePassthroughBroker = mkKubePassthroughBroker pkgs;
+    in {
       systemd.user.services.kubectl-passthrough = {
         Unit = {
           Description = "Broker OrbStack Kubernetes tunnels through stable localhost ports";

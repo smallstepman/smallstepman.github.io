@@ -8,15 +8,17 @@
   vmTouchIdSudoKnownHosts = "/var/lib/vm-touchid-sudo-bridge/known_hosts";
   macTouchIdKnownHostsEntry = "192.168.130.1 ${builtins.readFile ../mac-host-ssh-ed25519.pub}";
 
-  mkRbwPinentryTouchIdBridge = pkgs: pkgs.substituteAll {
-    name = "vm-gpg-touchid-pinentry-bridge";
-    dir = "/bin";
-    src = ./vm-pinentry-bridge.py;
-    isExecutable = true;
-    inherit vmTouchIdUserBrokerSocket;
-    python3 = "${pkgs.python3}";
-    wayprompt = "${pkgs.wayprompt}";
-  };
+  mkRbwPinentryTouchIdBridge = pkgs:
+    let
+      script = pkgs.replaceVars ../vm-pinentry-bridge.py {
+        inherit vmTouchIdUserBrokerSocket;
+        python3 = pkgs.python3;
+        wayprompt = pkgs.wayprompt;
+      };
+    in
+      pkgs.runCommand "vm-gpg-touchid-pinentry-bridge" { } ''
+        install -Dm755 ${script} $out/bin/vm-gpg-touchid-pinentry-bridge
+      '';
 
   mkRbwPinentryTouchIdBrokerTunnel = pkgs: pkgs.writeShellApplication {
     name = "rbw-pinentry-touchid-broker-tunnel";

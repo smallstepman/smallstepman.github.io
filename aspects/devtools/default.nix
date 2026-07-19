@@ -25,7 +25,11 @@
       ".gdbinit".source = ./gdbinit;
       ".cargo/config.toml".text = ''
         [build]
-        target-dir = "/Volumes/crucialP3/.cargo/target"
+        target-dir = "${
+          if pkgs.stdenv.hostPlatform.isDarwin
+          then "/Volumes/crucialP3/.cargo/target"
+          else "${config.home.homeDirectory}/.cargo/target"
+        }"
       '';
     };
   };

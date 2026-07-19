@@ -13,12 +13,17 @@
       environment.systemPackages = with pkgs; [ cachix ];
     };
 
-    homeManager = { pkgs, lib, config, ... }:
+    homeManager = { pkgs, lib, config, osConfig ? null, ... }:
       let
         isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
         isLinux = !isDarwin;
         isWSL = false;
         isNonWSLLinux = isLinux;
+        isWork = config.home.username == "work";
+        nixosHostName =
+          if osConfig == null
+          then "vm-aarch64"
+          else osConfig.networking.hostName;
 
         niksWorktree = if isDarwin || isNonWSLLinux then pkgs.writeShellApplication {
           name = "niks-worktree";
@@ -40,7 +45,7 @@
                     --no-write-lock-file
                 '' else ''
                   sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch \
-                    --flake "path:$selected#vm-aarch64" \
+                    --flake "path:$selected#${nixosHostName}" \
                     --no-write-lock-file
                 '';
             in ''
@@ -141,7 +146,6 @@
           pkgs.hwatch
           pkgs.jq 
           pkgs.mdfried 
-          pkgs.rbw 
           pkgs.ripgrep
           pkgs.trash-cli 
           pkgs.tree
@@ -149,7 +153,9 @@
           pkgs.websocat
           pkgs.wezterm
           pkgs.yq
-        ] ++ lib.optionals (niksWorktree != null) [ niksWorktree ];
+        ]
+        ++ lib.optionals (!isWork) [ pkgs.rbw ]
+        ++ lib.optionals (niksWorktree != null) [ niksWorktree ];
 
         programs.yazi = {
           enable = true;
@@ -232,8 +238,8 @@
             rs = "cargo"; kubectl = "kubecolor";
             nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
           } // (lib.optionalAttrs isLinux {
-            niks = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake path:/nixos-config#vm-aarch64 --no-write-lock-file";
-            nikt = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake path:/nixos-config#vm-aarch64 --no-write-lock-file";
+            niks = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake path:/nixos-config#${nixosHostName} --no-write-lock-file";
+            nikt = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake path:/nixos-config#${nixosHostName} --no-write-lock-file";
             nikw = "${niksWorktree}/bin/niks-worktree";
             open = "xdg-open";
             pbcopy = "wl-copy --type text/plain";
@@ -287,7 +293,7 @@
           '' + (lib.optionalString isDarwin ''
             eval "$(/opt/homebrew/bin/brew shellenv)"
             vm() { ~/.config/nix/docs/vm.sh "$@"; }
-          '') + (lib.optionalString isLinux ''
+          '') + (lib.optionalString (isLinux && !isWork) ''
             gh() { GITHUB_TOKEN=$(rbw get github-token) command gh "$@"; }
           '');
         };

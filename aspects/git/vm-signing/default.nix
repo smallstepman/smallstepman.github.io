@@ -1,4 +1,5 @@
-{ pkgs, lib, ... }: let
+{ ... }: let
+  mkHomeManager = { pkgs, lib, ... }: let
   vmGitSigningKey = "071F6FE39FC26713930A702401E5F9A947FA8F5C";
 
   vmGitSigningWrapper = pkgs.writeShellScriptBin "vm-gpg-touchid-signing" ''
@@ -167,9 +168,21 @@
   repairSharedGitFileMode = pkgs.writeShellScriptBin "repair-shared-git-filemode" ''
     set -euo pipefail
     git_bin=${pkgs.git}/bin/git
+    hgfs_client=${pkgs.open-vm-tools}/bin/vmware-hgfsclient
+    grep_bin=${pkgs.gnugrep}/bin/grep
+    shared_folder_available() {
+      local root="$1" share
+      case "$root" in
+        /nixos-config) share=nixos-config ;;
+        /Users/m/Projects|/Users/m/Projects/*) share=Projects ;;
+        *) return 0 ;;
+      esac
+      "$hgfs_client" | "$grep_bin" -Fqx "$share"
+    }
     repair_repo() {
       local root="$1"
       case "$root" in /nixos-config|/Users/m/Projects|/Users/m/Projects/*) ;; *) return 0 ;; esac
+      shared_folder_available "$root" || return 0
       "$git_bin" -C "$root" rev-parse --show-toplevel >/dev/null 2>&1 || return 0
       "$git_bin" -C "$root" config core.fileMode false
       "$git_bin" -C "$root" submodule foreach --quiet 'git config core.fileMode false' 2>/dev/null || true
@@ -212,9 +225,7 @@
     fi
     exec "$git_bin" "$@"
   '';
-in {
-  den.aspects.git.vm-signing = {
-    homeManager = { pkgs, lib, ... }: {
+  in {
       home.packages = [
         pkgs.docker-client
       ];
@@ -223,10 +234,10 @@ in {
         DOCKER_CONTEXT = "host-mac";
       };
 
-      programs.git.signing.key = vmGitSigningKey;
-      programs.git.signing.signer = "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
-      programs.git.settings.gpg.program = "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
-      programs.git.package = repairingGit;
+      programs.git.signing.key = lib.mkForce vmGitSigningKey;
+      programs.git.signing.signer = lib.mkForce "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
+      programs.git.settings.gpg.program = lib.mkForce "${vmGitSigningWrapper}/bin/vm-gpg-touchid-signing";
+      programs.git.package = lib.mkForce repairingGit;
 
 
       programs.ssh = {
@@ -267,6 +278,9 @@ in {
         };
         Install.WantedBy = [ "default.target" ];
       };
-    };
+  };
+in {
+  den.aspects.git.vm-signing = {
+    homeManager = mkHomeManager;
   };
 }
