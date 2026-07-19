@@ -1,6 +1,10 @@
 { pkgs, lib, ... }: {
   den.aspects.monitoring = {
-    nixos = { pkgs, ... }: {
+    nixos = { config, pkgs, ... }:
+    let
+      grafanaSecretKeyDir = "/var/lib/grafana-secret";
+      grafanaSecretKeyFile = "${grafanaSecretKeyDir}/secret_key";
+    in {
       users.users.alloy = {
         isSystemUser = true;
         group = "alloy";
@@ -74,7 +78,32 @@
         }
       '';
 
-      environment.etc."grafana/secret_key".text = "SW2YcwTIb9zpOOhoPsMm";
+      systemd.services.grafana-secret-key = {
+        description = "Generate Grafana's local secret key";
+        requiredBy = [ "grafana.service" ];
+        before = [ "grafana.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          UMask = "0077";
+        };
+        script = ''
+          set -euo pipefail
+          key=${lib.escapeShellArg grafanaSecretKeyFile}
+          ${pkgs.coreutils}/bin/install -d -m 0750 -o root -g grafana ${lib.escapeShellArg grafanaSecretKeyDir}
+          if [ ! -s "$key" ]; then
+            tmp="$(${pkgs.coreutils}/bin/mktemp ${lib.escapeShellArg "${grafanaSecretKeyDir}/.secret_key.XXXXXX"})"
+            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+            ${pkgs.openssl}/bin/openssl rand -hex 32 > "$tmp"
+            ${pkgs.coreutils}/bin/chown root:grafana "$tmp"
+            ${pkgs.coreutils}/bin/chmod 0440 "$tmp"
+            ${pkgs.coreutils}/bin/mv "$tmp" "$key"
+            trap - EXIT
+          fi
+          ${pkgs.coreutils}/bin/chown root:grafana "$key"
+          ${pkgs.coreutils}/bin/chmod 0440 "$key"
+        '';
+      };
 
       services.grafana = {
         enable = true;
@@ -83,7 +112,7 @@
             http_addr = "0.0.0.0";
             http_port = 3001;
           };
-          security.secret_key = "$__file{/etc/grafana/secret_key}";
+          security.secret_key = "$__file{${grafanaSecretKeyFile}}";
         };
         provision = {
           enable = true;
@@ -92,6 +121,11 @@
             { name = "Loki"; type = "loki"; url = "http://127.0.0.1:3100"; }
           ];
         };
+      };
+
+      systemd.services.grafana = {
+        requires = [ "grafana-secret-key.service" ];
+        after = [ "grafana-secret-key.service" ];
       };
     };
   };

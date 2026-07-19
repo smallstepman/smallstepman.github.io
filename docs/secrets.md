@@ -1,246 +1,117 @@
 # Secrets Management
 
-This repository uses a hybrid model:
+The repository uses SOPS and sops-nix for secrets needed during NixOS
+activation, with sopsidy collecting their values from Bitwarden.
 
-- **sops-nix + sopsidy** for boot-time VM secrets
-- **rbw (Bitwarden)** for runtime user-facing secrets
+The age-encrypted file is tracked at
+`aspects/authentication/secrets.yaml`. Keeping encrypted data in Git is the
+normal SOPS workflow and lets the flake evaluate directly without a generated
+input or wrapper flake.
 
-The repository is now den-native, so the moving pieces live in den aspects
-rather than legacy machine/user entrypoints.
+## Files and ownership
 
-## Architecture overview
+| Path | Contents |
+|------|----------|
+| `aspects/authentication/secrets.yaml` | Age-encrypted boot-time secrets, tracked in Git |
+| `aspects/authentication/vm-age.pub` | Public age recipient used by sopsidy, tracked beside the SOPS configuration |
+| `aspects/network/ssh/m.pub` | General user SSH public key, tracked beside the SSH configuration |
+| `aspects/authorization/touchid/*.pub` | Host pins and bridge public keys, tracked beside the Touch ID bridge configuration |
+| `/var/lib/sops-nix/key.txt` | VM age private key, never stored in Git |
+| `/var/lib/grafana-secret/secret_key` | Jimi-local Grafana encryption key, generated once as `root:grafana` with mode `0440` |
+| `~/.local/share/nix-config-generated/kubeconfig` | Private runtime OrbStack kubeconfig, never used as a flake input |
+| `/nixos-generated/kubeconfig` | VMware shared-folder view of that runtime kubeconfig |
 
-```
-macOS host
-  Bitwarden vault
-    └── rbw
-          └── WRAPPER=$(bash scripts/external-input-flake.sh)
-                nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
-                └── ~/.local/share/nix-config-generated/secrets.yaml (age-encrypted, outside the repo)
-                      └── bash docs/vm.sh switch
+## Boot-time secrets
 
-NixOS VM
-  /nixos-generated (VMware shared folder exposing the same dataset)
-    └── flake input `generated`
-          └── sops-nix decrypts secrets.yaml
-                ├── /run/secrets/tailscale/auth-key
-                ├── /run/secrets/rbw/email
-                ├── /run/secrets/uniclip/password
-                └── /run/secrets/user/hashed-password
+The VM currently decrypts:
 
-  den/aspects/features/secrets.nix
-    ├── services.tailscale.authKeyFile
-    ├── users.users.m.hashedPasswordFile
-    └── systemd.user.services.rbw-config
+| Secret | Consumer |
+|--------|----------|
+| `tailscale/auth-key` | `services.tailscale.authKeyFile` |
+| `rbw/email` | Generated Linux rbw configuration |
+| `uniclip/password` | VM Uniclip client (`UNICLIP_PASSWORD`) |
+| `user/hashed-password` | `users.users.m.hashedPasswordFile` |
 
-  den/aspects/features/shell-git.nix
-    ├── gh()        -> rbw get github-token
-    ├── with-openai -> rbw get openai-api-key
-    ├── with-amp    -> rbw get amp-api-key
-    ├── claude      -> rbw get claude-oauth-token
-    └── codex       -> rbw get openai-api-key
-```
+Runtime API tokens remain in Bitwarden and are fetched by their individual
+shell helpers or services.
 
-## What goes through sops vs rbw
+## Jimi unattended installer
 
-| Secret | Delivery | Why |
-|--------|----------|-----|
-| `rbw/email` | sops → file → `rbw-config` | Keeps the Bitwarden email out of the public repo while still generating the VM rbw config automatically. |
-| `tailscale/auth-key` | sops → file → Tailscale service | Needed by a system service before the user session exists. |
-| `uniclip/password` | sops → file → VM uniclip service | Needed by the VM clipboard client at user-session startup. |
-| `user/hashed-password` | sops → file → `users.users.m.hashedPasswordFile` | Needed during system activation, not interactively. |
-| `github-token` | rbw → shell function | Fetched on demand by `gh()`. |
-| `claude-oauth-token` | rbw → shell function | Injected only for `claude`. |
-| `openai-api-key` | rbw → shell functions | Used by `codex` and `with-openai`. |
-| `amp-api-key` | rbw → shell function | Used by `with-amp`. |
-| `orbstack-kubeconfig` | rbw → launchd sync / `refresh-kubeconfig` | Keeps the host kubeconfig and embedded key material out of the repo; the VM broker reads the generated copy. |
-
-Rule of thumb: if the secret is needed during boot or activation, it goes
-through sops; otherwise it is fetched live from Bitwarden and materialized on
-demand. Self-contained kubeconfig blobs follow the same rule.
-
-## Where the configuration lives
-
-| File | Role |
-|------|------|
-| `flake.nix` | Declares shared inputs and exports `lib.mkOutputs` for wrapper flakes |
-| `den/mk-config-outputs.nix` | Builds system outputs plus the `collect-secrets` package once external inputs are provided |
-| `scripts/external-input-flake.sh` | Creates a temporary wrapper flake with the live generated / yeetnyoink inputs |
-| `den/aspects/features/secrets.nix` | Owns secret declarations, Tailscale auth, hashed password wiring, `rbw-config`, and `generated.requireFile "secrets.yaml"` |
-| `den/aspects/features/git.nix` | Owns Linux `programs.rbw` settings and GitHub credential-helper wiring |
-| `den/aspects/features/shell.nix` | Owns runtime rbw-backed shell helpers (`gh`, `claude`, `codex`, `with-openai`, `with-amp`) |
-| `den/aspects/hosts/vm-aarch64.nix` | Reads the VM age public key from the generated input via `sops.hostPubKey` |
-| `~/.local/share/nix-config-generated/` | Canonical generated dataset on macOS (`secrets.yaml`, age pubkey, authorization keys, pinned host keys, bridge pubkeys) |
-| `docs/vm.sh` | VM provisioning/switch helper, including `refresh-secrets` |
-| `/nixos-generated` | VMware shared-folder mount exposing the same dataset inside the VM |
-| `WRAPPER=$(bash scripts/external-input-flake.sh) && nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file` | Regenerates the external `secrets.yaml` dataset locally |
-
-## Generated dataset contents
-
-The shared generated dataset at `~/.local/share/nix-config-generated/` now includes:
-
-- `secrets.yaml` - encrypted boot-time secrets collected via sopsidy
-- `vm-age-pubkey` - the VM age public key used to encrypt `secrets.yaml`
-- `host-authorized-keys` - the macOS user SSH public key authorized on the VM
-- `mac-host-authorized-keys` - the macOS-side authorized key used for VM Docker/SSH access
-- `mac-host-ssh-ed25519.pub` - the macOS host SSH public key pinned by VM bridge clients
-- `vm-host-ssh-ed25519.pub` - the VM SSH host public key pinned by the Darwin reverse tunnel
-- `touchid-bridge-mac-to-vm.pub` - the Darwin bridge client public key trusted by the VM
-- `touchid-bridge-vm-user-to-mac.pub` - the VM user bridge client public key trusted by macOS
-- `touchid-bridge-vm-root-to-mac.pub` - the VM root bridge client public key trusted by macOS
-- `kubeconfig` - the synced OrbStack kubeconfig blob fetched from Bitwarden
-
-## Bitwarden entries
-
-These Bitwarden item names are consumed directly by the current config:
-
-| Entry name | Used by | Delivery |
-|------------|---------|----------|
-| `bitwarden-email` | `sops.secrets."rbw/email"` | sops |
-| `tailscale-auth-key` | `sops.secrets."tailscale/auth-key"` | sops |
-| `uniclip-password` | `sops.secrets."uniclip/password"` | sops |
-| `nixos-hashed-password` | `sops.secrets."user/hashed-password"` | sops |
-| `github-token` | `gh()` / git credential helper flow | rbw |
-| `claude-oauth-token` | `claude()` wrapper | rbw |
-| `openai-api-key` | `codex()` and `with-openai()` | rbw |
-| `amp-api-key` | `with-amp()` | rbw |
-| `orbstack-kubeconfig` | `docs/vm.sh refresh-kubeconfig` / `launchd.user.agents.orbstack-kubeconfig-sync` | rbw |
-
-## Common workflows
-
-### Initial setup
+The Jimi installer is parameterized at build time rather than carrying Wi-Fi
+credentials in tracked Nix:
 
 ```bash
-# 1. Ensure the VM age key, pinned host keys, and bridge public keys are synced
-bash docs/vm.sh refresh-secrets
+# .env is ignored by Git; only the Bitwarden item name is stored here.
+WIFI_SSID=...
+WIFI_PSK_RBW_ITEM=...
 
-# 2. Populate Bitwarden with the entries listed above
-
-# 3. Collect and encrypt boot-time secrets into the external dataset
-WRAPPER=$(bash scripts/external-input-flake.sh)
-nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
-
-# 4. Deploy to the VM
-bash docs/vm.sh switch
-
-# 5. On the VM, register/login rbw once if needed
-ssh m@<VM_IP>
-rbw register
-rbw login
+scripts/build-iso.sh
 ```
 
-### Rotating a boot-time secret
+The build script fetches the PSK with `rbw` immediately before evaluation. It
+also accepts `WIFI_PSK_FILE` (for a mounted secret) or `WIFI_PSK` (for an
+already-populated environment). `scripts/jimi-installer.nix` reads the resolved
+variables during impure evaluation and adds the Wi-Fi profile only to the
+installer configuration. After installation, the installer copies
+NetworkManager's mode-`0600` runtime keyfile into the installed system. The
+regular Jimi NixOS configuration contains no Wi-Fi PSK.
+
+An unattended ISO that can join the network necessarily contains the Wi-Fi
+credential. Treat `.env`, the builder's Nix store/derivation, the resulting ISO,
+and the installed NetworkManager keyfile as secret-bearing artifacts. Do not
+publish the ISO; use a dedicated installer network or rotate the PSK if that
+exposure is unacceptable.
+
+## Grafana encryption key
+
+Jimi generates Grafana's `security.secret_key` once at
+`/var/lib/grafana-secret/secret_key`. The root-owned value is not present in Git
+or a Nix store path and survives rebuilds. Back it up with Grafana's database:
+replacing or losing it can make credentials already encrypted in that database
+unreadable.
+
+## Collecting secrets
+
+From the repository root:
 
 ```bash
-rbw remove tailscale-auth-key
-echo "new-value" | rbw add tailscale-auth-key
-
-WRAPPER=$(bash scripts/external-input-flake.sh)
-nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
-bash docs/vm.sh switch
+nix run .#collect-secrets --no-write-lock-file
 ```
 
-### Rotating a runtime secret
+sopsidy reads the declarations in `aspects/authentication/secrets.nix`, fetches
+the corresponding Bitwarden items, and rewrites the tracked encrypted YAML for
+the recipient in `aspects/authentication/vm-age.pub`.
 
-```bash
-rbw remove github-token
-echo "new-value" | rbw add github-token
+To rotate a value, update the Bitwarden item, run the command above, review the
+encrypted YAML diff, and deploy normally.
 
-# No rebuild needed; next helper invocation fetches the new value.
-```
+## Provisioning or rotating the VM key
 
-### Managing the kubeconfig blob
+`docs/vm.sh refresh-secrets` ensures the VM private age key exists, writes its
+public recipient beside the authentication aspect, refreshes the SSH and Touch
+ID aspects' public inputs, and runs `collect-secrets`.
 
-Store the full kubeconfig in Bitwarden as `orbstack-kubeconfig`.
-If the kubeconfig references external files, inline the client certificate and
-client key data before storing it so the Bitwarden item stays self-contained.
+On installation, `docs/vm.sh` creates the private age key in the installer,
+copies it to the installed system, refreshes the tracked recipient and
+encrypted YAML, and then builds the target configuration directly from the
+repository.
 
-```bash
-rbw add orbstack-kubeconfig < ~/.kube/config
-```
+## Runtime kubeconfig
 
-The macOS launchd sync and `docs/vm.sh refresh-kubeconfig` both fetch this item
-and write it to `~/.local/share/nix-config-generated/kubeconfig`.
+The OrbStack kubeconfig can contain private key material, so it remains outside
+Git. The macOS launch agent and `docs/vm.sh refresh-kubeconfig` fetch it from
+Bitwarden into `~/.local/share/nix-config-generated/kubeconfig`. The VM reads it
+through the `/nixos-generated` VMware shared folder. This directory is runtime
+state only and is not part of Nix evaluation.
 
-### Adding a new boot-time secret
+## Security boundary
 
-Declare it in `den/aspects/features/secrets.nix`:
-
-```nix
-sops.secrets."myapp/token" = {
-  collect.rbw.id = "myapp-token";
-  owner = "myapp-user";
-};
-```
-
-Then run:
-
-```bash
-WRAPPER=$(bash scripts/external-input-flake.sh)
-nix run "path:$WRAPPER#collect-secrets" --no-write-lock-file
-bash docs/vm.sh switch
-```
-
-### Adding a new runtime secret helper
-
-Add the Bitwarden entry:
-
-```bash
-echo "token-value" | rbw add myapp-token
-```
-
-Then add the helper to the relevant den aspect (usually
-`den/aspects/features/shell-git.nix` or another user-facing feature aspect).
-
-## Security notes
-
-### Why runtime helpers use shell functions
-
-The current setup injects secrets only into the target process:
-
-- `gh()` sets `GITHUB_TOKEN` for the `gh` invocation
-- `claude()` sets `CLAUDE_CODE_OAUTH_TOKEN`
-- `codex()` and `with-openai()` set `OPENAI_API_KEY`
-- `with-amp()` sets `AMP_API_KEY`
-
-This keeps secrets out of global login-session variables, but they are still
-visible to processes running as the same user through `/proc/<PID>/environ`.
-
-### Why the age public key comes from the VM
-
-The VM owns the age private key at `/var/lib/sops-nix/key.txt`. The matching
-public key is stored in the external generated dataset as `vm-age-pubkey` and read by
-`den/aspects/hosts/vm-aarch64.nix` as `sops.hostPubKey`.
-
-- The Mac uses the public key only to encrypt.
-- The VM keeps the private key and is the only system that can decrypt
-  `secrets.yaml`.
-
-### Known trade-off: copied host keys
-
-The VM SSH/Docker workflow expects suitable key material to exist inside the VM
-(for example `~/.ssh/id_ed25519` for the `mac-host-docker` SSH config). That is
-convenient for Docker-over-SSH and git workflows, but it also means any private
-keys present in the VM are exposed if the VM is compromised.
-
-## Security model summary
-
-```text
-Who can decrypt secrets.yaml from the generated dataset?
-  -> Only a host with the matching age private key (the VM)
-
-Who can read /run/secrets/* on the VM?
-  -> root
-  -> user m for the secrets explicitly owned by m
-
-What is stored in the repo?
-  -> declarative secret wiring
-  -> secret names / IDs
-  -> no plaintext secrets
-
-What is not stored in the repo?
-  -> ~/.local/share/nix-config-generated/secrets.yaml
-  -> ~/.local/share/nix-config-generated/{vm-age-pubkey,host-authorized-keys,mac-host-authorized-keys,mac-host-ssh-ed25519.pub,vm-host-ssh-ed25519.pub,touchid-bridge-mac-to-vm.pub,touchid-bridge-vm-user-to-mac.pub,touchid-bridge-vm-root-to-mac.pub}
-  -> the VM age private key
-  -> Bitwarden runtime secrets
-```
+- The repository contains encrypted secret values and public keys.
+- The VM age private key remains only at `/var/lib/sops-nix/key.txt`.
+- That is a deployment identity, not a rule against recovery: another consumer
+  or an offline recovery location should use its own age identity/recipient
+  rather than receive a copy of the VM's private key.
+- Anyone with both the repository and that private key can decrypt the tracked
+  YAML.
+- Runtime Bitwarden tokens, the kubeconfig, and Jimi's Grafana key remain
+  outside the repository.

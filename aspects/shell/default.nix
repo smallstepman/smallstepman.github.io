@@ -20,10 +20,6 @@
         isWSL = false;
         isNonWSLLinux = isLinux;
 
-        generatedDirSetup = lib.removeSuffix "\n" ''
-          generated_dir="''${GENERATED_INPUT_DIR:-''${HOME}/.local/share/nix-config-generated}"
-        '';
-
         niksWorktree = if isDarwin || isNonWSLLinux then pkgs.writeShellApplication {
           name = "niks-worktree";
           runtimeInputs = [ pkgs.coreutils pkgs.findutils pkgs.fzf ];
@@ -35,34 +31,22 @@
                   cd "$selected"
                   NIXPKGS_ALLOW_UNFREE=1 nix build \
                     --extra-experimental-features 'nix-command flakes' \
-                    "path:$wrapper#darwinConfigurations.macbook-pro-m1.system" \
+                    "path:$selected#darwinConfigurations.macbook-pro-m1.system" \
                     --no-write-lock-file \
                     --max-jobs 8 \
                     --cores 0
                   sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch \
-                    --flake "path:$wrapper#macbook-pro-m1" \
+                    --flake "path:$selected#macbook-pro-m1" \
                     --no-write-lock-file
                 '' else ''
                   sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch \
-                    --flake "path:$wrapper#vm-aarch64" \
+                    --flake "path:$selected#vm-aarch64" \
                     --no-write-lock-file
                 '';
             in ''
               set -euo pipefail
 
               repo_root=${repoRoot}
-
-              generated_dir="''${GENERATED_INPUT_DIR:-}"
-              if [ -z "$generated_dir" ]; then
-                if [ -d "$HOME/.local/share/nix-config-generated" ]; then
-                  generated_dir="$HOME/.local/share/nix-config-generated"
-                elif [ -d /nixos-generated ]; then
-                  generated_dir=/nixos-generated
-                else
-                  echo "niks-worktree: generated dataset missing; set GENERATED_INPUT_DIR" >&2
-                  exit 1
-                fi
-              fi
 
               if ! { [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; }; then
                 if [ -r /dev/tty ] && [ -w /dev/tty ]; then
@@ -104,8 +88,6 @@
               }
 
               selected=$(choose_repo)
-              wrapper=$(NIX_CONFIG_DIR="$selected" GENERATED_INPUT_DIR="$generated_dir" bash "$selected/scripts/external-input-flake.sh")
-
               ${applyCommand}
             '';
         } else null;
@@ -250,8 +232,8 @@
             rs = "cargo"; kubectl = "kubecolor";
             nvim-hrr = "nvim --headless -c 'Lazy! sync' +qa";
           } // (lib.optionalAttrs isLinux {
-            niks = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
-            nikt = "${generatedDirSetup}; WRAPPER=$(NIX_CONFIG_DIR=/nixos-config GENERATED_INPUT_DIR=\"$generated_dir\" bash /nixos-config/scripts/external-input-flake.sh) && sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake \"path:$WRAPPER#vm-aarch64\" --no-write-lock-file";
+            niks = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake path:/nixos-config#vm-aarch64 --no-write-lock-file";
+            nikt = "sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild test --flake path:/nixos-config#vm-aarch64 --no-write-lock-file";
             nikw = "${niksWorktree}/bin/niks-worktree";
             open = "xdg-open";
             pbcopy = "wl-copy --type text/plain";
@@ -260,8 +242,8 @@
           }) // (lib.optionalAttrs isNonWSLLinux {
             nikw = "${niksWorktree}/bin/niks-worktree";
           }) // (lib.optionalAttrs isDarwin {
-            niks = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
-            nikt = "cd ~/.config/nix && ${generatedDirSetup} && WRAPPER=$(NIX_CONFIG_DIR=~/.config/nix GENERATED_INPUT_DIR=\"$generated_dir\" bash ~/.config/nix/scripts/external-input-flake.sh) && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' \"path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system\" --no-write-lock-file && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake \"path:$WRAPPER#macbook-pro-m1\" --no-write-lock-file";
+            niks = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' .#darwinConfigurations.macbook-pro-m1.system --no-write-lock-file --max-jobs 8 --cores 0 && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch --flake .#macbook-pro-m1 --no-write-lock-file";
+            nikt = "cd ~/.config/nix && NIXPKGS_ALLOW_UNFREE=1 nix build --extra-experimental-features 'nix-command flakes' .#darwinConfigurations.macbook-pro-m1.system --no-write-lock-file && sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild test --flake .#macbook-pro-m1 --no-write-lock-file";
             nikw = "${niksWorktree}/bin/niks-worktree";
             pinentry = "pinentry-mac";
           });

@@ -1,9 +1,9 @@
-{ generated, ... }: { pkgs, ... }: let
+{ ... }: { pkgs, ... }: let
   vmTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
   vmTouchIdRemoteSocket = "/home/m/.local/run/vm-touchid-broker.sock";
   vmTouchIdBridgeKey = "/Users/m/.ssh/id_ed25519_touchid_bridge_to_vm";
   vmTouchIdKnownHosts = "/Users/m/.ssh/known_hosts_vm_touchid_bridge";
-  vmTouchIdVmKnownHostsEntry = "192.168.130.3 ${builtins.readFile (generated.requireFile "vm-host-ssh-ed25519.pub")}";
+  vmTouchIdVmKnownHostsEntry = "192.168.130.3 ${builtins.readFile ./vm-host-ssh-ed25519.pub}";
   vmTouchIdPinentry = "/opt/homebrew/opt/pinentry-touchid/bin/pinentry-touchid";
   vmTouchIdGpgCommitHelper = "/etc/profiles/per-user/m/bin/gpg-touchid-commit-get-pin";
 

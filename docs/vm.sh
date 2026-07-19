@@ -35,6 +35,9 @@ export DISPLAY=
 
 HOST_SSH_PUBKEY_FILE="${HOST_SSH_PUBKEY_FILE:-$HOME/.ssh/id_ed25519.pub}"
 GENERATED_DIR="${GENERATED_DIR:-$HOME/.local/share/nix-config-generated}"
+AUTHENTICATION_ASPECT_DIR="$NIX_CONFIG_DIR/aspects/authentication"
+SSH_ASPECT_DIR="$NIX_CONFIG_DIR/aspects/network/ssh"
+TOUCHID_ASPECT_DIR="$NIX_CONFIG_DIR/aspects/authorization/touchid"
 
 VM_BASE_DIR="$HOME/Virtual Machines.localized"
 HOST_PROJECTS_DIR="${HOST_PROJECTS_DIR:-$HOME/Projects}"
@@ -103,23 +106,6 @@ die() { echo "error: $*" >&2; exit 1; }
 
 ensure_generated_dir() {
     mkdir -p "$GENERATED_DIR"
-}
-
-require_generated_dir() {
-    [ -d "$GENERATED_DIR" ] || die "Generated dataset not found: $GENERATED_DIR"
-}
-
-source_external_input_flake() {
-    local helper="$NIX_CONFIG_DIR/scripts/external-input-flake.sh"
-    [ -f "$helper" ] || die "Wrapper helper not found: $helper"
-    # shellcheck source=../scripts/external-input-flake.sh
-    . "$helper"
-}
-
-local_wrapper_flake() {
-    source_external_input_flake
-    _nix_wrapper_dir=""
-    GENERATED_INPUT_DIR="$GENERATED_DIR" NIX_CONFIG_DIR="$NIX_CONFIG_DIR" mk_wrapper_flake
 }
 
 vm_ensure_shared_folder() {
@@ -459,12 +445,8 @@ vm_wait_for_ssh() {
 
 vm_prepare_host_authorized_keys() {
     [ -f "$HOST_SSH_PUBKEY_FILE" ] || die "SSH public key not found: $HOST_SSH_PUBKEY_FILE"
-    ensure_generated_dir
-    # host-authorized-keys  → authorizes the macOS host key on the VM (nixos.nix)
-    cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/host-authorized-keys"
-    # mac-host-authorized-keys → authorizes the VM's use of the same key on the
-    # macOS host sshd (darwin.nix), enabling Docker-over-SSH from the VM.
-    cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-authorized-keys"
+    mkdir -p "$SSH_ASPECT_DIR"
+    cp "$HOST_SSH_PUBKEY_FILE" "$SSH_ASPECT_DIR/m.pub"
 }
 
 vm_prepare_kubeconfig() {
@@ -502,7 +484,7 @@ vm_prepare_kubeconfig() {
 # ─── Prepare SOPS Age Key ──────────────────────────────────────────────────
 
 vm_prepare_sops_age_key() {
-    ensure_generated_dir
+    mkdir -p "$AUTHENTICATION_ASPECT_DIR"
     sshpass -p "$INSTALL_SSH_PASSWORD" ssh $BOOTSTRAP_SSH_OPTIONS -p"$NIXPORT" "${NIXINSTALLUSER}@${NIXADDR}" "$REMOTE_FIX_INTERNET"' &&
         sudo mkdir -p /var/lib/sops-nix
         sudo chmod 700 /var/lib/sops-nix
@@ -511,9 +493,9 @@ vm_prepare_sops_age_key() {
             sudo chmod 600 /var/lib/sops-nix/key.txt
         fi
         sudo nix-shell -p age --run "age-keygen -y /var/lib/sops-nix/key.txt"
-    ' | tr -d '\r' > "$GENERATED_DIR/vm-age-pubkey"
+    ' | tr -d '\r' > "$AUTHENTICATION_ASPECT_DIR/vm-age.pub"
 
-    if ! grep -q '^age1' "$GENERATED_DIR/vm-age-pubkey"; then
+    if ! grep -q '^age1' "$AUTHENTICATION_ASPECT_DIR/vm-age.pub"; then
         die "Failed to fetch VM sops age public key"
     fi
 }
@@ -526,12 +508,8 @@ cmd_refresh_kubeconfig() {
 # ─── Collect Secrets ────────────────────────────────────────────────────────
 
 vm_collect_secrets() {
-    ensure_generated_dir
-    [ -f "$GENERATED_DIR/secrets.yaml" ] || : > "$GENERATED_DIR/secrets.yaml"
-    local wrapper
-    wrapper=$(local_wrapper_flake)
     (cd "$NIX_CONFIG_DIR" && nix --extra-experimental-features 'nix-command flakes' run \
-        "path:$wrapper#collect-secrets" --no-write-lock-file)
+        .#collect-secrets --no-write-lock-file)
 }
 
 # ─── VM Install ─────────────────────────────────────────────────────────────
@@ -546,21 +524,16 @@ vm_install() {
             echo "Error: flake.nix not found in '"$VM_SHARED_NIX_CONFIG_DIR"'"
             exit 1
         fi &&
-        if [ ! -f '"$VM_SHARED_GENERATED_DIR"'/secrets.yaml ]; then
-            echo "Error: generated dataset not mounted at '"$VM_SHARED_GENERATED_DIR"'"
-            exit 1
-        fi &&
         cd '"$VM_SHARED_NIX_CONFIG_DIR"' &&
         NIXCFG_CLEAN=/tmp/nixos-config-clean &&
         rm -rf "$NIXCFG_CLEAN" &&
         mkdir -p "$NIXCFG_CLEAN" &&
         tar -C '"$VM_SHARED_NIX_CONFIG_DIR"' --exclude="*.sock" -cf - . | tar -C "$NIXCFG_CLEAN" -xf - &&
-        WRAPPER=$(NIX_CONFIG_DIR="$NIXCFG_CLEAN" GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
         DISKO_SCRIPT=$(sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nix build \
             --extra-experimental-features "nix-command flakes" \
             --no-write-lock-file \
             --no-link --print-out-paths \
-            "path:$WRAPPER#nixosConfigurations.'"$NIXNAME"'.config.system.build.diskoScript") &&
+            "path:$NIXCFG_CLEAN#nixosConfigurations.'"$NIXNAME"'.config.system.build.diskoScript") &&
         if [ -d "$DISKO_SCRIPT" ] && [ -x "$DISKO_SCRIPT/bin/disko" ]; then
             sudo "$DISKO_SCRIPT/bin/disko"
         else
@@ -574,7 +547,7 @@ vm_install() {
             --extra-experimental-features "nix-command flakes" \
             --no-write-lock-file \
             --no-link --print-out-paths \
-            "path:$WRAPPER#nixosConfigurations.'"$NIXNAME"'.config.system.build.toplevel") &&
+            "path:$NIXCFG_CLEAN#nixosConfigurations.'"$NIXNAME"'.config.system.build.toplevel") &&
         sudo NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-install \
             --system "$SYSTEM_TOPLEVEL" \
             --no-root-passwd &&
@@ -596,8 +569,7 @@ Commands:
                     SSH, install NixOS. --redo destroys existing VM first
   switch            Run nixos-rebuild switch on the VM via shared folder
   refresh-kubeconfig Refresh the Bitwarden-backed kubeconfig cache
-  refresh-secrets   Refresh the generated dataset (age pubkey, pinned host keys,
-                    bridge pubkeys, encrypted secrets)
+  refresh-secrets   Refresh tracked public keys and encrypted SOPS secrets
   up                Start the VM
   down              Stop the VM (graceful shutdown)
   ip                Print the VM's IP address
@@ -690,12 +662,10 @@ cmd_switch() {
     vmx=$(vm_find_vmx) || die "No VM found. Run 'vm bootstrap' first."
     vm_ensure_required_shared_folders "$vmx"
     addr=$(vm_detect_ip)
-    require_generated_dir
     echo "Switching NixOS config on VM at $addr..."
 
     ssh -t $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "$REMOTE_MOUNT_SHARED"' &&
-        WRAPPER=$(NIX_CONFIG_DIR='"$VM_SHARED_NIX_CONFIG_DIR"' GENERATED_INPUT_DIR='"$VM_SHARED_GENERATED_DIR"' bash '"$VM_SHARED_NIX_CONFIG_DIR"'/scripts/external-input-flake.sh) &&
-        sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake "path:$WRAPPER#'"$NIXNAME"'" --no-write-lock-file
+        sudo NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake "path:'"$VM_SHARED_NIX_CONFIG_DIR"'#'"$NIXNAME"'" --no-write-lock-file
     '
 }
 
@@ -705,7 +675,7 @@ cmd_refresh_secrets() {
     echo "Refreshing secrets for VM at $addr..."
 
     # Get VM age public key (uses normal SSH, not bootstrap)
-    ensure_generated_dir
+    mkdir -p "$AUTHENTICATION_ASPECT_DIR" "$TOUCHID_ASPECT_DIR"
     ssh -tt $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         sudo mkdir -p /var/lib/sops-nix &&
         sudo chmod 700 /var/lib/sops-nix &&
@@ -714,17 +684,17 @@ cmd_refresh_secrets() {
             sudo chmod 600 /var/lib/sops-nix/key.txt
         fi &&
         sudo nix-shell -p age --run 'age-keygen -y /var/lib/sops-nix/key.txt'
-    " | tr -d '\r' | sed '/^Connection to .* closed\\.$/d' > "$GENERATED_DIR/vm-age-pubkey"
+    " | tr -d '\r' | sed '/^Connection to .* closed\\.$/d' > "$AUTHENTICATION_ASPECT_DIR/vm-age.pub"
 
-    if ! grep -q '^age1' "$GENERATED_DIR/vm-age-pubkey"; then
+    if ! grep -q '^age1' "$AUTHENTICATION_ASPECT_DIR/vm-age.pub"; then
         die "Failed to fetch VM sops age public key"
     fi
 
     ssh $SSH_OPTIONS -p"$NIXPORT" "${NIXUSER}@${addr}" "
         cat /etc/ssh/ssh_host_ed25519_key.pub
-    " | tr -d '\r' > "$GENERATED_DIR/vm-host-ssh-ed25519.pub"
+    " | tr -d '\r' > "$TOUCHID_ASPECT_DIR/vm-host-ssh-ed25519.pub"
 
-    if ! grep -q '^ssh-' "$GENERATED_DIR/vm-host-ssh-ed25519.pub"; then
+    if ! grep -q '^ssh-' "$TOUCHID_ASPECT_DIR/vm-host-ssh-ed25519.pub"; then
         die "Failed to fetch VM SSH host public key"
     fi
 
@@ -739,9 +709,9 @@ cmd_refresh_secrets() {
         fi &&
         chmod 600 ~/.ssh/id_ed25519_touchid_bridge_to_host &&
         cat ~/.ssh/id_ed25519_touchid_bridge_to_host.pub
-    " | tr -d '\r' > "$GENERATED_DIR/touchid-bridge-vm-user-to-mac.pub"
+    " | tr -d '\r' > "$TOUCHID_ASPECT_DIR/touchid-bridge-vm-user-to-mac.pub"
 
-    if ! grep -q '^ssh-' "$GENERATED_DIR/touchid-bridge-vm-user-to-mac.pub"; then
+    if ! grep -q '^ssh-' "$TOUCHID_ASPECT_DIR/touchid-bridge-vm-user-to-mac.pub"; then
         die "Failed to fetch VM user bridge SSH public key"
     fi
 
@@ -757,9 +727,9 @@ cmd_refresh_secrets() {
         fi &&
         sudo chmod 600 /var/lib/vm-touchid-sudo-bridge/id_ed25519 &&
         sudo cat /var/lib/vm-touchid-sudo-bridge/id_ed25519.pub
-    " | tr -d '\r' | sed '/^Connection to .* closed\\.$/d' > "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"
+    " | tr -d '\r' | sed '/^Connection to .* closed\\.$/d' > "$TOUCHID_ASPECT_DIR/touchid-bridge-vm-root-to-mac.pub"
 
-    if ! grep -q '^ssh-' "$GENERATED_DIR/touchid-bridge-vm-root-to-mac.pub"; then
+    if ! grep -q '^ssh-' "$TOUCHID_ASPECT_DIR/touchid-bridge-vm-root-to-mac.pub"; then
         die "Failed to fetch VM root bridge SSH public key"
     fi
 

@@ -18,7 +18,8 @@ default_nix_config_dir() {
 }
 
 NIX_CONFIG_DIR="${NIX_CONFIG_DIR:-$(default_nix_config_dir)}"
-GENERATED_DIR="${GENERATED_DIR:-$HOME/.local/share/nix-config-generated}"
+SSH_ASPECT_DIR="$NIX_CONFIG_DIR/aspects/network/ssh"
+TOUCHID_ASPECT_DIR="$NIX_CONFIG_DIR/aspects/authorization/touchid"
 HOST_SSH_PUBKEY_FILE="${HOST_SSH_PUBKEY_FILE:-$HOME/.ssh/id_ed25519.pub}"
 MAC_HOST_SSH_PUBKEY_FILE="${MAC_HOST_SSH_PUBKEY_FILE:-/etc/ssh/ssh_host_ed25519_key.pub}"
 MAC_TOUCHID_BRIDGE_KEY_FILE="${MAC_TOUCHID_BRIDGE_KEY_FILE:-$HOME/.ssh/id_ed25519_touchid_bridge_to_vm}"
@@ -26,12 +27,11 @@ MAC_TOUCHID_BRIDGE_PUBKEY_FILE="${MAC_TOUCHID_BRIDGE_PUBKEY_FILE:-$MAC_TOUCHID_B
 
 die() { echo "error: $*" >&2; exit 1; }
 
-prepare_generated_dataset() {
+prepare_public_keys() {
     [ -f "$HOST_SSH_PUBKEY_FILE" ] || die "SSH public key not found: $HOST_SSH_PUBKEY_FILE"
     [ -f "$MAC_HOST_SSH_PUBKEY_FILE" ] || die "macOS host SSH public key not found: $MAC_HOST_SSH_PUBKEY_FILE"
-    mkdir -p "$GENERATED_DIR"
-    cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/host-authorized-keys"
-    cp "$HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-authorized-keys"
+    mkdir -p "$SSH_ASPECT_DIR" "$TOUCHID_ASPECT_DIR"
+    cp "$HOST_SSH_PUBKEY_FILE" "$SSH_ASPECT_DIR/m.pub"
     if [ ! -f "$MAC_TOUCHID_BRIDGE_KEY_FILE" ]; then
         rm -f "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE"
         mkdir -p "$(dirname "$MAC_TOUCHID_BRIDGE_KEY_FILE")"
@@ -40,9 +40,8 @@ prepare_generated_dataset() {
         /usr/bin/ssh-keygen -y -f "$MAC_TOUCHID_BRIDGE_KEY_FILE" > "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE"
     fi
     chmod 600 "$MAC_TOUCHID_BRIDGE_KEY_FILE"
-    cp "$MAC_HOST_SSH_PUBKEY_FILE" "$GENERATED_DIR/mac-host-ssh-ed25519.pub"
-    cp "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" "$GENERATED_DIR/touchid-bridge-mac-to-vm.pub"
-    [ -f "$GENERATED_DIR/secrets.yaml" ] || : > "$GENERATED_DIR/secrets.yaml"
+    cp "$MAC_HOST_SSH_PUBKEY_FILE" "$TOUCHID_ASPECT_DIR/mac-host-ssh-ed25519.pub"
+    cp "$MAC_TOUCHID_BRIDGE_PUBKEY_FILE" "$TOUCHID_ASPECT_DIR/touchid-bridge-mac-to-vm.pub"
 }
 
 echo "==> macbook bootstrap"
@@ -85,21 +84,17 @@ else
     echo "==> Nix already installed."
 fi
 
-# ─── 5. Prepare external generated dataset ────────────────────────────────
-echo "==> Preparing external generated dataset at $GENERATED_DIR..."
-prepare_generated_dataset
+# ─── 5. Refresh public key inputs ─────────────────────────────────────────
+echo "==> Refreshing aspect-owned public keys..."
+prepare_public_keys
 
 # ─── 6. Apply nix-darwin config ────────────────────────────────────────────
 echo "==> Building and applying nix-darwin configuration..."
 cd "$NIX_CONFIG_DIR"
 
-# shellcheck source=../scripts/external-input-flake.sh
-. "$NIX_CONFIG_DIR/scripts/external-input-flake.sh"
-WRAPPER=$(GENERATED_INPUT_DIR="$GENERATED_DIR" NIX_CONFIG_DIR="$NIX_CONFIG_DIR" mk_wrapper_flake)
+NIXPKGS_ALLOW_UNFREE=1 nix build     --extra-experimental-features "nix-command flakes"     .#darwinConfigurations.macbook-pro-m1.system     --no-write-lock-file     --max-jobs 8 --cores 0
 
-NIXPKGS_ALLOW_UNFREE=1 nix build     --extra-experimental-features "nix-command flakes"     "path:$WRAPPER#darwinConfigurations.macbook-pro-m1.system"     --no-write-lock-file     --max-jobs 8 --cores 0
-
-sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch     --flake "path:$WRAPPER#macbook-pro-m1"     --no-write-lock-file
+sudo NIXPKGS_ALLOW_UNFREE=1 ./result/sw/bin/darwin-rebuild switch     --flake .#macbook-pro-m1     --no-write-lock-file
 
 echo ""
 echo "Done! Open a new terminal to pick up all changes."

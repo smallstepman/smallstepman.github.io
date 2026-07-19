@@ -1,4 +1,4 @@
-{ config, lib, pkgs, inputs, generated, ... }: {
+{ lib, inputs, ... }: {
   den.aspects.hardware.disk.vm-default = {
     nixos = { config, lib, pkgs, ... }: {
       imports = [ inputs.disko.nixosModules.disko ];
@@ -60,9 +60,6 @@
       };
 
       networking.interfaces.enp2s0.useDHCP = true;
-
-      sops.hostPubKey = lib.removeSuffix "\n"
-        (generated.readFile "vm-age-pubkey");
 
       networking.hosts."127.0.0.1" = [ "vm-macbook" "localhost" ];
     };

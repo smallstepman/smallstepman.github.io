@@ -1,19 +1,20 @@
-{ pkgs, ... }: let
-  composeYamlSrc = pkgs.fetchurl {
-    url = "https://raw.githubusercontent.com/noonghunna/club-3090/refs/heads/master/models/qwen3.6-27b/vllm/compose/dual/autoround-int4/fp8-mtp.yml";
-    hash = "sha256-csN3hKbD7YNdA1xKXj1lblSBXKHp0+vkJyXMz8UYSAo=";
-  };
-
-  composeYaml = pkgs.runCommand "patched-compose.yml" {
-    src = composeYamlSrc;
-  } ''
-    sed -z 's|\([[:space:]]*\)- driver: nvidia\n\([[:space:]]*\)count: all\n[[:space:]]*capabilities: \[gpu\]|\1- driver: cdi\n\2capabilities: [gpu]\n\2device_ids:\n\2  - nvidia.com/gpu=all|' "$src" > "$out"
-  '';
-
-  dcgmExporterImage = "nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.6.0-ubuntu22.04";
-in {
+{ ... }: {
   den.aspects.services.vllm = {
-    nixos = { config, pkgs, lib, ... }: {
+    nixos = { config, pkgs, lib, ... }:
+    let
+      composeYamlSrc = pkgs.fetchurl {
+        url = "https://raw.githubusercontent.com/noonghunna/club-3090/refs/heads/master/models/qwen3.6-27b/vllm/compose/dual/autoround-int4/fp8-mtp.yml";
+        hash = "sha256-csN3hKbD7YNdA1xKXj1lblSBXKHp0+vkJyXMz8UYSAo=";
+      };
+
+      composeYaml = pkgs.runCommand "patched-compose.yml" {
+        src = composeYamlSrc;
+      } ''
+        sed -z 's|\([[:space:]]*\)- driver: nvidia\n\([[:space:]]*\)count: all\n[[:space:]]*capabilities: \[gpu\]|\1- driver: cdi\n\2capabilities: [gpu]\n\2device_ids:\n\2  - nvidia.com/gpu=all|' "$src" > "$out"
+      '';
+
+      dcgmExporterImage = "nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.6.0-ubuntu22.04";
+    in {
       systemd.services.club-3090 = {
         description = "vLLM Dual RTX 3090 (Qwen 3.6 27B)";
         after = [ "network.target" "docker.service" "docker.socket" "nvidia-power-limits.service" ];

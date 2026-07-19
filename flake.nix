@@ -135,24 +135,6 @@
         };
       }) systems);
 
-    mkGenerated = gen:
-      let
-        requireFile = relative:
-          let path = if gen == null then null else gen + "/${relative}";
-          in if path != null && builtins.pathExists path then path
-          else throw ''
-            Missing generated input file `${relative}`.
-            Create a wrapper flake with `scripts/external-input-flake.sh`
-            or call `lib.mkOutputs { generated = <path>; }`.
-            Supported default locations are `~/.local/share/nix-config-generated` on macOS
-            and `/nixos-generated` inside the VMware guest.
-          '';
-      in {
-        root = gen;
-        inherit requireFile;
-        readFile = relative: builtins.readFile (requireFile relative);
-      };
-
     denModule = { inputs, lib, overlays, ... }:
       let osModule = {
         nixpkgs.overlays = overlays;
@@ -172,8 +154,10 @@
                     home-manager.useGlobalPkgs = true;
                     home-manager.useUserPackages = true;
                     home-manager.backupFileExtension = "backup";
-                    home-manager.users.m.home.stateVersion = "18.09";
-                    home-manager.users.m.home.enableNixpkgsReleaseCheck = false;
+                    home-manager.users.${user.userName}.home = {
+                      stateVersion = "18.09";
+                      enableNixpkgsReleaseCheck = false;
+                    };
                     home-manager.backupCommand = ''
                       set -eu
                       for ((s=1; ; s++)); do [[ -e "$1.backup.$s" || -L "$1.backup.$s" ]] || break; done
@@ -189,19 +173,12 @@
         };
       };
 
-    mkDen = { generated }: (nixpkgs.lib.evalModules {
+    den = (nixpkgs.lib.evalModules {
       modules = [ denModule ./hosts.nix (inputs.import-tree ./aspects) ];
-      specialArgs = { inherit generated inputs overlays; };
+      specialArgs = { inherit inputs overlays; };
     }).config;
 
-    den = mkDen { generated = mkGenerated inputs.generated; };
-
-    mkOutputs = { generated }:
-      let den' = mkDen { generated = mkGenerated generated; };
-      in den'.flake // { packages = mkPackages den'.flake; };
-
   in {
-    lib.mkOutputs = mkOutputs;
     inherit (den.flake) nixosConfigurations darwinConfigurations;
     packages = mkPackages den.flake;
   };

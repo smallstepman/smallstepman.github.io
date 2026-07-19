@@ -1,4 +1,4 @@
-{ den, lib, generated, inputs, ... }: {
+{ den, lib, inputs, ... }: {
 
   den.aspects.secrets = {
     nixos = { config, pkgs, lib, ... }:
@@ -27,7 +27,8 @@
       ];
 
       config = {
-        sops.defaultSopsFile = generated.requireFile "secrets.yaml";
+        sops.defaultSopsFile = ./secrets.yaml;
+        sops.hostPubKey = lib.removeSuffix "\n" (builtins.readFile ./vm-age.pub);
 
         sops.age.keyFile = "/var/lib/sops-nix/key.txt";
         sops.age.generateKey = true;

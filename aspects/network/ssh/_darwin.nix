@@ -1,10 +1,10 @@
-{ generated, ... }: {
+{ ... }: {
   users.users.m = {
     home = "/Users/m";
     openssh.authorizedKeys.keyFiles = [
-      (generated.requireFile "mac-host-authorized-keys")
-      (generated.requireFile "touchid-bridge-vm-user-to-mac.pub")
-      (generated.requireFile "touchid-bridge-vm-root-to-mac.pub")
+      ./m.pub
+      ../../authorization/touchid/touchid-bridge-vm-user-to-mac.pub
+      ../../authorization/touchid/touchid-bridge-vm-root-to-mac.pub
     ];
   };
 

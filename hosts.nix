@@ -7,16 +7,7 @@
 
   den.hosts.aarch64-darwin.macbook-pro-m1.users.m = { };
 
-  den.hosts.x86_64-linux.jimi = {
-    users.s = {
-      isNormalUser = true;
-      hashedPassword = "$6$fhySpewi.hTKt.1D$nfheFtKH358q9dKSgrHGsgfzIsot4MgHQiT/A4YMB3hLe00CxTiiGr94qJZGsmFMOIbVMxqGq5emtrWJFWEwD1";
-      openssh.authorizedKeys.keys = [
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+nYJzeeJtFRAHcgcUUcqg7bJUW8MPqVwCSNm1G+LbC m@ms-MacBook-Pro.local"
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
-      ];
-    };
-  };
+  den.hosts.x86_64-linux.jimi.users.s.classes = [ "user" "homeManager" ];
 
   # ── User m (cross-platform) ───────────────────────────────────────────
   den.aspects.m = {
@@ -31,6 +22,22 @@
       den.aspects.git
       den.aspects.devtools
     ];
+  };
+
+  # ── User s (Jimi) ────────────────────────────────────────────────────
+  den.aspects.s = {
+    includes = [
+      den.batteries.primary-user
+      (den.batteries.user-shell "zsh")
+    ];
+
+    user = {
+      hashedPassword = "!";
+      openssh.authorizedKeys.keys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+nYJzeeJtFRAHcgcUUcqg7bJUW8MPqVwCSNm1G+LbC m@ms-MacBook-Pro.local"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
+      ];
+    };
   };
 
   # ── MacBook Pro ────────────────────────────────────────────────────
@@ -92,6 +99,7 @@
       den.aspects.shell
       den.aspects.shell.wezterm-vm
       den.aspects.ssh-pam
+      den.aspects.uniclip
       den.aspects.virtualization.core
       den.aspects.virtualization.flatpak
       den.aspects.vmware
@@ -118,22 +126,13 @@
         nixos = { config, pkgs, lib, ... }: {
           networking.hostName = "jimi";
           networking.networkmanager.enable = true;
-          networking.networkmanager.ensureProfiles.profiles."Preconfigured-WiFi" = {
-            connection = { id = "Siema"; type = "wifi"; autoconnect = true; };
-            wifi = { ssid = "Siema"; mode = "infrastructure"; };
-            wifi-security = {
-              auth-alg = "open";
-              key-mgmt = "wpa-psk";
-              psk = "p79sqKgG2DyRlh";
-            };
-          };
 
           users.users.root = {
             openssh.authorizedKeys.keys = [
               "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+nYJzeeJtFRAHcgcUUcqg7bJUW8MPqVwCSNm1G+LbC m@ms-MacBook-Pro.local"
               "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtDsEqT1JWzbDo8WeDKlMql6AbcnvzKI1aE46gpHYtv m.liebiediew@gmail.com"
             ];
-            hashedPassword = "$6$fhySpewi.hTKt.1D$nfheFtKH358q9dKSgrHGsgfzIsot4MgHQiT/A4YMB3hLe00CxTiiGr94qJZGsmFMOIbVMxqGq5emtrWJFWEwD1";
+            hashedPassword = "!";
           };
 
           security.sudo.wheelNeedsPassword = false;

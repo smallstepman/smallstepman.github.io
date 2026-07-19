@@ -30,14 +30,14 @@ macOS (host)                              NixOS VM (guest)
 | File | Role |
 |------|------|
 | `patches/uniclip-bind-and-env-password.patch` | Adds `--bind` and `UNICLIP_PASSWORD` support to uniclip |
-| `flake.nix` | Builds the patched `pkgs.uniclip` package from `uniclip-src` |
-| `den/aspects/features/launchd.nix` | macOS launchd user agent for the uniclip server |
-| `den/aspects/hosts/vm-aarch64.nix` | VM-specific Home Manager `systemd.user.services.uniclip` client |
-| `den/aspects/features/secrets.nix` | Declares `/run/secrets/uniclip/password` on the VM |
+| `aspects/clipboard/_overlay.nix` | Builds the patched `pkgs.uniclip` package from `uniclip-src` |
+| `aspects/clipboard/_darwin.nix` | macOS launchd user agent for the Uniclip server |
+| `aspects/clipboard/default.nix` | Projects the Home Manager `systemd.user.services.uniclip` client to Linux users |
+| `aspects/authentication/secrets.nix` | Declares `/run/secrets/uniclip/password` on the VM |
 
 ## macOS side
 
-The server is defined in `den/aspects/features/launchd.nix`.
+The server is defined in `aspects/clipboard/_darwin.nix`.
 
 Behavior:
 - waits for `/nix/store` to exist
@@ -49,7 +49,8 @@ Behavior:
 
 ## VM side
 
-The client is defined in `den/aspects/hosts/vm-aarch64.nix`.
+The client is defined in `aspects/clipboard/default.nix` and routed from the VM
+host aspect to its Home Manager user with Den's `provides.to-users` mechanism.
 
 Behavior:
 - starts after `graphical-session.target`
@@ -65,9 +66,8 @@ The shared encryption password is stored in Bitwarden under
 `uniclip-password`.
 
 - **macOS:** fetched live by the launchd agent through `rbw`
-- **VM:** collected into the external generated dataset
-  (`~/.local/share/nix-config-generated` on macOS, mounted as `/nixos-generated`
-  in the VM), decrypted by sops-nix, and exposed as
+- **VM:** stored in the tracked, age-encrypted
+  `aspects/authentication/secrets.yaml`, decrypted by sops-nix, and exposed as
   `/run/secrets/uniclip/password`
 
 ## Debugging

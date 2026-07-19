@@ -1,6 +1,6 @@
-{ generated, ... }: {
+{ ... }: {
   den.aspects.ssh-pam = {
-    darwin = import ./_darwin.nix { inherit generated; };
+    darwin = import ./_darwin.nix;
 
     nixos = { ... }: {
       services.openssh.enable = true;

@@ -220,7 +220,6 @@ in {
       ];
 
       home.sessionVariables = {
-        GENERATED_INPUT_DIR = "/nixos-generated";
         DOCKER_CONTEXT = "host-mac";
       };
 

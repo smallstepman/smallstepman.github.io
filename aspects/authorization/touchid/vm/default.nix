@@ -1,4 +1,4 @@
-{ config, lib, pkgs, generated, ... }: let
+{ lib, pkgs, ... }: let
   vmTouchIdUserBrokerSocket = "/home/m/.local/run/vm-touchid-broker.sock";
   vmTouchIdUserBridgeKey = "/home/m/.ssh/id_ed25519_touchid_bridge_to_host";
   vmTouchIdUserKnownHosts = "/home/m/.ssh/known_hosts_touchid_bridge";
@@ -6,7 +6,7 @@
   macTouchIdBrokerSocket = "/Users/m/Library/Caches/vm-touchid-broker.sock";
   vmTouchIdSudoBridgeKey = "/var/lib/vm-touchid-sudo-bridge/id_ed25519";
   vmTouchIdSudoKnownHosts = "/var/lib/vm-touchid-sudo-bridge/known_hosts";
-  macTouchIdKnownHostsEntry = "192.168.130.1 ${builtins.readFile (generated.requireFile "mac-host-ssh-ed25519.pub")}";
+  macTouchIdKnownHostsEntry = "192.168.130.1 ${builtins.readFile ../mac-host-ssh-ed25519.pub}";
 
   mkRbwPinentryTouchIdBridge = pkgs: pkgs.substituteAll {
     name = "vm-gpg-touchid-pinentry-bridge";
@@ -122,8 +122,8 @@ in {
         users.users.m = {
           extraGroups = [ "lxd" ];
           openssh.authorizedKeys.keyFiles = [
-            (generated.requireFile "host-authorized-keys")
-            (generated.requireFile "touchid-bridge-mac-to-vm.pub")
+            ../../../network/ssh/m.pub
+            ../touchid-bridge-mac-to-vm.pub
           ];
         };
 

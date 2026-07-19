@@ -30,11 +30,9 @@ qemu-verify-iso:
     cat > /tmp/iso-expr-test4.nix << NIXEOF                                    
     let                                                                       
       f = builtins.getFlake "/home/m/smallstepman.github.io";                
-      g = builtins.getFlake "/tmp/nix-generated";                           
       lib = f.inputs.nixpkgs.lib;                                          
       pkgs = f.inputs.nixpkgs.legacyPackages.x86_64-linux;                
-      outputs = f.lib.mkOutputs { generated = g; };                      
-      jimi = outputs.nixosConfigurations.jimi;                          
+      jimi = f.nixosConfigurations.jimi;
       installer = f.inputs.unattended-installer.lib.diskoInstallerWrapper jimi {  
         flake = "/tmp/qemu-test#test";                                 
         successAction = "poweroff";                                   

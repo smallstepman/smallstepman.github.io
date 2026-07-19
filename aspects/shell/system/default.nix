@@ -6,10 +6,11 @@
       programs.zsh.enable = true;
       programs.nix-ld.enable = true;
       programs.nix-ld.libraries = with pkgs; [];
-
-      home-manager.users.m.home.packages = with pkgs; [
-        foot grim slurp
-      ];
     };
+
+    homeManager = { pkgs, ... }:
+      lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
+        home.packages = with pkgs; [ foot grim slurp ];
+      };
   };
 }
